@@ -79,10 +79,12 @@ flowchart TD
 
     subgraph Scenes
         GS[GameScene<br/>owns entities + systems<br/>runs the frame]
-        UIS[UIScene<br/>HUD + end screen<br/>polls GameScene]
+        UIS[UIScene<br/>HUD + end screen + menu<br/>polls GameScene]
+        AB[AbilityBar / PauseMenu<br/>views under UIScene]
     end
 
     IC[InputController<br/>keys/mouse → commands] -->|CommandHandler| GS
+    GS --> CLK[GameClock<br/>simulated time]
     GS --> AS[AttackSystem<br/>attack state machine<br/>orders + acquisition]
     GS --> SS[SkillshotSystem<br/>Q quick-cast]
     GS --> EPS[EnemyProjectileSystem<br/>dodge pressure]
@@ -100,7 +102,8 @@ flowchart TD
 
     AS -.->|windupProgress,<br/>lastReleaseAt| PL
     DM -.->|elapsed| AS
-    GS -.->|getHudState / getRoundResult| UIS
+    GS -.->|getHudState / getRoundResult / isPaused| UIS
+    UIS --> AB
 
     BAL -.-> AS
     BAL -.-> PL
@@ -202,7 +205,31 @@ setRangeRingState(inRange, attackMovePending);
 playReleaseBurst(scene); showCancelTag(scene);
 ```
 
-### `src/game/entities/Target.ts` — enemy dummies *(gameplay + rendering)*
+### `src/game/entities/Enemy.ts` — the enemy base *(gameplay + rendering)*
+
+Abstract class holding everything archetype-independent: position, HP, the
+damage/death lifecycle, `spawnId`, and all shared feedback (hit flash, floating
+damage numbers, draining ghost HP bar, death burst, shadow). Subclasses supply
+only `buildBody` (in their constructor), `syncBody()` and optionally
+`updateAi()`. Every combat system types against `Enemy`, never a concrete
+archetype — which is why adding a mob touches no system code.
+
+### `src/game/entities/Pursuer.ts` — the melee stalker *(gameplay + rendering)*
+
+The first mob with movement AI: a two-state machine (`chase` / `windup`) that
+walks the player down and swings on a cooldown. See §14b.
+
+### `src/game/systems/PassiveSystem.ts` — the Q passive *(gameplay)*
+
+Owns the stack count and the shared expiry. `SkillshotSystem` calls `addStack()`
+on a landed Q; `AttackSystem` only reads `attackSpeedMultiplier`.
+
+### `src/game/systems/EnemyDirector.ts` — the roster *(gameplay)*
+
+Owns the enemy slots, difficulty-weighted archetype selection, HP scaling,
+respawn timing and enemy-vs-enemy separation.
+
+### `src/game/entities/Target.ts` — the basic dummy *(gameplay + rendering)*
 
 **Owns:** `x`, `y`, `hp`, `active`, **`spawnId`**, `respawnAt`, wander state
 (`wanderX/Y`, `nextWanderAt`), and visual-only `hitFlashUntil`, `deathAnimUntil`,
@@ -273,10 +300,12 @@ JS objects are garbage.
 `UIScene.create()` runs once at boot and is **not** re-run on `GameScene` restart,
 which is exactly why it polls.
 
-### Delta time
+### Delta time and the game clock
 
 ```ts
 const dt = Math.min(delta, 50) / 1000;   // seconds, clamped at 50ms
+this.clock.advance(dt * 1000);           // simulated time
+const now = this.clock.now;
 ```
 
 The clamp prevents an alt-tab or a long GC pause from teleporting entities through
@@ -287,12 +316,16 @@ accumulates this same clamped `dt`.
 Note the two distinct time sources in use:
 
 - `dt` (seconds, clamped) — for movement and anything rate-based.
-- `time` (Phaser's monotonic ms timestamp, unclamped) — for every deadline comparison
-  (`windupEndsAt`, `cycleEndsAt`, `respawnAt`, `hitFlashUntil`, i-frames).
+- `clock.now` (`GameClock`, ms) — for **every** gameplay deadline comparison
+  (`windupEndsAt`, `cycleEndsAt`, `readyAt`, `respawnAt`, `hitFlashUntil`, i-frames).
 
-That mix is intentional but is a subtle hazard: after a long stall, `time` jumps
-while `dt` is clamped, so deadlines can all expire at once while movement advances
-only 50ms worth.
+`GameClock` accumulates the same clamped delta, and only on frames the simulation
+actually runs. Phaser's own `time` is used for tweens and other decoration only.
+Two properties follow from this:
+
+- A long stall cannot make deadlines expire together, because the clock advances
+  by at most 50ms per frame just like movement does.
+- Pausing is simply "stop calling `advance()`" — see §19.
 
 ### Exact update order
 
@@ -1530,6 +1563,21 @@ stateDiagram-v2
 `scene.restart()`, which re-runs `create()` from scratch. `UIScene` keeps running and
 simply starts seeing fresh polled values.
 
+### Pause
+
+`GameScene.setPaused(true)` flips a flag that makes `update()` return before it
+advances the clock, and calls `tweens.pauseAll()` so decoration stops with the
+simulation. Nothing is rescheduled on resume: because every deadline is measured
+against `GameClock` — which stopped — each one keeps exactly the remaining time it
+had. A windup frozen 20% of the way through resumes 20% of the way through.
+
+Input is gated separately: `InputController` checks
+`cmd.acceptsGameplayInput()` (false while paused) before acting on any pointer
+event or gameplay key, which is what stops a click on a menu button from also
+issuing a move order underneath the overlay. Escape is handled *above* that gate,
+and is contextual — it backs out of armed A-targeting first, and otherwise toggles
+the menu.
+
 > **Artifact:** because `update()` returns early when `state === 'over'`, any
 > auto-attack missiles and enemy projectiles in flight at the buzzer freeze mid-air
 > and remain visible under the end-screen overlay until restart.
@@ -1597,11 +1645,12 @@ the browser console apply on the next frame.
 
 | Variable | Meaning | Value | Effect of increasing |
 | --- | --- | --- | --- |
-| `speed` | Bolt speed | 1900 px/s | Less leading required |
+| `speed` | Bolt speed | **1250 px/s** | Less leading required |
 | `radius` | Collision half-width | 7 | Easier to land |
 | `maxRange` | Hard travel cap | 450 (1.73× attack range) | Longer reach |
 | `damage` | Hit damage | 30 | — |
-| `cooldownMs` | Cooldown | 4000 | Less frequent casts |
+| `cooldownMs` | Cooldown | **3000** | Less frequent casts |
+| `hitCooldownReductionMs` | Refund on a landed Q | **750** | Bigger reward for hitting |
 | `castTimeMs` | Cast time | 0 | **Declared but never read** (§24) |
 | `stopsOnFirstHit` | No pierce | `true` | `false` would pierce (untested path) |
 | `boltLength` / `castFlashRadius` / `castFlashMs` / `impactRadius` / `impactMs` | Visuals | 26 / 26 / 160 / 30 / 200 | Visual only |
@@ -1620,6 +1669,9 @@ the browser console apply on the next frame.
 | `edgeMargin` | Border keep-out | 60 | Targets stay more central |
 | `driftSpeed` | Wander speed | 45 px/s | More movement to track (0 = static) |
 | `driftRetargetMs` | Wander re-pick | 1800 | Longer straight drifts |
+
+`Target` is constructed with a `GameClock` reference and stamps its hit-flash and
+death-fade deadlines from it, so target feedback freezes with a pause too.
 
 ### `ENEMY_PROJECTILES` (all `{start, end}` ramp on `DifficultyManager.t`)
 
@@ -1642,13 +1694,21 @@ the browser console apply on the next frame.
 | `rampCurve` | 1.8 | Gentler early ramp, sharper late |
 | `levels` | 10 | More HUD tiers (cosmetic) |
 | `pointsPerDamage` | 1 | — |
-| `pointsPerKill` | 100 | — |
+| `pointsPerKill` | 100 | Base kill value, multiplied by each archetype's `scoreMultiplier` |
 | `pointsPerSecondAlive` | 5 | Rewards surviving over fighting |
 
 ### `DEBUG` / `KEYBINDS` / `INDICATORS`
 
-`DEBUG` — `showAttackRange`, `showAttackState`, `showCancelFeedback`,
-`showTargetMarker`, `showDamageNumbers`, all `true`, all pure overlay.
+`DEBUG` — all pure overlay, and the first three are editable live from the pause
+menu:
+
+| Variable | Value | Meaning |
+| --- | --- | --- |
+| `attackRangeDisplay` | `'contextual'` | `'contextual'` shows the range ring only while an Attack Move command is in play (A armed, or briefly after T); `'always'` / `'off'` also available |
+| `showDamageNumbers` | `true` | Floating damage numbers |
+| `showAttackState` | `true` | The whole top-right debug panel |
+| `showCancelFeedback` | `true` | The "CANCEL" tag |
+| `showTargetMarker` | `true` | Rotating reticle on the current target |
 
 `KEYBINDS` — `attackMove: ['A']`, `attackMoveClick: ['T']`, `stop: ['S']`,
 `skillshotQ: ['Q']`, `cancel: ['ESCAPE']`, `restart: ['R','SPACE']`. Arrays, so
@@ -1841,9 +1901,10 @@ and move orders cancelling uncommitted ones.
    implements it. Setting it non-zero has no effect.
 
 3. **Round timing is simulation time, not wall time.** `dt` is clamped at 50ms and
-   `DifficultyManager` accumulates the clamped value, so a stuttering machine gets a
-   longer real-time round and a *slower* difficulty ramp. Meanwhile deadline checks
-   use unclamped `time`, so after a long stall the two disagree.
+   both `DifficultyManager` and `GameClock` accumulate the clamped value, so a
+   stuttering machine gets a longer real-time round and a slower difficulty ramp.
+   Deadlines and movement now share that same clamped source, so they no longer
+   disagree with each other — but neither tracks a wall clock.
 
 4. **In-flight projectiles freeze on round end.** `update()` returns early when
    `state === 'over'`, so missiles hang in mid-air under the end overlay.

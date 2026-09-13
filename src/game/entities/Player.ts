@@ -51,10 +51,15 @@ export class Player {
 
   /** Where the unit is pointing. Smoothed so it never snaps. */
   private facingAngle = -Math.PI / 2;
+  /** 0..1, written by setRangeRingState(); gates the ring in syncVisuals(). */
+  private rangeVisibility = 0;
   /** Contracts onto the body through the windup: the "can I still cancel?" cue. */
   private readonly chargeRing: Phaser.GameObjects.Arc;
   /** Expands outward at the instant of release. */
   private readonly releaseRing: Phaser.GameObjects.Arc;
+  /** Steady ring shown only while the Q passive is fully stacked. */
+  private readonly passiveAura: Phaser.GameObjects.Arc;
+  private passiveMaxed = false;
 
   /** Visual-only attack animation state, written by applyAttackVisual(). */
   private visualOffsetX = 0;
@@ -72,7 +77,7 @@ export class Player {
     this.rangeRing = scene.add
       .circle(x, y, this.attackRingRadius(), 0x000000, 0)
       .setStrokeStyle(1, 0x4a5a72, 0.28)
-      .setVisible(DEBUG.showAttackRange)
+      .setVisible(false)
       .setDepth(1);
 
     this.moveMarker = scene.add
@@ -96,6 +101,12 @@ export class Player {
       .circle(x, y, this.radius, 0x000000, 0)
       .setStrokeStyle(3, THEME.player.outline, 1)
       .setDepth(9)
+      .setVisible(false);
+
+    this.passiveAura = scene.add
+      .circle(x, y, this.radius + 6, 0x000000, 0)
+      .setStrokeStyle(2, THEME.passive.maxStackColor, 0.55)
+      .setDepth(8)
       .setVisible(false);
 
     // A dart-shaped hull: the point IS the facing indicator, so no tether line
@@ -156,13 +167,27 @@ export class Player {
    *   grey  — idle
    * Called every frame; `pending` wins so A-mode is unmistakable.
    */
-  setRangeRingState(inRange: boolean, attackMovePending: boolean): void {
-    if (!DEBUG.showAttackRange) return;
-    if (attackMovePending) {
-      this.rangeRing.setStrokeStyle(1.5, THEME.markers.attackMoveColor, 0.5);
-    } else {
-      this.rangeRing.setStrokeStyle(1, inRange ? THEME.markers.targetLockColor : 0x4a5a72, inRange ? 0.38 : 0.22);
+  setRangeRingState(inRange: boolean, attackMovePending: boolean, visibility: number): void {
+    this.rangeVisibility = Phaser.Math.Clamp(visibility, 0, 1);
+
+    if (this.rangeVisibility <= 0) {
+      this.rangeRing.setVisible(false);
+      return;
     }
+
+    // Alpha is scaled by `visibility` so the post-T hint can fade out cleanly.
+    const alpha = attackMovePending ? 0.5 : inRange ? 0.38 : 0.22;
+    this.rangeRing
+      .setVisible(true)
+      .setStrokeStyle(
+        attackMovePending ? 1.5 : 1,
+        attackMovePending
+          ? THEME.markers.attackMoveColor
+          : inRange
+            ? THEME.markers.targetLockColor
+            : 0x4a5a72,
+        alpha * this.rangeVisibility,
+      );
   }
 
   /** Hold the player in place (attack windup, cast time). Reference counted. */
@@ -275,6 +300,31 @@ export class Player {
     });
   }
 
+  /**
+   * One energy pulse per passive stack gained. Fired by the scene off the
+   * PassiveSystem's own timestamp, so it can never fire without a real stack.
+   */
+  playPassivePulse(scene: Phaser.Scene, maxed: boolean): void {
+    const pulse = scene.add
+      .circle(this.x, this.y, this.radius + 2, 0x000000, 0)
+      .setStrokeStyle(maxed ? 3 : 2, THEME.passive.maxStackColor, 0.9)
+      .setDepth(9);
+
+    scene.tweens.add({
+      targets: pulse,
+      radius: this.radius + (maxed ? 34 : 24),
+      alpha: 0,
+      duration: 320,
+      ease: 'Quad.easeOut',
+      onComplete: () => pulse.destroy(),
+    });
+  }
+
+  /** Persistent (understated) marker that the passive is at max stacks. */
+  setPassiveMaxed(maxed: boolean): void {
+    this.passiveMaxed = maxed;
+  }
+
   /** Small "CANCEL" tag so an aborted windup is unmistakable while testing. */
   showCancelTag(scene: Phaser.Scene): void {
     if (!DEBUG.showCancelFeedback) return;
@@ -303,6 +353,16 @@ export class Player {
 
     this.body.setPosition(bx, by);
     this.shadow.setPosition(this.x, this.y + this.radius * 0.75);
+
+    // Max-stack aura: a steady ring that breathes very slightly.
+    if (this.passiveMaxed) {
+      this.passiveAura
+        .setVisible(true)
+        .setPosition(this.x, this.y)
+        .setRadius(this.radius + 6 + Math.sin(this.pulseClock * 2) * 1.5);
+    } else {
+      this.passiveAura.setVisible(false);
+    }
 
     // Face the aim target while attacking, otherwise face the way we are moving.
     // This replaces the old destination tether line entirely.
@@ -342,7 +402,7 @@ export class Player {
     this.rangeRing
       .setPosition(this.x, this.y)
       .setRadius(this.attackRingRadius())
-      .setVisible(DEBUG.showAttackRange);
+      .setVisible(this.rangeVisibility > 0);
 
     // Brighten the hull through the windup: closer to white = closer to committed.
     this.hull.setFillStyle(
@@ -375,6 +435,7 @@ export class Player {
 
   destroy(): void {
     this.body.destroy();
+    this.passiveAura.destroy();
     this.shadow.destroy();
     this.chargeRing.destroy();
     this.releaseRing.destroy();

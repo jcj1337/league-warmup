@@ -20,8 +20,16 @@ npm run build    # typecheck + production build
 | `S` | Stop: freeze in place, drop all pending orders |
 | `Q` | Quick-cast the skillshot toward the cursor — fires instantly, no click |
 | Left-click on a target | Direct attack order (convenience) |
-| `Esc` | Cancel a pending A / Q targeting mode |
+| `Esc` | Back out of armed A-targeting, or open/close the pause menu |
 | `R` / `Space` / button | Restart from the end screen |
+
+The attack-range ring is **contextual**: it appears while `A` targeting is armed and
+flashes briefly after `T`, rather than sitting on screen permanently. Change
+`DEBUG.attackRangeDisplay` (or the pause menu) for `always` / `off`.
+
+Q lives in the bottom-centre ability bar, with a radial cooldown sweep and a
+countdown. The bar is laid out for N slots and re-centres itself, so W/E/R can be
+added later without moving anything.
 
 Keys live in `KEYBINDS` in [balance.ts](src/config/balance.ts); `InputController`
 is the only thing that reads them.
@@ -67,6 +75,16 @@ What you see maps 1:1 onto the state machine:
 The charge ring is the precise cancel cue: while it is still shrinking you can
 cancel; the frame it reaches the body, the auto is gone.
 
+## Q passive
+
+Landing a Q grants a stack (max 5), each worth **+10% attack speed**, and
+refreshes the whole buff to 6s. Missing gives nothing. A landed Q also takes
+750ms off Q's *remaining* cooldown. Stacks show as pips above the ability bar.
+
+```
+cooldownMs = rampCooldown / (1 + stacks * 0.10)
+```
+
 ## Attack speed scaling
 
 The attack cycle shortens over the round, on its own ramp (separate from the
@@ -95,6 +113,7 @@ Friend and foe differ by SHAPE, not just colour, so they stay legible at speed:
 | Enemies | red hexagons, slowly rotating, dark rim |
 | Your auto attack | thin cyan bolt + streak, homes to its target |
 | Your Q | narrow green bolt, finite 450px range, stops on the first enemy |
+| Pursuer (from stage 4) | large orange arrowhead that walks you down and swings in melee |
 | Enemy shot (dodge!) | fat amber circle, heavy dark rim, pulsing core |
 | Move order | pip that collapses inward at the destination |
 | Attack-move order | crosshair that blooms outward |

@@ -2,9 +2,10 @@ import Phaser from 'phaser';
 import { ATTACK, attackReach, DEBUG } from '../../config/balance';
 import { AutoAttackMissile } from '../entities/AutoAttackMissile';
 import type { Player } from '../entities/Player';
-import type { Target } from '../entities/Target';
+import type { Enemy } from '../entities/Enemy';
 import type { KitingMetrics } from './KitingMetrics';
 import type { DifficultyManager } from './DifficultyManager';
+import type { PassiveSystem } from './PassiveSystem';
 
 /**
  * idle     — no attack in progress; may start one the moment a target is in range
@@ -22,7 +23,7 @@ export type TargetSource = 'direct' | 'attack-move';
 
 interface AttackCallbacks {
   /** Called the instant damage is committed (end of windup). */
-  onDamage: (target: Target, damage: number, killed: boolean) => void;
+  onDamage: (target: Enemy, damage: number, killed: boolean) => void;
 }
 
 interface AttackMoveOrder {
@@ -59,7 +60,7 @@ export class AttackSystem {
   public state: AttackState = 'idle';
   /** True when the current target is in range — read by the scene for the ring. */
   public targetInRange = false;
-  public currentTarget: Target | null = null;
+  public currentTarget: Enemy | null = null;
   public targetSource: TargetSource = 'direct';
 
   private now = 0;
@@ -68,7 +69,7 @@ export class AttackSystem {
   /** When the whole cycle ends and the next attack may start. */
   private cycleEndsAt = 0;
   /** The target this swing committed to — may differ from currentTarget. */
-  private windupTarget: Target | null = null;
+  private windupTarget: Enemy | null = null;
   /** True while we are driving the player's movement toward a target. */
   private chasing = false;
   /** Active Attack Move order, if any. */
@@ -92,6 +93,7 @@ export class AttackSystem {
     private readonly player: Player,
     private readonly metrics: KitingMetrics,
     private readonly difficulty: DifficultyManager,
+    private readonly passive: PassiveSystem,
     private readonly callbacks: AttackCallbacks,
   ) {
     this.targetMarker = scene.add.graphics().setDepth(7).setVisible(false);
@@ -125,13 +127,27 @@ export class AttackSystem {
     return Math.pow(linear, ATTACK.attackSpeedCurve);
   }
 
+/**
+   * The cooldown the difficulty ramp alone would give, before any buffs.
+   */
+  get baseCooldownMs(): number {
+    return Phaser.Math.Linear(ATTACK.baseCooldownMs, ATTACK.minCooldownMs, this.attackSpeedT);
+  }
+
   /**
-   * The live attack cycle length. Everything downstream (windup, recovery, the
-   * charge-ring animation) is derived from this single number, so scaling
-   * attack speed can never desync the visuals from the mechanics.
+   * THE authoritative attack cycle length. Everything downstream (windup,
+   * recovery, the charge-ring animation, the HUD) derives from this one number.
+   *
+   * The Q passive is a multiplicative ATTACK SPEED bonus, not a flat cooldown
+   * subtraction, so stacks have diminishing absolute value exactly like real
+   * attack speed:
+   *
+   *   attacksPerSecond = (1000 / rampCooldown) * passiveMultiplier
+   *   cooldownMs       = 1000 / attacksPerSecond
+   *                    = rampCooldown / passiveMultiplier
    */
   get cooldownMs(): number {
-    return Phaser.Math.Linear(ATTACK.baseCooldownMs, ATTACK.minCooldownMs, this.attackSpeedT);
+    return this.baseCooldownMs / this.passive.attackSpeedMultiplier;
   }
 
   /** Attacks per second, for the HUD readout. */
@@ -169,7 +185,7 @@ export class AttackSystem {
    * enemy and will chase it. Does NOT cancel a windup already in progress —
    * the committed swing still resolves.
    */
-  commandAttack(target: Target): void {
+  commandAttack(target: Enemy): void {
     if (!target.active) return;
     this.attackMove = null;
     this.currentTarget = target;
@@ -237,7 +253,7 @@ export class AttackSystem {
 
   // -------------------------------------------------------------------- loop
 
-  update(nowMs: number, deltaSeconds: number, targets: Target[]): void {
+  update(nowMs: number, deltaSeconds: number, targets: Enemy[]): void {
     this.now = nowMs;
 
     // Missiles fly independently of the attack cycle — they are never a gate.
@@ -319,7 +335,7 @@ export class AttackSystem {
    * Attack Move acquisition. Only enemies ALREADY in attack range are
    * considered, so an A-click never turns into a cross-arena sprint.
    */
-  private acquireAttackMoveTarget(targets: Target[]): Target | null {
+  private acquireAttackMoveTarget(targets: Enemy[]): Enemy | null {
     const order = this.attackMove;
     if (!order) return null;
 
@@ -327,7 +343,7 @@ export class AttackSystem {
     const originX = byCursor ? order.cursorX : this.player.x;
     const originY = byCursor ? order.cursorY : this.player.y;
 
-    let best: Target | null = null;
+    let best: Enemy | null = null;
     let bestDist = Infinity;
 
     for (const target of targets) {
@@ -344,7 +360,7 @@ export class AttackSystem {
   }
 
   /** Is any enemy attackable right now? Used for the kiting metrics. */
-  hasTargetInRange(targets: Target[]): boolean {
+  hasTargetInRange(targets: Enemy[]): boolean {
     return targets.some((t) => t.active && this.isInRange(t));
   }
 
@@ -355,12 +371,12 @@ export class AttackSystem {
    * hitbox. `attackReach` is shared with the drawn ring, so a target whose
    * center is inside the ring is always attackable and vice versa.
    */
-  isInRange(target: Target): boolean {
+  isInRange(target: Enemy): boolean {
     const reach = this.reachTo(target);
     return (target.x - this.player.x) ** 2 + (target.y - this.player.y) ** 2 <= reach * reach;
   }
 
-  private reachTo(target: Target): number {
+  private reachTo(target: Enemy): number {
     return attackReach(target.radius, this.player.radius);
   }
 
@@ -369,7 +385,7 @@ export class AttackSystem {
    * so the player coasts to a stop at max range instead of face-hugging.
    * Re-issued each frame, so a drifting target is tracked.
    */
-  private chaseToward(target: Target): void {
+  private chaseToward(target: Enemy): void {
     const dx = this.player.x - target.x;
     const dy = this.player.y - target.y;
     const dist = Math.hypot(dx, dy) || 1;
@@ -381,7 +397,7 @@ export class AttackSystem {
 
   // ------------------------------------------------------------- attack cycle
 
-  private beginWindup(target: Target, nowMs: number): void {
+  private beginWindup(target: Enemy, nowMs: number): void {
     this.state = 'windup';
     this.windupTarget = target;
     this.windupEndsAt = nowMs + this.windupMs;
@@ -432,7 +448,7 @@ export class AttackSystem {
   }
 
   /** Damage resolution, at the moment the missile visibly connects. */
-  private onMissileHit(target: Target, damage: number): void {
+  private onMissileHit(target: Enemy, damage: number): void {
     if (!target.active) return;
     const killed = target.takeDamage(damage);
     this.metrics.onAttackLanded();
@@ -458,7 +474,7 @@ export class AttackSystem {
 
   // ------------------------------------------------------------- debug visuals
 
-  private updateVisuals(target: Target, inRange: boolean): void {
+  private updateVisuals(target: Enemy, inRange: boolean): void {
     if (DEBUG.showTargetMarker) {
       // Four rotating brackets: reads as "locked on" without drawing a solid
       // ring that competes with the enemy's own outline.

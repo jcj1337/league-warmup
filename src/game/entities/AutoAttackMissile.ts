@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import { ATTACK } from '../../config/balance';
 import { THEME } from '../../config/theme';
-import type { Target } from './Target';
+import type { Enemy } from './Enemy';
 
 /**
  * The player's basic-attack projectile.
@@ -29,11 +29,11 @@ export class AutoAttackMissile {
     scene: Phaser.Scene,
     startX: number,
     startY: number,
-    private readonly target: Target,
+    private readonly target: Enemy,
     /** Identifies the specific life of the target, so a respawn is not hit. */
     private readonly targetSpawnId: number,
     private readonly damage: number,
-    private readonly onHit: (target: Target, damage: number) => void,
+    private readonly onHit: (target: Enemy, damage: number) => void,
   ) {
     this.scene = scene;
     this.x = startX;

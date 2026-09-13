@@ -1,14 +1,17 @@
 import Phaser from 'phaser';
-import { ARENA, ATTACK, INDICATORS, PLAYER, ROUND, SKILLSHOT_Q, TARGETS } from '../../config/balance';
+import { ARENA, ATTACK, DEBUG, INDICATORS, PLAYER, ROUND, SKILLSHOT_Q } from '../../config/balance';
 import { THEME } from '../../config/theme';
 import { Player } from '../entities/Player';
-import { Target } from '../entities/Target';
+import type { Enemy } from '../entities/Enemy';
 import { AttackSystem } from '../systems/AttackSystem';
 import { SkillshotSystem } from '../systems/SkillshotSystem';
 import { EnemyProjectileSystem } from '../systems/EnemyProjectileSystem';
 import { DifficultyManager } from '../systems/DifficultyManager';
 import { ScoreSystem } from '../systems/ScoreSystem';
 import { KitingMetrics } from '../systems/KitingMetrics';
+import { GameClock } from '../systems/GameClock';
+import { PassiveSystem } from '../systems/PassiveSystem';
+import { EnemyDirector } from '../systems/EnemyDirector';
 import { InputController, type CommandHandler } from '../systems/InputController';
 
 export type RoundState = 'running' | 'over';
@@ -29,6 +32,8 @@ export interface RoundResult {
   attacksLanded: number;
   idleInRangeMs: number;
   wastedRecoveryMs: number;
+  /** Kills broken down by enemy archetype. */
+  killsByType: Record<string, number>;
 }
 
 /** Snapshot the HUD polls every frame. */
@@ -53,11 +58,21 @@ export interface HudState {
   wastedRecoveryMs: number;
   difficultyLevel: number;
   elapsed: number;
+  /** Countdown to the next stage; Infinity at max level. */
+  secondsUntilNextStage: number;
+  nextStage: number | null;
+  /** Q passive. */
+  passiveStacks: number;
+  passiveMaxStacks: number;
+  passiveFraction: number;
 }
 
 export class GameScene extends Phaser.Scene {
   private player!: Player;
-  private targets: Target[] = [];
+  /** The live enemy roster. Owned by EnemyDirector; cached each frame. */
+  private enemies: Enemy[] = [];
+  private director!: EnemyDirector;
+  private passive!: PassiveSystem;
 
   private attacks!: AttackSystem;
   private skillshot!: SkillshotSystem;
@@ -66,6 +81,18 @@ export class GameScene extends Phaser.Scene {
   private scoring!: ScoreSystem;
   private metrics!: KitingMetrics;
   private inputs!: InputController;
+
+  /**
+   * Simulated time. Every gameplay deadline is measured against this, never
+   * against Phaser's wall clock, so pausing cannot fast-forward anything.
+   */
+  private clock!: GameClock;
+
+  /** True while the pause menu is up. Freezes the entire simulation. */
+  private paused = false;
+
+  /** Clock time until which the range ring is held up after a T press. */
+  private rangeHintUntil = -Infinity;
 
   private state: RoundState = 'running';
   private result: RoundResult | null = null;
@@ -82,9 +109,12 @@ export class GameScene extends Phaser.Scene {
   create(): void {
     this.state = 'running';
     this.result = null;
-    this.targets = [];
+    this.enemies = [];
     this.lastCancelShownAt = -Infinity;
     this.lastReleaseShownAt = -Infinity;
+    this.rangeHintUntil = -Infinity;
+    this.paused = false;
+    this.clock = new GameClock();
 
     this.drawArena();
 
@@ -94,23 +124,30 @@ export class GameScene extends Phaser.Scene {
     this.scoring = new ScoreSystem();
 
     this.metrics = new KitingMetrics();
+    this.passive = new PassiveSystem();
 
-    this.attacks = new AttackSystem(this, this.player, this.metrics, this.difficulty, {
+    this.attacks = new AttackSystem(this, this.player, this.metrics, this.difficulty, this.passive, {
       onDamage: (target, damage, killed) => this.onTargetDamaged(target, damage, killed),
     });
 
     this.skillshot = new SkillshotSystem(this, this.player, {
       onHit: (target, damage, killed) => this.onTargetDamaged(target, damage, killed),
+      // The authoritative Q hit event: only a landed Q stacks the passive.
+      onLanded: () => {
+        this.passive.addStack();
+        this.player.playPassivePulse(this, this.passive.isMaxStacked);
+      },
     });
 
     this.enemyProjectiles = new EnemyProjectileSystem(this, this.player, this.difficulty, {
       onPlayerHit: (damage) => this.onPlayerHit(damage),
     });
 
-    for (let i = 0; i < TARGETS.count; i++) {
-      const spot = this.findSpawnSpot();
-      this.targets.push(new Target(this, spot.x, spot.y));
-    }
+    this.director = new EnemyDirector(this, this.clock, this.difficulty, () => ({
+      x: this.player.x,
+      y: this.player.y,
+    }));
+    this.enemies = this.director.enemies;
 
     this.inputs = new InputController(this, this.commandHandler());
   }
@@ -135,9 +172,15 @@ export class GameScene extends Phaser.Scene {
         this.attacks.commandAttack(target);
       },
 
-      commandAttackMove: (x, y) => {
+      commandAttackMove: (x, y, opts) => {
+        // Identical order for A-click and T; `showRangeHint` is purely visual
+        // and is only set by the instant (T) path, which has no targeting mode
+        // to keep the ring up for it.
         this.attacks.commandAttackMove(x, y);
         this.ping(x, y, INDICATORS.attackMoveColor, 'attack-move');
+        if (opts?.showRangeHint) {
+          this.rangeHintUntil = this.clock.now + THEME.rangeHint.holdMs;
+        }
       },
 
       commandStop: () => this.attacks.onStop(),
@@ -148,17 +191,20 @@ export class GameScene extends Phaser.Scene {
 
       targetAt: (x, y) => this.targetAt(x, y),
       isRoundRunning: () => this.state === 'running',
+      acceptsGameplayInput: () => this.state === 'running' && !this.paused,
+      isPaused: () => this.paused,
+      togglePause: () => this.setPaused(!this.paused),
       restartRound: () => this.restartRound(),
     };
   }
 
   /** Click hit test, with a little grace so clicks feel forgiving. */
-  private targetAt(x: number, y: number): Target | null {
+  private targetAt(x: number, y: number): Enemy | null {
     const grace = 10;
-    let best: Target | null = null;
+    let best: Enemy | null = null;
     let bestDist = Infinity;
 
-    for (const target of this.targets) {
+    for (const target of this.enemies) {
       if (!target.active) continue;
       const dist = Phaser.Math.Distance.Between(x, y, target.x, target.y);
       if (dist <= target.radius + grace && dist < bestDist) {
@@ -209,6 +255,51 @@ export class GameScene extends Phaser.Scene {
     });
   }
 
+  // ---------------------------------------------------------------- pause
+
+  /**
+   * Freeze / unfreeze the whole simulation.
+   *
+   * Nothing is rescheduled on resume: `update()` simply stops running, so the
+   * GameClock stops advancing and every stored deadline (windup, cooldowns,
+   * respawns, spawn ticks) keeps exactly the same remaining time it had.
+   * Phaser tweens are decoration only, but they run on wall time, so they are
+   * paused alongside to stop pings and damage numbers finishing behind the menu.
+   */
+  setPaused(paused: boolean): void {
+    if (this.state !== 'running' || this.paused === paused) return;
+    this.paused = paused;
+
+    if (paused) {
+      this.tweens.pauseAll();
+    } else {
+      this.tweens.resumeAll();
+    }
+  }
+
+  get isPaused(): boolean {
+    return this.paused;
+  }
+
+  /**
+   * How strongly to draw the attack-range ring right now, 0..1.
+   *
+   * 'contextual' (the default) only shows it while an Attack Move command is in
+   * play: held at full strength while A-targeting is armed, then a short fading
+   * hint after an instant T press.
+   */
+  private rangeRingVisibility(now: number): number {
+    if (DEBUG.attackRangeDisplay === 'off') return 0;
+    if (DEBUG.attackRangeDisplay === 'always') return 1;
+
+    if (this.inputs.attackMovePending) return 1;
+
+    const remaining = this.rangeHintUntil - now;
+    if (remaining <= 0) return 0;
+    // Full strength, then ease out over the last `fadeMs`.
+    return Math.min(1, remaining / THEME.rangeHint.fadeMs);
+  }
+
   restartRound(): void {
     this.attacks.clearMissiles();
     this.skillshot.clear();
@@ -218,17 +309,23 @@ export class GameScene extends Phaser.Scene {
 
   // ---------------------------------------------------------------- loop
 
-  override update(time: number, delta: number): void {
-    if (this.state !== 'running') return;
+  override update(_time: number, delta: number): void {
+    if (this.state !== 'running' || this.paused) return;
 
     // Clamp dt so an alt-tab / long frame cannot teleport everything.
     const dt = Math.min(delta, 50) / 1000;
 
+    // Advance simulated time FIRST; everything below reads `now` from here and
+    // never from Phaser's wall clock, which is what makes pausing safe.
+    this.clock.advance(dt * 1000);
+    const now = this.clock.now;
+
     this.difficulty.update(dt);
     this.scoring.tickSurvival(dt);
+    this.passive.update(now);
 
     // 1. Gameplay state decides what is happening...
-    this.attacks.update(time, dt, this.targets);
+    this.attacks.update(now, dt, this.enemies);
 
     // 2. ...then the visuals read it. This runs BEFORE player.update() so the
     //    animation drawn this frame reflects this frame's attack state — a
@@ -236,21 +333,29 @@ export class GameScene extends Phaser.Scene {
     const aimTarget = this.attacks.currentTarget;
     this.player.applyAttackVisual({
       windupProgress: this.attacks.windupProgress,
-      msSinceRelease: time - this.attacks.lastReleaseAt,
+      msSinceRelease: now - this.attacks.lastReleaseAt,
       targetX: aimTarget ? aimTarget.x : null,
       targetY: aimTarget ? aimTarget.y : null,
     });
-    // One range ring, recolored: red while Attack Move is pending.
-    this.player.setRangeRingState(this.attacks.targetInRange, this.inputs.attackMovePending);
+    // The range ring is contextual: up while A-targeting is armed, and a brief
+    // fading hint after an instant T press. See rangeRingVisibility().
+    this.player.setRangeRingState(
+      this.attacks.targetInRange,
+      this.inputs.attackMovePending,
+      this.rangeRingVisibility(now),
+    );
 
     // 3. ...and only now does the player move and redraw.
     this.player.update(dt);
 
     this.metrics.update(dt, {
       attackState: this.attacks.state,
-      enemyInRange: this.attacks.hasTargetInRange(this.targets),
+      enemyInRange: this.attacks.hasTargetInRange(this.enemies),
       playerMoving: this.player.isMoving,
     });
+
+    // Persistent emphasis while the passive is fully stacked.
+    this.player.setPassiveMaxed(this.passive.isMaxStacked);
 
     // Cancel tag: fires once per cancel, driven off the system's timestamp.
     if (this.attacks.lastCancelAt > this.lastCancelShownAt) {
@@ -265,17 +370,15 @@ export class GameScene extends Phaser.Scene {
       this.player.playReleaseBurst(this);
     }
 
-    for (const target of this.targets) {
-      target.update(dt, time);
-      if (target.isReadyToRespawn(time)) {
-        const spot = this.findSpawnSpot();
-        target.respawnAtPosition(spot.x, spot.y, time);
-      }
-    }
+    // The director owns the roster: AI, respawns, archetype re-rolls, spacing.
+    this.director.update(dt, now, {
+      player: { x: this.player.x, y: this.player.y, radius: this.player.radius },
+      damagePlayer: (amount) => this.onPlayerHit(amount),
+    });
+    this.enemies = this.director.enemies;
 
-    this.separateTargets();
-    this.skillshot.update(dt, time, this.targets);
-    this.enemyProjectiles.update(dt, time);
+    this.skillshot.update(dt, now, this.enemies);
+    this.enemyProjectiles.update(dt, now);
 
     if (!this.player.isAlive) {
       this.endRound(false);
@@ -284,46 +387,19 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
-  /**
-   * Soft body-blocking between targets so drifting ones do not stack into a
-   * single blob, which would make click-targeting ambiguous.
-   */
-  private separateTargets(): void {
-    for (let i = 0; i < this.targets.length; i++) {
-      const a = this.targets[i];
-      if (!a.active) continue;
-
-      for (let j = i + 1; j < this.targets.length; j++) {
-        const b = this.targets[j];
-        if (!b.active) continue;
-
-        const dx = b.x - a.x;
-        const dy = b.y - a.y;
-        const minDist = a.radius + b.radius + 6;
-        const dist = Math.hypot(dx, dy) || 0.001;
-        if (dist >= minDist) continue;
-
-        const push = (minDist - dist) / 2;
-        a.x -= (dx / dist) * push;
-        a.y -= (dy / dist) * push;
-        b.x += (dx / dist) * push;
-        b.y += (dy / dist) * push;
-      }
-    }
-  }
-
   // ---------------------------------------------------------------- events
 
-  private onTargetDamaged(target: Target, damage: number, killed: boolean): void {
+  private onTargetDamaged(target: Enemy, damage: number, killed: boolean): void {
     this.scoring.addDamage(damage);
     if (killed) {
-      this.scoring.addKill();
-      target.scheduleRespawn(this.time.now);
+      // Score and kill tallies are per archetype, so a Pursuer is worth more.
+      this.scoring.addKill(target.archetype, target.scoreMultiplier);
+      this.director.onEnemyKilled(target, this.clock.now);
     }
   }
 
   private onPlayerHit(damage: number): void {
-    const taken = this.player.takeDamage(damage, this.time.now);
+    const taken = this.player.takeDamage(damage, this.clock.now);
     if (taken <= 0) return;
 
     this.scoring.addProjectileHit();
@@ -346,7 +422,7 @@ export class GameScene extends Phaser.Scene {
     this.state = 'over';
     this.attacks.cancel();
     this.inputs.cancelPending();
-    this.player.setRangeRingState(false, false);
+    this.player.setRangeRingState(false, false, 0);
     this.player.stop();
 
     this.result = {
@@ -364,47 +440,12 @@ export class GameScene extends Phaser.Scene {
       attacksLanded: this.metrics.attacksLanded,
       idleInRangeMs: Math.round(this.metrics.idleInRangeMs),
       wastedRecoveryMs: Math.round(this.metrics.wastedRecoveryMs),
+      killsByType: { ...this.scoring.killsByType },
     };
   }
 
   // ---------------------------------------------------------------- helpers
 
-  /** A spot inside the arena that is not on top of the player or another target. */
-  private findSpawnSpot(): { x: number; y: number } {
-    const margin = ARENA.padding + TARGETS.edgeMargin;
-    const minX = margin;
-    const maxX = ARENA.width - margin;
-    const minY = margin;
-    const maxY = ARENA.height - margin;
-
-    for (let attempt = 0; attempt < 60; attempt++) {
-      const x = Phaser.Math.Between(minX, maxX);
-      const y = Phaser.Math.Between(minY, maxY);
-
-      if (this.player) {
-        const d = Phaser.Math.Distance.Between(x, y, this.player.x, this.player.y);
-        if (d < TARGETS.minSpawnDistanceFromPlayer) continue;
-      }
-      const tooClose = this.targets.some(
-        (t) => t.active && Phaser.Math.Distance.Between(x, y, t.x, t.y) < TARGETS.radius * 5,
-      );
-      if (tooClose) continue;
-
-      return { x, y };
-    }
-
-    // Fallback if the arena is crowded: any legal point.
-    return { x: Phaser.Math.Between(minX, maxX), y: Phaser.Math.Between(minY, maxY) };
-  }
-
-  /**
-   * The training field. Built once from Graphics primitives, in layers:
-   * floor slab -> centre wash -> fine grid -> major grid -> centre mark ->
-   * border frame + corner brackets -> edge vignette.
-   *
-   * Everything is dark and low contrast on purpose; units, projectiles and
-   * markers own all the bright colour in the scene.
-   */
   private drawArena(): void {
     const A = THEME.arena;
     this.cameras.main.setBackgroundColor(A.voidColor);
@@ -503,6 +544,13 @@ export class GameScene extends Phaser.Scene {
       wastedRecoveryMs: this.metrics ? this.metrics.wastedRecoveryMs : 0,
       difficultyLevel: this.difficulty ? this.difficulty.level : 1,
       elapsed: this.difficulty ? this.difficulty.elapsed : 0,
+      secondsUntilNextStage: this.difficulty
+        ? this.difficulty.secondsUntilNextLevel
+        : Number.POSITIVE_INFINITY,
+      nextStage: this.difficulty ? this.difficulty.nextLevel : null,
+      passiveStacks: this.passive ? this.passive.stackCount : 0,
+      passiveMaxStacks: this.passive ? this.passive.maxStacks : 0,
+      passiveFraction: this.passive ? this.passive.remainingFraction : 0,
     };
   }
 

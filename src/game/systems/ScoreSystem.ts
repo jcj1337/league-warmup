@@ -5,6 +5,8 @@ export class ScoreSystem {
   public score = 0;
   public damageDealt = 0;
   public targetsKilled = 0;
+  /** Kills broken down by archetype id, for the end screen. */
+  public readonly killsByType: Record<string, number> = {};
   public projectileHitsTaken = 0;
 
   private survivalCredit = 0;
@@ -14,9 +16,14 @@ export class ScoreSystem {
     this.score += amount * SCORE.pointsPerDamage;
   }
 
-  addKill(): void {
+  /**
+   * A kill. `scoreMultiplier` comes from the enemy archetype, so a tankier
+   * enemy is worth proportionally more without inflating the base value.
+   */
+  addKill(archetype: string, scoreMultiplier: number): void {
     this.targetsKilled++;
-    this.score += SCORE.pointsPerKill;
+    this.killsByType[archetype] = (this.killsByType[archetype] ?? 0) + 1;
+    this.score += SCORE.pointsPerKill * scoreMultiplier;
   }
 
   addProjectileHit(): void {

@@ -220,8 +220,16 @@ export const INDICATORS = {
  * changes nothing about how the game plays.
  */
 export const DEBUG = {
-  /** The attack-range ring around the player. */
-  showAttackRange: true,
+  /**
+   * When the player's attack-range ring is drawn:
+   *   'contextual' — only while an Attack Move command is being used (A mode,
+   *                  or briefly after T). This is the default: the ring is a
+   *                  targeting aid, not permanent furniture.
+   *   'always'     — the old behaviour, useful when tuning range itself
+   *   'off'        — never
+   * Changing this never changes the attack range calculation.
+   */
+  attackRangeDisplay: 'contextual' as 'contextual' | 'always' | 'off',
   /** READY / WINDUP / RECOVERY readout in the HUD panel. */
   showAttackState: true,
   /** The little "CANCEL" tag when a windup is aborted. */
@@ -239,8 +247,12 @@ export const DEBUG = {
  * confirming click, no indicator. Finite range, stops on the first enemy hit.
  */
 export const SKILLSHOT_Q = {
-  /** Fast, so leading a moving target is a small correction rather than a lob. */
-  speed: 1900,
+  /**
+   * Slow enough that cast -> travel -> hit reads as three separate beats, and
+   * that a moving Pursuer has to be led rather than pointed at.
+   * (Was 1900; -34%.)
+   */
+  speed: 1250,
   /** Collision half-width (circle-vs-circle against the target's radius). */
   radius: 7,
   /**
@@ -250,7 +262,12 @@ export const SKILLSHOT_Q = {
    */
   maxRange: 450,
   damage: 30,
-  cooldownMs: 4000,
+  cooldownMs: 3000,
+  /**
+   * A landed Q takes this much off the REMAINING cooldown (it never restarts
+   * the cooldown). Missing gives nothing: no refund, no passive stack.
+   */
+  hitCooldownReductionMs: 750,
   /** Cast time before the missile spawns. 0 = instant, and you keep moving. */
   castTimeMs: 0,
   /** Missile stops on the first target it damages — no pierce. */
@@ -263,6 +280,19 @@ export const SKILLSHOT_Q = {
   castFlashMs: 160,
   impactRadius: 30,
   impactMs: 200,
+} as const;
+
+/**
+ * The Ezreal-flavoured passive: landing Q ramps your attack speed.
+ *
+ * One shared timed buff, not per-stack timers — every hit adds a stack (to the
+ * cap) AND refreshes the whole buff. When it expires, all stacks go at once.
+ */
+export const PASSIVE = {
+  maxStacks: 5,
+  /** Multiplicative attack-speed bonus per stack. 0.10 == +10% each. */
+  attackSpeedPerStack: 0.1,
+  durationMs: 6000,
 } as const;
 
 export const TARGETS = {
@@ -324,6 +354,63 @@ export const ENEMY_PROJECTILES = {
   cullMargin: 80,
 } as const;
 
+/**
+ * The Pursuer: our first mob with movement AI. It walks the player down, so the
+ * drill becomes "keep spacing" rather than "hit the stationary dummy".
+ *
+ * HP is expressed as a multiple of the basic target so the two stay in
+ * proportion when you retune TARGETS.maxHp.
+ */
+export const PURSUER = {
+  /** maxHp = TARGETS.maxHp * this. 24 * 2.5 = 60 == 5 autos at 12 damage. */
+  baseHpMultiplier: 2.5,
+  radius: 26,
+  /** Fraction of PLAYER.moveSpeed. Below 1 so it can always be kited. */
+  moveSpeedFraction: 0.55,
+  /** Centre-to-centre reach for its melee swing (see attackReachTo()). */
+  attackRange: 16,
+  attackDamage: 10,
+  /** Telegraph before the hit lands — your window to walk out. */
+  windupMs: 400,
+  /** Minimum gap between swings, measured from the START of a swing. */
+  attackCooldownMs: 1200,
+  /** Kill score relative to a basic target. */
+  scoreMultiplier: 2.25,
+  hpBarWidth: 64,
+  hpBarHeight: 8,
+  hpBarOffsetY: 20,
+} as const;
+
+/**
+ * Which archetypes spawn at each difficulty level, as relative weights.
+ * Index 0 == difficulty 1. Weights are normalised, so they need not sum to 1.
+ * Adding an archetype means adding one row here plus a factory entry.
+ */
+export const ENEMY_SPAWN = {
+  weights: {
+    basic:   [1, 1, 1, 0.8, 0.75, 0.65, 0.6, 0.5, 0.5, 0.5],
+    pursuer: [0, 0, 0, 0.2, 0.25, 0.35, 0.4, 0.5, 0.5, 0.5],
+  } as Record<string, number[]>,
+} as const;
+
+/**
+ * Modest HP growth so later stages bite without turning enemies into sponges.
+ * D1-3 = 100%, then +5% per level: D4 105%, D5 110%, ...
+ */
+export const ENEMY_SCALING = {
+  hpRampStartDifficulty: 4,
+  hpPerDifficulty: 0.05,
+  maxHpMultiplier: 1.5,
+} as const;
+
+/** The between-stage countdown / banner. Presentation only. */
+export const STAGE = {
+  /** Start counting down this long before the next difficulty level lands. */
+  countdownSeconds: 3,
+  /** How long the "STAGE N" banner stays up after it changes. */
+  bannerMs: 1500,
+} as const;
+
 export const DIFFICULTY = {
   /**
    * Nothing scales for this long: the opening stays sparse so you can work on
@@ -347,6 +434,7 @@ export const DIFFICULTY = {
 
 export const SCORE = {
   pointsPerDamage: 1,
+  /** Base kill value; each archetype multiplies this by its scoreMultiplier. */
   pointsPerKill: 100,
   /** Small trickle just for staying alive; keeps a clean 60s worth something. */
   pointsPerSecondAlive: 5,

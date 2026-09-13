@@ -3,10 +3,15 @@ import { SKILLSHOT_Q } from '../../config/balance';
 import { THEME } from '../../config/theme';
 import { Projectile } from '../entities/Projectile';
 import type { Player } from '../entities/Player';
-import type { Target } from '../entities/Target';
+import type { Enemy } from '../entities/Enemy';
 
 interface SkillshotCallbacks {
-  onHit: (target: Target, damage: number, killed: boolean) => void;
+  onHit: (target: Enemy, damage: number, killed: boolean) => void;
+  /**
+   * A Q actually connected. This is the authoritative hit event: the passive
+   * stack and the cooldown refund both hang off it, and a miss fires nothing.
+   */
+  onLanded: () => void;
 }
 
 /**
@@ -83,7 +88,7 @@ export class SkillshotSystem {
     return true;
   }
 
-  update(deltaSeconds: number, nowMs: number, targets: Target[]): void {
+  update(deltaSeconds: number, nowMs: number, targets: Enemy[]): void {
     this.now = nowMs;
 
     for (const missile of this.missiles) {
@@ -97,7 +102,13 @@ export class SkillshotSystem {
         const killed = target.takeDamage(missile.damage);
         this.shotsHit++;
         this.showImpact(missile.x, missile.y);
+
+        // A landed Q shaves the REMAINING cooldown — it never restarts it, so
+        // the refund can bring Q straight back up.
+        this.readyAt = Math.max(this.now, this.readyAt - SKILLSHOT_Q.hitCooldownReductionMs);
+
         this.callbacks.onHit(target, missile.damage, killed);
+        this.callbacks.onLanded();
         // No pierce: the bolt is spent on the first enemy it touches.
         if (SKILLSHOT_Q.stopsOnFirstHit) missile.kill();
         break;

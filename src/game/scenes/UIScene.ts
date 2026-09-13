@@ -1,6 +1,9 @@
 import Phaser from 'phaser';
-import { ARENA, DEBUG, ROUND } from '../../config/balance';
+import { ARENA, DEBUG, ROUND, STAGE } from '../../config/balance';
 import { THEME } from '../../config/theme';
+import { AbilityBar } from '../ui/AbilityBar';
+import { PassiveDisplay } from '../ui/PassiveDisplay';
+import { PauseMenu } from '../ui/PauseMenu';
 import type { GameScene } from './GameScene';
 
 /**
@@ -13,10 +16,19 @@ export class UIScene extends Phaser.Scene {
   private timeText!: Phaser.GameObjects.Text;
   private scoreText!: Phaser.GameObjects.Text;
   private levelText!: Phaser.GameObjects.Text;
-  private qText!: Phaser.GameObjects.Text;
   private modeText!: Phaser.GameObjects.Text;
   private debugText!: Phaser.GameObjects.Text;
   private stateText!: Phaser.GameObjects.Text;
+  /** The whole top-right debug group, toggled together from the pause menu. */
+  private debugPanel!: Phaser.GameObjects.Graphics;
+
+  private abilityBar!: AbilityBar;
+  private passiveDisplay!: PassiveDisplay;
+  private pauseMenu!: PauseMenu;
+  private stageText!: Phaser.GameObjects.Text;
+  /** Last difficulty level the banner was shown for. */
+  private lastStage = 1;
+  private stageBannerUntil = 0;
   private hintText!: Phaser.GameObjects.Text;
 
   private hpBar!: Phaser.GameObjects.Rectangle;
@@ -54,7 +66,7 @@ export class UIScene extends Phaser.Scene {
 
     // ---- top-right: live mechanics panel ---------------------------------
     const dbgX = ARENA.width - M - 244;
-    this.panel(dbgX - 16, 40, 260, 140);
+    this.debugPanel = this.panel(dbgX - 16, 40, 260, 140);
     this.stateText = label(dbgX, 50, 15, THEME.ui.dim);
     this.debugText = label(dbgX, 76, 12, THEME.ui.faint);
     this.debugText.setLineSpacing(6);
@@ -75,26 +87,95 @@ export class UIScene extends Phaser.Scene {
       .setDepth(102);
     this.hpText = label(M + 266, barY - 8, 13, THEME.ui.dim);
 
-    this.qText = label(M + 16, vitalsTop + 16, 15, THEME.ui.text);
-    // Pending-command line: Attack Move stance, etc.
-    this.modeText = label(M + 126, vitalsTop + 16, 15, THEME.ui.danger);
+    label(M + 16, vitalsTop + 16, 12, THEME.ui.faint).setText('HP');
+
+    // Pending-command banner, sat just above the ability bar where the eyes
+    // already are. (Q now lives in the bottom-centre bar — there is exactly one
+    // Q cooldown display in the whole HUD.)
+    this.modeText = label(ARENA.width / 2, ARENA.height - 112, 14, THEME.ui.danger)
+      .setOrigin(0.5, 0.5);
 
     // ---- bottom-right: controls ------------------------------------------
-    this.hintText = label(ARENA.width - M, ARENA.height - 62, 12, THEME.ui.faint).setOrigin(1, 0);
-    this.hintText.setText(
-      'RMB move / attack     T attack-move at cursor     A + LMB attack-move     S stop     Q skillshot',
-    );
+    // The full control list lives in the pause menu; the HUD only points at it,
+    // which keeps the space beside the ability bar clear.
+    this.hintText = label(ARENA.width - M, ARENA.height - 44, 12, THEME.ui.faint).setOrigin(1, 0);
+    this.hintText.setText('ESC   menu & settings');
+
+    // ---- bottom-centre: ability bar (Q today, room for W/E/R) ------------
+    this.abilityBar = new AbilityBar(this, ['Q']);
+
+    // Passive pips sit just above the bar.
+    const slotTop = ARENA.height - THEME.ability.bottomMargin - THEME.ability.slotSize;
+    this.passiveDisplay = new PassiveDisplay(this, 5, slotTop - 30);
+
+    // Stage countdown / banner, centred above the play area.
+    this.stageText = label(ARENA.width / 2, 96, 20, THEME.ui.warn)
+      .setOrigin(0.5, 0)
+      .setVisible(false);
 
     this.buildOverlay();
+    this.buildPauseMenu();
   }
 
   /** Rounded, semi-transparent plate that groups a block of HUD text. */
-  private panel(x: number, y: number, w: number, h: number): void {
+  private panel(x: number, y: number, w: number, h: number): Phaser.GameObjects.Graphics {
     const g = this.add.graphics().setDepth(100);
     g.fillStyle(THEME.ui.panelColor, THEME.ui.panelAlpha);
     g.fillRoundedRect(x, y, w, h, THEME.ui.panelRadius);
     g.lineStyle(1, THEME.ui.panelStroke, 0.9);
     g.strokeRoundedRect(x, y, w, h, THEME.ui.panelRadius);
+    return g;
+  }
+
+  /**
+   * The Escape menu. Settings write straight into the DEBUG config block, which
+   * gameplay and HUD code already re-read every frame — so there is no second
+   * copy of the settings state to keep in sync.
+   */
+  private buildPauseMenu(): void {
+    this.pauseMenu = new PauseMenu(
+      this,
+      {
+        resume: () => this.game_.setPaused(false),
+        restart: () => {
+          this.game_.setPaused(false);
+          this.game_.restartRound();
+        },
+      },
+      [
+        {
+          label: 'Attack Range Indicator',
+          read: () => DEBUG.attackRangeDisplay.toUpperCase(),
+          cycle: () => {
+            const order = ['contextual', 'always', 'off'] as const;
+            const next = (order.indexOf(DEBUG.attackRangeDisplay) + 1) % order.length;
+            DEBUG.attackRangeDisplay = order[next];
+          },
+        },
+        {
+          label: 'Damage Numbers',
+          read: () => (DEBUG.showDamageNumbers ? 'ON' : 'OFF'),
+          cycle: () => {
+            DEBUG.showDamageNumbers = !DEBUG.showDamageNumbers;
+          },
+        },
+        {
+          label: 'Debug Metrics',
+          read: () => (DEBUG.showAttackState ? 'ON' : 'OFF'),
+          cycle: () => {
+            DEBUG.showAttackState = !DEBUG.showAttackState;
+          },
+        },
+      ],
+      [
+        'RMB ground | move',
+        'RMB enemy | attack that enemy',
+        'T | attack-move at cursor',
+        'A + LMB | attack-move at a point',
+        'S | stop',
+        'Q | skillshot toward cursor',
+      ],
+    );
   }
 
   private buildOverlay(): void {
@@ -159,15 +240,14 @@ export class UIScene extends Phaser.Scene {
     this.hpBar.setFillStyle(hpPct > 0.5 ? 0x62d26f : hpPct > 0.25 ? 0xffd166 : 0xff6b6b);
     this.hpText.setText(`${Math.ceil(hud.hp)} / ${hud.maxHp}`);
 
-    // Q is quick-cast, so the only states are ready and cooling down.
-    if (hud.qCooldownMs <= 0) {
-      this.qText.setText('Q  READY').setColor(THEME.ui.good);
-    } else {
-      this.qText.setText(`Q  ${(hud.qCooldownMs / 1000).toFixed(1)}s`).setColor(THEME.ui.faint);
-    }
+    // The ability bar is the single authoritative Q display. It is handed the
+    // real numbers from SkillshotSystem and derives nothing itself.
+    this.abilityBar.update([
+      { cooldownMs: hud.qCooldownMs, cooldownTotalMs: hud.qCooldownTotalMs },
+    ]);
 
     this.modeText
-      .setText(hud.attackMovePending ? 'A  ATTACK MOVE — click a location' : '')
+      .setText(hud.attackMovePending ? 'ATTACK MOVE — click a location' : '')
       .setVisible(hud.attackMovePending);
 
     // READY / WINDUP / RECOVERY — the system's own view of the attack cycle, so
@@ -178,6 +258,8 @@ export class UIScene extends Phaser.Scene {
       : hud.attackState === 'recovery' ? THEME.ui.good
       : THEME.ui.dim;
 
+    // One toggle hides the whole top-right group, plate included.
+    this.debugPanel.setVisible(DEBUG.showAttackState);
     this.debugText.setVisible(DEBUG.showAttackState);
     this.stateText.setVisible(DEBUG.showAttackState).setText(`STATE  ${stateLabel}`).setColor(stateColor);
 
@@ -189,7 +271,46 @@ export class UIScene extends Phaser.Scene {
       `STILL    ${(hud.wastedRecoveryMs / 1000).toFixed(1)}s in recovery`,
     ].join('\n'));
 
+    this.passiveDisplay.update(hud.passiveStacks, hud.passiveFraction);
+    this.updateStageBanner(hud);
+
+    this.pauseMenu.setVisible(this.game_.isPaused);
+
     this.syncOverlay();
+  }
+
+  /**
+   * Counts the last few seconds down to the next difficulty step, then flashes
+   * the new stage. Reads elapsed round time from the HUD snapshot, so it
+   * freezes with a pause like everything else.
+   */
+  private updateStageBanner(hud: ReturnType<GameScene['getHudState']>): void {
+    // A stage just started: show the banner for a moment.
+    if (hud.difficultyLevel !== this.lastStage) {
+      this.lastStage = hud.difficultyLevel;
+      this.stageBannerUntil = hud.elapsed * 1000 + STAGE.bannerMs;
+    }
+
+    const nowMs = hud.elapsed * 1000;
+    if (nowMs < this.stageBannerUntil) {
+      this.stageText
+        .setVisible(true)
+        .setText(`STAGE ${hud.difficultyLevel}`)
+        .setColor(THEME.ui.accent)
+        .setFontSize(24);
+      return;
+    }
+
+    if (hud.nextStage !== null && hud.secondsUntilNextStage <= STAGE.countdownSeconds) {
+      this.stageText
+        .setVisible(true)
+        .setText(`STAGE ${hud.nextStage} IN ${Math.ceil(hud.secondsUntilNextStage)}`)
+        .setColor(THEME.ui.warn)
+        .setFontSize(18);
+      return;
+    }
+
+    this.stageText.setVisible(false);
   }
 
   private syncOverlay(): void {
@@ -213,7 +334,10 @@ export class UIScene extends Phaser.Scene {
     this.resultText.setText(
       [
         row('SCORE', `${result.score}`),
-        row('TARGETS KILLED', `${result.targetsKilled}`),
+        row(
+          'KILLS',
+          `${result.targetsKilled}   (basic ${result.killsByType.basic ?? 0}, pursuer ${result.killsByType.pursuer ?? 0})`,
+        ),
         row('DAMAGE DEALT', `${result.damageDealt}`),
         row('PROJECTILES HIT BY', `${result.projectileHitsTaken}`),
         row('Q ACCURACY', `${result.qHit}/${result.qFired}  (${accuracy}%)`),

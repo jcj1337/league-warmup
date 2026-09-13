@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { KEYBINDS } from '../../config/balance';
-import type { Target } from '../entities/Target';
+import type { Enemy } from '../entities/Enemy';
 
 /**
  * Everything the input layer is allowed to ask the game to do. GameScene
@@ -11,9 +11,12 @@ export interface CommandHandler {
   /** Plain move order to a world point. */
   commandMove(x: number, y: number): void;
   /** Direct attack order on one specific enemy. */
-  commandAttackTarget(target: Target): void;
-  /** Attack Move toward a world point. */
-  commandAttackMove(x: number, y: number): void;
+  commandAttackTarget(target: Enemy): void;
+  /**
+   * Attack Move toward a world point. `showRangeHint` is a purely cosmetic flag
+   * set by the instant (T) path — the underlying order is identical either way.
+   */
+  commandAttackMove(x: number, y: number, opts?: { showRangeHint?: boolean }): void;
   /** Stop: freeze in place, drop pending orders. */
   commandStop(): void;
 
@@ -21,9 +24,13 @@ export interface CommandHandler {
   castSkillshot(x: number, y: number): void;
 
   /** Enemy under a world point, if any (click hit test). */
-  targetAt(x: number, y: number): Target | null;
+  targetAt(x: number, y: number): Enemy | null;
 
   isRoundRunning(): boolean;
+  /** False while paused: gameplay input is swallowed, UI input still works. */
+  acceptsGameplayInput(): boolean;
+  isPaused(): boolean;
+  togglePause(): void;
   restartRound(): void;
 }
 
@@ -68,7 +75,9 @@ export class InputController {
   }
 
   private onPointerDown(pointer: Phaser.Input.Pointer): void {
-    if (!this.cmd.isRoundRunning()) return;
+    // While the pause menu is up, clicks belong to the menu alone — this is what
+    // stops a button press from also issuing a move order underneath it.
+    if (!this.cmd.acceptsGameplayInput()) return;
 
     const x = pointer.worldX;
     const y = pointer.worldY;
@@ -113,10 +122,19 @@ export class InputController {
     }
     if (!this.cmd.isRoundRunning()) return;
 
+    // Escape is contextual: it backs out of armed attack-move targeting first,
+    // and only opens/closes the pause menu when there is nothing to back out of.
     if (KEYBINDS.cancel.includes(key)) {
-      this.cancelPending();
+      if (this.attackMovePending) {
+        this.cancelPending();
+      } else {
+        this.cmd.togglePause();
+      }
       return;
     }
+
+    // Everything below is a gameplay command, so it stops at the pause menu.
+    if (!this.cmd.acceptsGameplayInput()) return;
 
     if (KEYBINDS.attackMove.includes(key)) {
       // A toggles targeting mode: pressing it again backs out.
@@ -126,10 +144,11 @@ export class InputController {
 
     if (KEYBINDS.attackMoveClick.includes(key)) {
       // T: the exact same command A + left-click produces, issued straight at
-      // the cursor with no targeting mode and no second input.
+      // the cursor with no targeting mode and no second input. The range hint
+      // flag is the only difference, and it is cosmetic.
       this.attackMovePending = false;
       const { x, y } = this.cursor();
-      this.cmd.commandAttackMove(x, y);
+      this.cmd.commandAttackMove(x, y, { showRangeHint: true });
       return;
     }
 

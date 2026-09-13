@@ -45,9 +45,37 @@ export class DifficultyManager {
     return Math.pow(linear, DIFFICULTY.rampCurve);
   }
 
-  /** 1..DIFFICULTY.levels — purely for the HUD readout. */
+  /** 1..DIFFICULTY.levels. Drives the HUD readout AND enemy composition. */
   get level(): number {
     return Math.min(DIFFICULTY.levels, 1 + Math.floor(this.t * DIFFICULTY.levels));
+  }
+
+  /** The level after this one, or null once we are at the cap. */
+  get nextLevel(): number | null {
+    return this.level >= DIFFICULTY.levels ? null : this.level + 1;
+  }
+
+  /**
+   * Seconds until the next difficulty level lands — the inverse of the ramp.
+   *
+   *   t     = ((e - start) / (end - start)) ^ curve
+   *   => e  = start + (end - start) * t ^ (1 / curve)
+   *
+   * Infinity at max level. Used only for the stage countdown, so it never
+   * affects gameplay timing.
+   */
+  get secondsUntilNextLevel(): number {
+    const next = this.nextLevel;
+    if (next === null) return Number.POSITIVE_INFINITY;
+    const tAtNext = (next - 1) / DIFFICULTY.levels;
+    return Math.max(0, this.timeForT(tAtNext) - this.elapsedSeconds);
+  }
+
+  private timeForT(tv: number): number {
+    const start = DIFFICULTY.rampStartSeconds;
+    const end = ROUND.durationSeconds * DIFFICULTY.rampCompleteAtRoundFraction;
+    if (end <= start) return start;
+    return start + (end - start) * Math.pow(Phaser.Math.Clamp(tv, 0, 1), 1 / DIFFICULTY.rampCurve);
   }
 
   private lerp(ramp: Ramp): number {
