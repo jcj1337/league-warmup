@@ -26,9 +26,12 @@ export class UIScene extends Phaser.Scene {
   private passiveDisplay!: PassiveDisplay;
   private pauseMenu!: PauseMenu;
   private stageText!: Phaser.GameObjects.Text;
-  /** Last difficulty level the banner was shown for. */
+  /** Last difficulty level the banner was shown for. Round-scoped: see beginRound(). */
   private lastStage = 1;
+  /** Round-elapsed ms until which the "STAGE N" banner stays up. Round-scoped. */
   private stageBannerUntil = 0;
+  /** The GameScene round (HudState.round) this HUD last polled. */
+  private observedRound = 0;
   private hintText!: Phaser.GameObjects.Text;
 
   private hpBar!: Phaser.GameObjects.Rectangle;
@@ -234,8 +237,20 @@ export class UIScene extends Phaser.Scene {
       .setVisible(false);
   }
 
+  /**
+   * GameScene started a new round. UIScene itself is never restarted, so
+   * round-scoped HUD state is re-initialised here from the new round's own
+   * snapshot — the first round goes through this exact path too.
+   */
+  private beginRound(hud: ReturnType<GameScene['getHudState']>): void {
+    this.observedRound = hud.round;
+    this.lastStage = hud.difficultyLevel;
+    this.stageBannerUntil = 0;
+  }
+
   override update(): void {
     const hud = this.game_.getHudState();
+    if (hud.round !== this.observedRound) this.beginRound(hud);
 
     this.timeText.setText(hud.timeRemaining.toFixed(1));
     this.timeText.setColor(hud.timeRemaining <= 10 ? THEME.ui.warn : THEME.ui.text);

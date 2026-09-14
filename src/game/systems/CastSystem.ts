@@ -1,7 +1,10 @@
 import type { Player } from '../entities/Player';
 
-/** Abilities that have a commitment window. Q and Flash stay instant. */
-export type CastAbility = 'w' | 'e';
+/**
+ * Abilities that have a commitment window. Flash stays instant by design.
+ * An ability whose castTimeMs is 0 skips this system entirely (see GameScene).
+ */
+export type CastAbility = 'q' | 'w' | 'e';
 
 /**
  * What was committed at the moment the key went down.
@@ -37,8 +40,9 @@ interface CastCallbacks {
  * animation entirely cannot desync the mechanic.
  *
  * While a cast is pending the player is rooted (movement is locked) and further
- * ability inputs are ignored, but move / attack-move orders are BUFFERED and
- * replayed the instant the cast resolves — committed, but never unresponsive.
+ * ability inputs are ignored, but move, attack-move and attack orders are
+ * BUFFERED and replayed the instant the cast resolves — committed, but never
+ * unresponsive. Stop discards a buffered order without touching the cast.
  *
  * All timing is GameClock time, so a pause preserves partial cast progress
  * exactly: nothing is rescheduled, the clock simply stops advancing.
@@ -47,13 +51,13 @@ export class CastSystem {
   private pending: PendingCast | null = null;
   private now = 0;
 
-  /** A move/attack-move order issued mid-cast, replayed on resolve. */
+  /** A move, attack-move or attack order issued mid-cast, replayed on resolve. */
   private buffered: (() => void) | null = null;
 
   /** Bumped each time a cast completes, so the scene can flash once. */
   public lastResolveAt = -Infinity;
   /** Which ability that last resolve was — `castingAbility` is null by then. */
-  public lastResolvedAbility: CastAbility = 'w';
+  public lastResolvedAbility: CastAbility = 'q';
 
   constructor(
     private readonly player: Player,
@@ -101,11 +105,16 @@ export class CastSystem {
   }
 
   /**
-   * Hold a move / attack-move order issued during the cast. Only the most
-   * recent one survives, matching how re-clicking works everywhere else.
+   * Hold a move, attack-move or attack order issued during the cast. Only the
+   * most recent one survives, matching how re-clicking works everywhere else.
    */
   bufferCommand(run: () => void): void {
     this.buffered = run;
+  }
+
+  /** Drop the buffered order (Stop mid-cast). The cast itself still resolves. */
+  clearBufferedCommand(): void {
+    this.buffered = null;
   }
 
   update(nowMs: number): void {

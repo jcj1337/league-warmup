@@ -1,0 +1,83 @@
+import { expect, type Page, type TestInfo } from '@playwright/test';
+
+/**
+ * Shared scaffolding for the browser regression suites.
+ *
+ * Each suite is a port of a characterization script: one long, sequential walk
+ * through an area of the game that records PASS / FAIL / WARN lines. `fail` is a
+ * soft assertion, so — exactly like the original scripts — one failed check
+ * never hides the checks after it, but the test still fails at the end.
+ */
+export interface Suite {
+  pass(message: string): void;
+  fail(message: string): void;
+  /** Informational: a scenario this run could not exercise. Never fails the test. */
+  warn(message: string): void;
+  /** Label the checks that follow, so a failure names the part of the suite it came from. */
+  section(name: string): void;
+  /** Uncaught page errors and console errors seen so far. */
+  errors: string[];
+  /** Check for page errors, attach the check log, print a one-line summary. */
+  finish(): Promise<void>;
+}
+
+/**
+ * Wait until both scenes have run create() and the simulation has advanced
+ * `settleMs` of GAME time. (The original scripts slept a fixed few hundred
+ * wall-clock milliseconds here instead.)
+ */
+export async function waitForGame(page: Page, settleMs: number): Promise<void> {
+  await page.waitForFunction((settle) => {
+    const scenes = window.__warmup?.scene;
+    const g = scenes?.getScene('GameScene');
+    const ui = scenes?.getScene('UIScene');
+    return Boolean(g?.clock && ui?.pauseMenu && g.clock.now >= settle);
+  }, settleMs);
+}
+
+export async function startSuite(page: Page, testInfo: TestInfo, settleMs = 400): Promise<Suite> {
+  const log: string[] = [];
+  const errors: string[] = [];
+  let current = '';
+  const label = (m: string) => (current ? `[${current}] ${m}` : m);
+
+  page.on('pageerror', (e) => errors.push(String(e)));
+  page.on('console', (m) => {
+    if (m.type() === 'error') errors.push('console: ' + m.text());
+  });
+
+  await page.goto('/', { waitUntil: 'load' });
+  await waitForGame(page, settleMs);
+
+  const pass = (m: string) => {
+    log.push('PASS ' + label(m));
+  };
+  const fail = (m: string) => {
+    log.push('FAIL ' + label(m));
+    expect.soft(false, label(m)).toBe(true);
+  };
+  const warn = (m: string) => {
+    log.push('WARN ' + label(m));
+    testInfo.annotations.push({ type: 'warning', description: label(m) });
+  };
+
+  return {
+    pass,
+    fail,
+    warn,
+    errors,
+    section: (name) => {
+      current = name;
+    },
+    finish: async () => {
+      current = 'page errors';
+      errors.length === 0 ? pass('none') : fail(errors.join('\n'));
+
+      const count = (kind: string) => log.filter((l) => l.startsWith(kind)).length;
+      await testInfo.attach('checks.txt', { body: log.join('\n'), contentType: 'text/plain' });
+      console.log(
+        `${testInfo.title.split(':')[0]}: ${count('PASS')} passed, ${count('FAIL')} failed, ${count('WARN')} warnings`,
+      );
+    },
+  };
+}

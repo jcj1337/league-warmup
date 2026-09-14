@@ -1,0 +1,13 @@
+{
+  // Typechecks the browser suites and the Playwright config. The suites are
+  // ports of plain-JS scripts that read game internals through `any`, so the
+  // strict flags used for src/ are relaxed here.
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "strict": false,
+    "noUnusedLocals": false,
+    "noUnusedParameters": false,
+    "types": ["node"]
+  },
+  "include": ["./**/*.ts", "../playwright.config.ts"]
+}

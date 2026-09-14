@@ -55,7 +55,7 @@ export class Player {
   private rangeVisibility = 0;
 
   /** Ability cast animation state, written by setCastVisual(). */
-  private castAbility: 'w' | 'e' | null = null;
+  private castAbility: 'q' | 'w' | 'e' | null = null;
   private castProgress = 0;
   private castAngle: number | null = null;
   private readonly castGfx: Phaser.GameObjects.Graphics;
@@ -150,7 +150,12 @@ export class Player {
    * in what the cast timer already decided, so the charge always finishes
    * exactly when the spell fires, whatever castTimeMs is set to.
    */
-  setCastVisual(ability: 'w' | 'e' | null, progress: number, aimX: number | null, aimY: number | null): void {
+  setCastVisual(
+    ability: 'q' | 'w' | 'e' | null,
+    progress: number,
+    aimX: number | null,
+    aimY: number | null,
+  ): void {
     this.castAbility = ability;
     this.castProgress = Phaser.Math.Clamp(progress, 0, 1);
     this.castAngle =
@@ -160,8 +165,13 @@ export class Player {
   }
 
   /** Bright peak flash at the instant a cast completes. */
-  playCastRelease(scene: Phaser.Scene, ability: 'w' | 'e'): void {
-    const color = ability === 'w' ? THEME.projectiles.wCore : THEME.projectiles.eCore;
+  playCastRelease(scene: Phaser.Scene, ability: 'q' | 'w' | 'e'): void {
+    const color =
+      ability === 'q'
+        ? THEME.projectiles.qCore
+        : ability === 'w'
+          ? THEME.projectiles.wCore
+          : THEME.projectiles.eCore;
     const ring = scene.add
       .circle(this.x, this.y, this.radius, 0x000000, 0)
       .setStrokeStyle(3, color, 0.95)
@@ -190,9 +200,32 @@ export class Player {
       return;
     }
 
-    const t = this.castProgress;
     const C = THEME.cast;
+    // Front-load the anticipation: at a 165ms cast, linear interpolation would
+    // barely register before the release. pow(t, <1) makes the charge visible
+    // almost immediately while still peaking exactly at t = 1.
+    const t = Math.pow(this.castProgress, C.anticipationCurve);
     g.clear().setVisible(true);
+
+    if (this.castAbility === 'q') {
+      // Q: a tight forward spark — the quickest, smallest charge of the three.
+      const a = this.castAngle ?? this.facingAngle;
+      const ox = this.x + Math.cos(a) * (this.radius + C.wOrbOffset * 0.8);
+      const oy = this.y + Math.sin(a) * (this.radius + C.wOrbOffset * 0.8);
+
+      g.lineStyle(2, THEME.projectiles.qColor, 0.3 + 0.6 * t);
+      g.lineBetween(
+        this.x + Math.cos(a) * this.radius,
+        this.y + Math.sin(a) * this.radius,
+        ox + Math.cos(a) * (6 * t),
+        oy + Math.sin(a) * (6 * t),
+      );
+      g.fillStyle(THEME.projectiles.qColor, 0.6 + 0.4 * t);
+      g.fillCircle(ox, oy, Phaser.Math.Linear(1.5, C.wOrbEndRadius * 0.62, t));
+      g.fillStyle(THEME.projectiles.qCore, 0.9);
+      g.fillCircle(ox, oy, Phaser.Math.Linear(0.8, 2.6, t));
+      return;
+    }
 
     if (this.castAbility === 'w') {
       const a = this.castAngle ?? this.facingAngle;

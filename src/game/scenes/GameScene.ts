@@ -14,7 +14,7 @@ import { PassiveSystem } from '../systems/PassiveSystem';
 import { EnemyDirector } from '../systems/EnemyDirector';
 import { AbilityCooldowns } from '../systems/AbilityCooldowns';
 import { BlinkSystem } from '../systems/BlinkSystem';
-import { CastSystem } from '../systems/CastSystem';
+import { CastSystem, type CastAbility, type CastPayload } from '../systems/CastSystem';
 import { InputController, type CommandHandler } from '../systems/InputController';
 
 export type RoundState = 'running' | 'over';
@@ -41,6 +41,11 @@ export interface RoundResult {
 
 /** Snapshot the HUD polls every frame. */
 export interface HudState {
+  /**
+   * Which round this snapshot belongs to. Bumps each time create() starts a
+   * round, so the persistent UIScene can tell a restart from a continuing round.
+   */
+  round: number;
   timeRemaining: number;
   score: number;
   hp: number;
@@ -113,11 +118,18 @@ export class GameScene extends Phaser.Scene {
   /** Last release we have already drawn a burst for. */
   private lastReleaseShownAt = -Infinity;
 
+  /**
+   * Round identity. Deliberately NOT reset in create(): the scene instance
+   * survives scene.restart(), so this counts rounds for the persistent UIScene.
+   */
+  private roundId = 0;
+
   constructor() {
     super('GameScene');
   }
 
   create(): void {
+    this.roundId++;
     this.state = 'running';
     this.result = null;
     this.enemies = [];
@@ -173,13 +185,7 @@ export class GameScene extends Phaser.Scene {
     // Cast windows for W and E. The timer here is authoritative; the player's
     // charge animation only reads its progress.
     this.cast = new CastSystem(this.player, {
-      onResolve: (ability, payload) => {
-        if (ability === 'w') {
-          this.skillshot.fire('w', payload.x, payload.y);
-        } else {
-          this.blink.executeBlink(payload, this.enemies, this.clock.now);
-        }
-      },
+      onResolve: (ability, payload) => this.resolveCast(ability, payload),
     });
 
     this.director = new EnemyDirector(this, this.clock, this.difficulty, () => ({
@@ -218,6 +224,12 @@ export class GameScene extends Phaser.Scene {
 
       commandAttackTarget: (target) => {
         // Direct order: commits to this exact enemy, ignoring A-move selection.
+        // Mid-cast it is buffered like a move, so no auto can start during a
+        // Q/W/E window — the attack begins the moment the cast resolves.
+        if (this.cast.isCasting) {
+          this.cast.bufferCommand(() => this.attacks.commandAttack(target));
+          return;
+        }
         this.attacks.commandAttack(target);
       },
 
@@ -238,12 +250,20 @@ export class GameScene extends Phaser.Scene {
         }
       },
 
-      commandStop: () => this.attacks.onStop(),
+      // Stop cannot cancel a committed cast, but it discards any order buffered
+      // behind it, so nothing replays when the cast resolves.
+      commandStop: () => {
+        if (this.cast.isCasting) this.cast.clearBufferedCommand();
+        this.attacks.onStop();
+      },
 
-      // Q stays instant: it already feels good, and it is the tempo ability.
+      // All three kit abilities commit for a short window anchored to the auto
+      // windup, so weaving them between attacks keeps one rhythm.
       castSkillshot: (x, y) => {
-        if (this.cast.isCasting) return;
-        this.skillshot.cast('q', x, y);
+        if (this.cast.isCasting || !this.skillshot.canCast('q')) return;
+        this.attacks.onMoveOrder();
+        this.cooldowns.start('q');
+        this.beginCastOrResolve('q', { x, y }, SKILLSHOT_Q.castTimeMs);
       },
 
       // W and E commit: the cooldown starts NOW (so the window never extends
@@ -253,7 +273,7 @@ export class GameScene extends Phaser.Scene {
         if (this.cast.isCasting || !this.skillshot.canCast('w')) return;
         this.attacks.onMoveOrder();
         this.cooldowns.start('w');
-        this.cast.begin('w', { x, y }, SKILLSHOT_W.castTimeMs, this.clock.now);
+        this.beginCastOrResolve('w', { x, y }, SKILLSHOT_W.castTimeMs);
       },
       castBlink: (x, y) => {
         if (this.cast.isCasting || !this.blink.canBlink()) return;
@@ -261,7 +281,7 @@ export class GameScene extends Phaser.Scene {
         // Destination is committed here, not when the cast lands.
         const dest = this.blink.blinkDestination(x, y);
         this.cooldowns.start('e');
-        this.cast.begin('e', dest, BLINK_E.castTimeMs, this.clock.now);
+        this.beginCastOrResolve('e', dest, BLINK_E.castTimeMs);
       },
 
       // Flash stays instant, deliberately: it should feel more immediate than E.
@@ -277,6 +297,27 @@ export class GameScene extends Phaser.Scene {
       togglePause: () => this.setPaused(!this.paused),
       restartRound: () => this.restartRound(),
     };
+  }
+
+  /**
+   * Start a cast window, or resolve immediately when castTimeMs is 0 — so any
+   * ability can be made instant from config alone.
+   */
+  private beginCastOrResolve(ability: CastAbility, payload: CastPayload, castTimeMs: number): void {
+    if (castTimeMs <= 0) {
+      this.resolveCast(ability, payload);
+      return;
+    }
+    this.cast.begin(ability, payload, castTimeMs, this.clock.now);
+  }
+
+  /** What each ability actually does once its commitment window elapses. */
+  private resolveCast(ability: CastAbility, payload: CastPayload): void {
+    if (ability === 'e') {
+      this.blink.executeBlink(payload, this.enemies, this.clock.now);
+    } else {
+      this.skillshot.fire(ability, payload.x, payload.y);
+    }
   }
 
   /** Click hit test, with a little grace so clicks feel forgiving. */
@@ -694,6 +735,7 @@ export class GameScene extends Phaser.Scene {
   /** Polled by UIScene each frame; safe to call before create() finishes. */
   getHudState(): HudState {
     return {
+      round: this.roundId,
       timeRemaining: this.difficulty ? this.difficulty.remaining : ROUND.durationSeconds,
       score: this.scoring ? Math.round(this.scoring.score) : 0,
       hp: this.player ? this.player.hp : PLAYER.maxHp,

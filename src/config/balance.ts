@@ -274,8 +274,12 @@ export const SKILLSHOT_Q = {
    * Flash, and it never restarts a cooldown. Missing gives nothing.
    */
   hitCooldownReductionMs: 750,
-  /** Cast time before the missile spawns. 0 = instant, and you keep moving. */
-  castTimeMs: 0,
+  /**
+   * Commitment window before the bolt leaves, anchored to the auto-attack
+   * windup (ATTACK.baseCooldownMs * windupPercent = 175ms at round start) so
+   * weaving Q between autos feels like the same rhythm. Set 0 for instant.
+   */
+  castTimeMs: 165,
   /** Missile stops on the first target it damages — no pierce. */
   stopsOnFirstHit: true,
   // --- visuals -------------------------------------------------------------
@@ -283,7 +287,7 @@ export const SKILLSHOT_Q = {
   boltLength: 26,
   /** Muzzle flash thrown out from the player on cast. */
   castFlashRadius: 26,
-  castFlashMs: 160,
+  castFlashMs: 120,
   impactRadius: 30,
   impactMs: 200,
 } as const;
@@ -299,8 +303,9 @@ export const SKILLSHOT_W = {
   /**
    * Commitment window before the orb actually leaves. The direction is locked
    * in when the key goes down, so moving the mouse mid-cast cannot re-aim it.
+   * Slightly heavier than Q (165ms), still inside the auto-windup band.
    */
-  castTimeMs: 250,
+  castTimeMs: 185,
   /** Fatter and slower than Q, so it reads as a different kind of shot. */
   speed: 1000,
   radius: 12,
@@ -313,7 +318,7 @@ export const SKILLSHOT_W = {
   /** Marks stop on the first enemy touched — no pierce. */
   stopsOnFirstHit: true,
   castFlashRadius: 30,
-  castFlashMs: 170,
+  castFlashMs: 130,
   impactRadius: 34,
   impactMs: 220,
 } as const;
@@ -328,8 +333,10 @@ export const BLINK_E = {
   /**
    * Commitment window before the blink fires. The destination is committed at
    * keypress, so this is a real decision rather than a reflex escape.
+   * The heaviest of the three, because it is a blink — but still short enough
+   * to weave: AUTO 175 ~ Q 165 < W 185 < E 210.
    */
-  castTimeMs: 250,
+  castTimeMs: 210,
   cooldownMs: 8000,
   /** ~1.4x attack range. Real repositioning, well short of Q/W reach. */
   range: 364,
@@ -340,7 +347,7 @@ export const BLINK_E = {
   /** 1.25x a Q hit. */
   damage: 38,
   /** How long the departure/arrival streak lingers. Kept very short. */
-  blinkStreakMs: 130,
+  blinkStreakMs: 100,
 } as const;
 
 /** F: a summoner-style blink. No damage, no passive, no cooldown refund. */

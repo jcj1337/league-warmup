@@ -1,71 +1,35 @@
 # Warmup — Technical Report
 
-A complete description of the codebase as it exists today: architecture, mechanics,
-timing, state flow, configuration, and known weaknesses.
+How the codebase actually works: architecture, mechanics, timing, state flow, and
+known weaknesses. Written to be trustworthy enough to learn the project from.
 
-Everything in this document was read out of the source. Where behaviour is subtle,
-surprising, or differs from what a comment claims, it is called out explicitly.
-Values quoted are the ones currently in `src/config/balance.ts`.
+Everything here was read out of the source. Where behaviour is subtle, surprising,
+or differs from what a comment claims, it is called out. Values quoted are the ones
+currently in `src/config/balance.ts` and `src/config/theme.ts`.
 
 ---
 
-## 1. Project overview
+## 1. Overview
 
-### Purpose
+A 60-second mechanical warm-up trainer for League-style ADC play. The player
+practises positioning, kiting/orbwalking, dodging, and an Ezreal-flavoured kit
+(Q/W/E + Flash) against two enemy archetypes while difficulty ramps.
 
-A browser-based mechanical warm-up trainer for League-style ADC play. The player
-practises four skills simultaneously inside a 60-second round:
+| Layer | Choice |
+| --- | --- |
+| Engine | Phaser **3.90** — rendering, scenes, input, tweens only |
+| Language | TypeScript **5.9**, `strict`, `noUnusedLocals`, `noUnusedParameters` |
+| Bundler | Vite **7**; `npm run build` = `tsc --noEmit && vite build` |
+| Physics | **None** — all movement and collision is hand-written math |
 
-1. Click-to-move positioning
-2. Kiting / orbwalking (attack → move during recovery → attack)
-3. Dodging non-homing enemy projectiles
-4. Aiming a linear skillshot
+No physics engine is central to the design: every distance check, projectile step and
+collision test is explicit arithmetic inside a system class, which keeps timing
+deterministic and tunable.
 
-It is deliberately a **gray-box prototype**: no external art, no audio, no backend,
-no accounts. All visuals are procedural Phaser shapes, graphics and tweens.
-
-### Current gameplay loop
-
-```
-Round starts (60s)
-  → 4 hexagonal target dummies spawn away from the player
-  → player kites: right-click move, T / A-click attack-move, right-click enemy
-  → autos wind up, release a homing bolt, deal 12 damage on impact
-  → targets die in 2 autos, fade out, respawn 1200ms later elsewhere
-  → enemy projectiles fire from the arena edge at the player's position-at-spawn
-  → attack speed ramps up over the round; projectile pressure ramps after 22s
-  → round ends on timer (survived) or at 0 HP (defeated)
-  → end screen shows score + raw mechanical metrics; R / Space / button restarts
-```
-
-### Tech stack
-
-| Layer | Choice | Notes |
-| --- | --- | --- |
-| Engine | Phaser **3.90** | Rendering, scenes, input, tweens only |
-| Language | TypeScript **5.9**, `strict` | `noUnusedLocals`, `noUnusedParameters`, `noImplicitOverride` |
-| Bundler | Vite **7** | Zero plugins; `npm run build` = `tsc --noEmit && vite build` |
-| Physics | **None** | No Arcade/Matter. All movement and collision is hand-written math |
-
-The decision to skip Phaser's physics engine is central: every distance check,
-every projectile step and every collision test is explicit arithmetic in a system
-class. This is what makes the timing deterministic and tunable.
-
-### How Phaser is actually used
-
-Phaser provides only five things here:
-
-1. **The game loop** — `Scene.update(time, delta)` drives everything.
-2. **Scene management** — two parallel scenes (`GameScene` simulates, `UIScene` overlays).
-3. **Input capture** — `input.on('pointerdown')`, `input.keyboard.on('keydown')`, `activePointer.worldX/Y`.
-4. **Drawing primitives** — `Arc`, `Polygon`, `Rectangle`, `Ellipse`, `Line`, `Graphics`, `Container`, `Text`.
-5. **Tweens** — exclusively for *fire-and-forget decoration* (pings, impact rings, damage numbers, death bursts). No tween is ever load-bearing for gameplay.
-
-Notably **not** used: physics bodies, sprites, texture atlases, animation manager,
-particle emitters, timers/`scene.time.addEvent` for gameplay (all timing is
-timestamp comparison against `time` from the update loop).
-
-### Architecture
+Phaser provides exactly five things: the game loop (`Scene.update`), two parallel
+scenes, input capture, drawing primitives (`Arc`, `Polygon`, `Rectangle`, `Ellipse`,
+`Line`, `Graphics`, `Container`, `Text`), and tweens — used **only** for
+fire-and-forget decoration. No tween is ever load-bearing.
 
 ```mermaid
 flowchart TD
@@ -74,344 +38,186 @@ flowchart TD
         THM[theme.ts<br/>palette + look]
     end
 
-    MAIN[main.ts<br/>Phaser.Game bootstrap] --> GS
+    MAIN[main.ts] --> GS
     MAIN --> UIS
+
+    IC[InputController<br/>keys/mouse → commands] -->|CommandHandler| GS
 
     subgraph Scenes
         GS[GameScene<br/>owns entities + systems<br/>runs the frame]
-        UIS[UIScene<br/>HUD + end screen + menu<br/>polls GameScene]
-        AB[AbilityBar / PauseMenu<br/>views under UIScene]
+        UIS[UIScene<br/>HUD, ability bar, menu<br/>polls GameScene]
     end
 
-    IC[InputController<br/>keys/mouse → commands] -->|CommandHandler| GS
     GS --> CLK[GameClock<br/>simulated time]
-    GS --> AS[AttackSystem<br/>attack state machine<br/>orders + acquisition]
-    GS --> SS[SkillshotSystem<br/>Q quick-cast]
-    GS --> EPS[EnemyProjectileSystem<br/>dodge pressure]
-    GS --> DM[DifficultyManager<br/>elapsed → ramp t]
+    GS --> CAST[CastSystem<br/>Q/W/E commit window]
+    GS --> CD[AbilityCooldowns<br/>q w e flash]
+    GS --> AS[AttackSystem<br/>attack state machine]
+    GS --> SS[SkillshotSystem<br/>Q + W projectiles]
+    GS --> BS[BlinkSystem<br/>E blink + bolt, Flash]
+    GS --> PS[PassiveSystem]
+    GS --> ED[EnemyDirector<br/>roster + archetype weights]
+    GS --> EPS[EnemyProjectileSystem]
+    GS --> DM[DifficultyManager]
     GS --> SC[ScoreSystem]
     GS --> KM[KitingMetrics]
 
-    AS --> PL[Player<br/>position, HP, movement]
-    AS --> AAM[AutoAttackMissile<br/>homing bolt]
-    SS --> PRJ[Projectile<br/>straight-line]
+    ED --> EN[Enemy base<br/>Target / Pursuer]
+    AS --> PL[Player]
+    AS --> AAM[AutoAttackMissile]
+    BS --> AAM
+    SS --> PRJ[Projectile]
     EPS --> PRJ
-    AAM --> TG[Target]
-    PRJ --> TG
-    PRJ --> PL
 
-    AS -.->|windupProgress,<br/>lastReleaseAt| PL
+    CAST -.->|progress| PL
+    AS -.->|windupProgress| PL
+    PS -.->|attackSpeedMultiplier| AS
     DM -.->|elapsed| AS
-    GS -.->|getHudState / getRoundResult / isPaused| UIS
-    UIS --> AB
+    DM -.->|t / level| ED
+    GS -.->|getHudState| UIS
 
     BAL -.-> AS
-    BAL -.-> PL
-    BAL -.-> EPS
     THM -.-> PL
-    THM -.-> TG
 ```
 
-The dotted lines matter: **`AttackSystem → Player` is a one-way visual feed**, and
-**`UIScene → GameScene` is polling, never events**. Both choices are explained in
-§16 and §2.
+Two dotted relationships matter most: **systems → Player is a one-way visual feed**,
+and **UIScene polls GameScene** (never events — `scene.restart()` rebuilds every
+object, and an event-wired HUD kept breaking across restarts).
 
 ---
 
-## 2. File and module architecture
+## 2. Files
 
-### `src/main.ts` — bootstrap *(configuration)*
+### Config *(pure data)*
 
-Creates the `Phaser.Game` at a fixed 1280×720 with `Scale.FIT` + `CENTER_BOTH`, and
-registers `[GameScene, UIScene]`. Exposes `window.__warmup` (the game) and
-`window.__balance` (the whole config module) for live console tuning — this is also
-what the browser test suites drive.
+- **`src/config/balance.ts`** — gameplay tuning: `ARENA`, `ROUND`, `PLAYER`,
+  `ATTACK`, `attackReach()`, `KEYBINDS`, `INDICATORS`, `DEBUG`, `SKILLSHOT_Q`,
+  `SKILLSHOT_W`, `BLINK_E`, `FLASH`, `PASSIVE`, `TARGETS`, `PURSUER`,
+  `ENEMY_SPAWN`, `ENEMY_SCALING`, `STAGE`, `ENEMY_PROJECTILES`, `DIFFICULTY`,
+  `SCORE`, `UI`. `ATTACK`, `DEBUG` and `KEYBINDS` are deliberately not `as const`
+  so they stay writable from the console.
+- **`src/config/theme.ts`** — `THEME.{arena, player, target, pursuer, cast, mark,
+  passive, projectiles, markers, ui, rangeHint, ability, menu}`. Nothing here
+  affects gameplay.
 
-> **Note:** Phaser only auto-starts the *first* scene in the config array. `UIScene`
-> starts because its constructor passes `{ key: 'UIScene', active: true }`. This bit
-> a previous iteration: without `active: true`, the HUD silently never booted.
+### Scenes
 
-### `src/config/balance.ts` — gameplay tuning *(configuration)*
+- **`GameScene.ts`** (~760 lines) — the only file that knows about everything. Owns
+  the player, the enemy list, every system, `state`, `result`, and the "already
+  drawn" timestamps. Runs the frame (§3), implements the `CommandHandler` (§4),
+  owns W-mark detonation (§8) and the round lifecycle (§12).
+- **`UIScene.ts`** — HUD, ability bar, passive display, pause menu, end screen.
+  Holds no gameplay state; polls `getHudState()` / `getRoundResult()` every frame.
 
-Exports `ARENA`, `ROUND`, `PLAYER`, `ATTACK`, `KEYBINDS`, `INDICATORS`, `DEBUG`,
-`SKILLSHOT_Q`, `TARGETS`, `ENEMY_PROJECTILES`, `DIFFICULTY`, `SCORE`, `UI`, plus the
-function `attackReach()`.
+### Entities
 
-Most blocks are `as const` (readonly at the type level, still mutable at runtime from
-the console). **`ATTACK` and `DEBUG` and `KEYBINDS` deliberately are not `as const`**,
-so they are freely writable for live experimentation.
+- **`Player.ts`** — authoritative `x`, `y`, `hp`, move order, `rootCount`
+  (reference-counted movement lock), `lastHitAt`. Also owns its own rendering: a
+  `Container` with a dart `Polygon` hull, core, idle ring; plus shadow, range ring,
+  move marker, charge ring, release ring, passive aura and a cast `Graphics`.
+  Visual entry points (`applyAttackVisual`, `setCastVisual`, `setRangeRingState`,
+  `playReleaseBurst`, `playCastRelease`, `showCancelTag`, `playPassivePulse`) are
+  pure sinks — none can change timing.
+- **`Enemy.ts`** — abstract base holding everything archetype-independent: position,
+  HP, damage/death lifecycle, `spawnId`, the W mark, and all shared feedback (hit
+  flash, floating damage numbers, draining ghost HP bar, death burst, shadow).
+  Subclasses supply the body (in their constructor), `syncBody()` and optionally
+  `updateAi()`. Every combat system types against `Enemy`, never a concrete
+  archetype.
+- **`Target.ts`** — basic dummy: red hexagon, wanders, never attacks.
+- **`Pursuer.ts`** — melee stalker with a two-state AI (§10).
+- **`AutoAttackMissile.ts`** — homing missile, spec-driven so autos (cyan) and the E
+  bolt (pink) share one class. Carries a `targetSpawnId` guard.
+- **`Projectile.ts`** — straight-line projectile shared by Q, W and enemy fire.
+  Fixed `vx/vy`, accumulates `travelled`, dies at `maxRange` or out of bounds.
 
-`attackReach(targetRadius, playerRadius)` is the single source of truth for attack
-distance — see §9.
+### Systems
 
-### `src/config/theme.ts` — visual tuning *(configuration)*
-
-`THEME.{arena, player, target, projectiles, markers, ui}`. Colours, shadow alphas,
-idle-pulse rate, enemy spin speed, HUD panel styling. Nothing in here affects
-gameplay. Introduced to stop `balance.ts` from being half look and half feel — but
-the split is **incomplete**, see §24.
-
-### `src/game/scenes/GameScene.ts` — simulation root *(gameplay + rendering + wiring)*
-
-The largest file and the only place that knows about everything.
-
-**Owns:** `player`, `targets[]`, all six systems, `state: 'running' | 'over'`,
-`result: RoundResult | null`, and the two "already-drawn" timestamps
-(`lastCancelShownAt`, `lastReleaseShownAt`).
-
-**Key methods:**
-
-| Method | Role |
+| File | Role |
 | --- | --- |
-| `create()` | Draws the arena, constructs player/systems/targets, wires `InputController` |
-| `update(time, delta)` | The frame — see §3 |
-| `commandHandler()` | Returns the `CommandHandler` object that `InputController` calls |
-| `targetAt(x, y)` | Click hit test with a 10px grace radius |
-| `ping(x, y, color, kind)` | Transient ground marker (move = collapse, attack-move = bloom + crosshair) |
-| `separateTargets()` | Soft body-blocking so drifting enemies don't stack |
-| `findSpawnSpot()` | Rejection-sampled respawn position |
-| `drawArena()` | Layered procedural field (floor, grid, centre mark, vignette, bracketed frame) |
-| `getHudState()` / `getRoundResult()` | The read-only surface `UIScene` polls |
-| `endRound(survived)` / `restartRound()` | Round lifecycle |
+| `GameClock.ts` | Simulated time. The reason pause is safe (§13) |
+| `InputController.ts` | Keys/mouse → `CommandHandler` calls. Owns only `attackMovePending` |
+| `AttackSystem.ts` | Attack state machine, orders, acquisition, attack-speed scaling, auto missiles |
+| `CastSystem.ts` | Q/W/E commitment window, input lockout, movement buffering |
+| `AbilityCooldowns.ts` | One `readyAt` table for `q w e flash` |
+| `SkillshotSystem.ts` | Q and W projectiles (one loop, two configs) |
+| `BlinkSystem.ts` | E blink + homing bolt, Flash |
+| `PassiveSystem.ts` | Stack count, shared expiry, attack-speed multiplier |
+| `EnemyDirector.ts` | Roster, archetype weights, HP scaling, respawn, separation |
+| `EnemyProjectileSystem.ts` | Dodge pressure |
+| `DifficultyManager.ts` | `elapsed`, ramp `t`, `level`, stage countdown |
+| `ScoreSystem.ts` | Score, damage, kills by archetype |
+| `KitingMetrics.ts` | Six raw mechanical counters |
 
-### `src/game/scenes/UIScene.ts` — HUD and end screen *(rendering only)*
+### UI
 
-Runs in parallel above `GameScene`. Holds **no gameplay state**. Every frame it calls
-`this.game_.getHudState()` and writes text. The end screen is a `Container` that is
-shown when `getRoundResult()` stops returning `null`.
-
-Polling rather than event subscription is deliberate: `GameScene.restart()` destroys
-and rebuilds every game object, and an event-based HUD kept breaking across restarts.
-Polling a getter is immune to that.
-
-### `src/game/entities/Player.ts` — the avatar *(gameplay + rendering)*
-
-**Owns the authoritative gameplay state:** `x`, `y`, `hp`, the current move order
-(`destX`, `destY`), `rootCount` (reference-counted movement lock), and `lastHitAt`.
-
-**Also owns its own rendering:** a `Container` (`body`) holding a dart `Polygon`
-(`hull`), a bright `core` and an `idleRing`; plus `shadow`, `rangeRing`, `moveMarker`,
-`chargeRing`, `releaseRing`.
-
-The critical API split:
-
-```ts
-// gameplay — called by AttackSystem / GameScene
-moveTo(x, y); stop(); root(); releaseRoot(); takeDamage(amount, nowMs); update(dt);
-
-// visuals — pure sinks, cannot affect timing
-applyAttackVisual({ windupProgress, msSinceRelease, targetX, targetY });
-setRangeRingState(inRange, attackMovePending);
-playReleaseBurst(scene); showCancelTag(scene);
-```
-
-### `src/game/entities/Enemy.ts` — the enemy base *(gameplay + rendering)*
-
-Abstract class holding everything archetype-independent: position, HP, the
-damage/death lifecycle, `spawnId`, and all shared feedback (hit flash, floating
-damage numbers, draining ghost HP bar, death burst, shadow). Subclasses supply
-only `buildBody` (in their constructor), `syncBody()` and optionally
-`updateAi()`. Every combat system types against `Enemy`, never a concrete
-archetype — which is why adding a mob touches no system code.
-
-### `src/game/entities/Pursuer.ts` — the melee stalker *(gameplay + rendering)*
-
-The first mob with movement AI: a two-state machine (`chase` / `windup`) that
-walks the player down and swings on a cooldown. See §14b.
-
-### `src/game/systems/AbilityCooldowns.ts` — shared cooldown state *(gameplay)*
-
-One `readyAt` table for `q | w | e | flash`. Every ability system asks this
-instead of tracking its own timer, which is what makes a landed Q refunding
-Q/W/E a single `reduce(ms, ids)` call and gives the HUD one consistent source
-for all four slots.
-
-### `src/game/systems/CastSystem.ts` — ability cast windows *(gameplay)*
-
-Owns the pending cast for W and E: the committed payload (W's aim / E's
-destination), the deadline, `progress` for the animation, the movement root, and
-the buffered move order replayed on resolve. The timer here is authoritative —
-no animation callback decides when a spell happens.
-
-### `src/game/systems/BlinkSystem.ts` — E and Flash *(gameplay + rendering)*
-
-Blink geometry (cursor-or-max-range, clamped to the arena), the post-blink bolt
-acquisition with W-mark priority, and the departure/arrival visuals for both.
-
-### `src/game/systems/PassiveSystem.ts` — the Q passive *(gameplay)*
-
-Owns the stack count and the shared expiry. `SkillshotSystem` calls `addStack()`
-on a landed Q; `AttackSystem` only reads `attackSpeedMultiplier`.
-
-### `src/game/systems/EnemyDirector.ts` — the roster *(gameplay)*
-
-Owns the enemy slots, difficulty-weighted archetype selection, HP scaling,
-respawn timing and enemy-vs-enemy separation.
-
-### `src/game/entities/Target.ts` — the basic dummy *(gameplay + rendering)*
-
-**Owns:** `x`, `y`, `hp`, `active`, **`spawnId`**, `respawnAt`, wander state
-(`wanderX/Y`, `nextWanderAt`), and visual-only `hitFlashUntil`, `deathAnimUntil`,
-`ghostHp`.
-
-Rendering is a `Container` of two hexagon `Polygon`s plus an `eye` `Arc`, with a
-separate `shadow`, `hpBarBg`, `hpGhost` and `hpBar`. The module-level helper
-`hexPoints(r)` generates the silhouette.
-
-### `src/game/entities/AutoAttackMissile.ts` — the auto bolt *(gameplay + rendering)*
-
-A **homing** projectile holding a direct reference to its `Target` plus the
-`targetSpawnId` captured at spawn. Applies damage via an `onHit` callback on arrival.
-See §8.
-
-### `src/game/entities/Projectile.ts` — straight-line projectile *(gameplay + rendering)*
-
-Shared by Q and enemy fire. Stores velocity components (`vx`, `vy`) computed once at
-construction, accumulates `travelled`, and dies at `maxRange` or out of bounds.
-Config flags `shape: 'orb' | 'bolt'`, `trail`, `heavyOutline` select the look.
-`hits(cx, cy, r)` is circle-vs-circle.
-
-### `src/game/systems/AttackSystem.ts` — the heart *(gameplay)*
-
-Owns the attack state machine, the order model, target acquisition, attack-speed
-scaling, and the in-flight auto missiles. Detailed in §6, §7, §10, §11.
-
-### `src/game/systems/SkillshotSystem.ts` — Q *(gameplay + rendering)*
-
-Quick-cast, cooldown, missile list, collision against targets, cast flash and impact
-ring. Detailed in §12.
-
-### `src/game/systems/EnemyProjectileSystem.ts` — dodge pressure *(gameplay)*
-
-Spawn scheduling, edge-point selection, aim, player collision, culling. Detailed in §13.
-
-### `src/game/systems/DifficultyManager.ts` — the ramp *(gameplay)*
-
-Owns `elapsedSeconds`. Exposes `t` (the 0→1 ramp), `level` (cosmetic 1–10), and
-lerped getters for every enemy-projectile parameter. Detailed in §11.
-
-### `src/game/systems/InputController.ts` — input translation *(input)*
-
-Owns exactly one piece of state: `attackMovePending` (the A-key targeting mode).
-Translates raw Phaser events into `CommandHandler` calls. Detailed in §4.
-
-### `src/game/systems/KitingMetrics.ts` — measurement *(gameplay, read-only)*
-
-Six counters, incremented by `AttackSystem` hooks and by a per-frame `update()`.
-Detailed in §18.
-
-### `src/game/systems/ScoreSystem.ts` — scoring *(gameplay)*
-
-`score`, `damageDealt`, `targetsKilled`, `projectileHitsTaken`, plus fractional
-survival accumulation. Detailed in §19.
+`AbilityBar.ts` (slots + procedural icons + cooldown sweep + cast fill),
+`PassiveDisplay.ts` (pips + duration bar), `PauseMenu.ts` (scrim, panel, buttons,
+settings rows, controls reference).
 
 ---
 
-## 3. Main game loop
+## 3. The frame
 
-### Scene lifecycle
-
-`GameScene.create()` runs on boot and again on every `scene.restart()`. It rebuilds
-*everything* — arena graphics, player, systems, targets, input controller. There is
-no object pooling across rounds; Phaser destroys the display list and the old
-JS objects are garbage.
-
-`UIScene.create()` runs once at boot and is **not** re-run on `GameScene` restart,
-which is exactly why it polls.
-
-### Delta time and the game clock
+`GameScene.create()` runs on boot and on every `scene.restart()`, rebuilding
+everything. `UIScene.create()` runs once and is never re-run — hence polling.
 
 ```ts
-const dt = Math.min(delta, 50) / 1000;   // seconds, clamped at 50ms
+const dt = Math.min(delta, 50) / 1000;   // clamped seconds
 this.clock.advance(dt * 1000);           // simulated time
 const now = this.clock.now;
 ```
 
-The clamp prevents an alt-tab or a long GC pause from teleporting entities through
-each other. A consequence: **the round clock is simulation time, not wall time** —
-if frames are dropped, a "60 second" round takes longer in reality. `DifficultyManager`
-accumulates this same clamped `dt`.
-
-Note the two distinct time sources in use:
-
-- `dt` (seconds, clamped) — for movement and anything rate-based.
-- `clock.now` (`GameClock`, ms) — for **every** gameplay deadline comparison
-  (`windupEndsAt`, `cycleEndsAt`, `readyAt`, `respawnAt`, `hitFlashUntil`, i-frames).
-
-`GameClock` accumulates the same clamped delta, and only on frames the simulation
-actually runs. Phaser's own `time` is used for tweens and other decoration only.
-Two properties follow from this:
-
-- A long stall cannot make deadlines expire together, because the clock advances
-  by at most 50ms per frame just like movement does.
-- Pausing is simply "stop calling `advance()`" — see §19.
-
-### Exact update order
-
-From `GameScene.update()`, top to bottom:
+Exact order, from `GameScene.update()`:
 
 ```
-Frame (time, delta)
- │
- ├─ if state !== 'running' → return          (round over freezes the sim)
- ├─ dt = min(delta, 50) / 1000
- │
- ├─ difficulty.update(dt)                    elapsed += dt
- ├─ scoring.tickSurvival(dt)                 +5 pts/sec, fractional carry
- │
- ├─ attacks.update(time, dt, targets)        ① GAMEPLAY DECIDES
- │    ├─ updateMissiles(dt)                  auto bolts fly + resolve hits
- │    ├─ windup complete? → fireAttack()     spawn missile, state = recovery
- │    ├─ recovery elapsed? → state = idle
- │    ├─ drop dead currentTarget
- │    ├─ attack-move: acquire in-range target, else issue the walk
- │    ├─ in range? → stop chase, beginWindup if idle
- │    ├─ out of range? → chase, or drop (per source)
- │    └─ updateVisuals()                     target reticle
- │
- ├─ player.applyAttackVisual({...})          ② VISUALS READ IT
- ├─ player.setRangeRingState(...)
- │
- ├─ player.update(dt)                        ③ MOVE + REDRAW
- │
- ├─ metrics.update(dt, {state, enemyInRange, playerMoving})
- │
- ├─ cancel tag  (if attacks.lastCancelAt  > lastCancelShownAt)
- ├─ release burst (if attacks.lastReleaseAt > lastReleaseShownAt)
- │
- ├─ for each target: target.update(dt, time); respawn if due
- ├─ separateTargets()                        soft body-blocking
- │
- ├─ skillshot.update(dt, time, targets)      Q missiles + collision
- ├─ enemyProjectiles.update(dt, time)        spawn, fly, collide with player
- │
- └─ end condition: !player.isAlive → endRound(false)
-                   difficulty.remaining <= 0 → endRound(true)
+if (state !== 'running' || paused) return      ← pause freezes everything below
+dt = min(delta, 50) / 1000
+clock.advance(dt * 1000);  now = clock.now
+
+difficulty.update(dt)          elapsed += dt
+scoring.tickSurvival(dt)       +5 pts/sec
+passive.update(now)            expire stacks
+cooldowns.update(now)          refresh "now"
+cast.update(now)               ← resolves a Q/W/E cast, then replays buffered order
+
+attacks.update(now, dt, enemies)   ① GAMEPLAY DECIDES
+   ├─ auto missiles fly + resolve hits
+   ├─ windup complete → fireAttack()
+   ├─ recovery elapsed → idle
+   ├─ attack-move acquire / chase / release
+   └─ target reticle
+
+player.applyAttackVisual(...)      ② VISUALS READ IT
+player.setRangeRingState(...)
+player.update(dt)                  ③ MOVE + REDRAW
+
+metrics.update(dt, ...)
+player.setPassiveMaxed(...)
+player.setCastVisual(...)          cast charge, read from cast.progress
+one-shot cues: cast release / attack cancel / attack release (timestamp-gated)
+
+director.update(dt, now, ctx)      enemy AI, respawns, archetype re-rolls, separation
+skillshot.update(dt, now, enemies) Q + W projectiles and collisions
+blink.update(dt)                   E bolts
+enemyProjectiles.update(dt, now)   spawn, fly, collide with player
+
+end conditions → endRound(survived)
 ```
 
-The ordering of ①②③ is load-bearing and was a real bug once: when
-`applyAttackVisual` ran *after* `player.update()`, the charge ring rendered one frame
-stale and visibly persisted into recovery. See §16.
+The ①②③ ordering is load-bearing: when `applyAttackVisual` ran *after*
+`player.update()`, the charge ring rendered one frame stale and visibly persisted
+into recovery.
 
-### Event-driven vs polled
-
-| Mechanism | Style |
-| --- | --- |
-| Mouse / keyboard | **Event-driven** (Phaser emitters → `InputController`) |
-| Everything else in gameplay | **Polled** every frame |
-| Damage application | **Callback**, but only ever invoked from inside a polled update |
-| HUD | **Polled** (`getHudState()`) |
-| Decorative effects | **Tweens** (fire-and-forget, self-destructing) |
-
-There are no `setTimeout`s and no Phaser timer events in gameplay code.
+**Time sources.** `dt` (clamped seconds) drives rate-based motion. `clock.now`
+(`GameClock`, ms) drives **every** gameplay deadline. Phaser's own `time` is used
+only for tweens. `scene.time.now` appears **zero** times in gameplay code.
 
 ---
 
-## 4. Input system
+## 4. Input
 
-### Detection
-
-`InputController`'s constructor registers exactly two Phaser listeners:
+`InputController` registers exactly two Phaser listeners plus context-menu
+suppression:
 
 ```ts
 scene.input.mouse?.disableContextMenu();
@@ -419,200 +225,94 @@ scene.input.on('pointerdown', this.onPointerDown, this);
 scene.input.keyboard?.on('keydown', this.onKeyDown, this);
 ```
 
-A **single** `keydown` listener plus a binding table (`KEYBINDS`) rather than
-per-key `keydown-A` listeners — that is what makes rebinding a config change.
-Keys are normalised: `' '` → `'SPACE'`, everything else `toUpperCase()`
-(so `Escape` → `'ESCAPE'`).
+One `keydown` listener plus the `KEYBINDS` table — that is what makes rebinding a
+config change. Keys are normalised (`' '` → `SPACE`, else `toUpperCase()`).
+Keyboard-issued commands read `scene.input.activePointer.worldX/Y`.
 
-Keyboard-issued commands read the cursor from `scene.input.activePointer.worldX/Y`.
+### Command surface
 
-### The command surface
+`GameScene.commandHandler()` returns the only methods input may call:
 
-`InputController` never touches gameplay objects. It calls methods on a
-`CommandHandler` implemented by `GameScene.commandHandler()`:
-
-```ts
-commandMove(x, y)            commandAttackTarget(target)
-commandAttackMove(x, y)      commandStop()
-castSkillshot(x, y)          targetAt(x, y)
-isRoundRunning()             restartRound()
+```
+commandMove        commandAttackTarget   commandAttackMove   commandStop
+castSkillshot(Q)   castMark(W)           castBlink(E)        castFlash(F)
+targetAt           isRoundRunning        acceptsGameplayInput
+isPaused           togglePause           restartRound
 ```
 
-### Every input
+### Key handling order
 
-| Input | Detected as | Handler call | Resulting state |
-| --- | --- | --- | --- |
-| **Right-click empty ground** | `pointerdown` + `rightButtonDown()`, `targetAt()` returns null | `commandMove(x,y)` | `attacks.onMoveOrder()` → cancels uncommitted windup, clears all orders; `player.moveTo()`; blue collapse ping |
-| **Right-click enemy** | same, `targetAt()` hits | `commandAttackTarget(t)` | `attacks.commandAttack(t)` → `currentTarget = t`, `targetSource = 'direct'`, clears any attack-move. **Does not cancel a windup.** |
-| **A then left-click** | `keydown A` sets `attackMovePending = true`; next `pointerdown` + `leftButtonDown()` | `commandAttackMove(x,y)` | `attacks.commandAttackMove()`; red bloom ping |
-| **T** | `keydown T` | `commandAttackMove(cursorX, cursorY)` | *Identical* to the A path |
-| **Q** | `keydown Q` | `castSkillshot(cursorX, cursorY)` | `skillshot.castToward()` fires immediately or no-ops on cooldown |
-| **S** | `keydown S` | `commandStop()` | `attacks.onStop()` → cancel windup, clear orders, `player.stop()` |
-| **Esc** | `keydown ESCAPE` | — | `cancelPending()` only (clears A-mode) |
-| **R / Space** | `keydown`, only when `!isRoundRunning()` | `restartRound()` | `scene.restart()` |
-| **Left-click enemy (no mode)** | `pointerdown` + left | `commandAttackTarget(t)` | Legacy V0.1 convenience; identical to right-clicking it |
-
-### Input flow
-
-```mermaid
-flowchart LR
-    K[keydown] --> N[normalizeKey]
-    N --> KB{KEYBINDS match}
-    M[pointerdown] --> B{button?}
-
-    KB -->|A| PEND[attackMovePending = !pending]
-    KB -->|T| AMC[commandAttackMove at cursor]
-    KB -->|Q| CAST[castSkillshot at cursor]
-    KB -->|S| STOP[commandStop]
-    KB -->|ESC| CP[cancelPending]
-
-    B -->|right| CANCEL[cancelPending] --> HIT{enemy under cursor?}
-    HIT -->|yes| DIR[commandAttackTarget]
-    HIT -->|no| MOVE[commandMove]
-
-    B -->|left| P{attackMovePending?}
-    P -->|yes| AMC
-    P -->|no| HIT2{enemy under cursor?}
-    HIT2 -->|yes| DIR
-
-    AMC --> AS[AttackSystem.commandAttackMove]
-    DIR --> AS2[AttackSystem.commandAttack]
-    MOVE --> AS3[AttackSystem.onMoveOrder + Player.moveTo]
+```
+restart keys (only when the round is over) → restartRound
+if round not running → ignore
+ESC → armed A-mode? cancel it : togglePause()      ← handled ABOVE the pause gate
+if !acceptsGameplayInput() → ignore                ← everything below stops at the menu
+A → toggle attackMovePending
+T → commandAttackMove(cursor, {showRangeHint})
+S → commandStop
+Q/W/E/F → cast* (cursor)
 ```
 
-### The four command types
+Pointer: right-click cancels any pending A-mode *and* still issues its contextual
+order (attack an enemy / move to ground). Left-click resolves a pending A-mode, else
+attacks an enemy under the cursor.
 
-They are genuinely different orders, not variations:
+### The four order types
 
-1. **Move** — hands movement control to the player, clears every attack order, cancels an uncommitted windup.
-2. **Direct attack** — commits to one specific `Target` object, chases it anywhere, ignores attack-move target selection, does *not* cancel a windup.
-3. **Attack Move (A-click)** — an order at a *location*; targets are chosen dynamically from whoever is in range.
-4. **Attack Move Click (T)** — the same order, issued at the cursor with no intermediate mode.
+1. **Move** — hands movement to the player, clears attack orders, cancels an
+   uncommitted windup.
+2. **Direct attack** — commits to one `Enemy` object, chases it anywhere, ignores
+   attack-move selection, does *not* cancel a windup.
+3. **Attack Move (A + click)** — an order at a *location*; targets chosen
+   dynamically from whoever is in range.
+4. **Attack Move Click (T)** — the identical order at the cursor, no targeting mode.
 
-### Why T reuses A's implementation
-
-`InputController` emits the **same `commandAttackMove(x, y)` call** for both. There is
-no T-specific branch anywhere downstream. Consequences that are true by construction
-rather than by maintenance:
-
-- `attackMoveTargeting` ('cursor' vs 'player') governs both.
-- Acquisition is restricted to in-range enemies for both.
-- The windup/release/recovery timing is the same state machine.
-- `KitingMetrics` counts both identically.
-- Any future change to attack-move (priority targeting, acquisition range) applies to both automatically.
-
-The only difference is that T skips the `attackMovePending` intermediate state.
+A and T call the **same** `commandAttackMove(x, y)`. There is no T-specific branch
+downstream, so targeting rules, attack timing, cancellation and metrics are identical
+by construction. T passes a cosmetic `showRangeHint` flag; that is the only
+difference.
 
 ---
 
-## 5. Player movement
-
-### State
+## 5. Movement
 
 ```ts
-private destX: number | null = null;   // current move order, null = standing still
-private destY: number | null = null;
+private destX: number | null = null;   // move order, null = standing still
 private rootCount = 0;                 // >0 blocks movement entirely
 ```
 
-`isMoving` is `destX !== null && !isRooted`. A move order is a *destination*, not a
-velocity — there is no acceleration, no momentum, no turn rate.
-
-### The integration step
-
-`Player.update(dt)`:
-
 ```
 if (!rooted && dest != null):
-    d     = dest - position
-    dist  = |d|
-    step  = PLAYER.moveSpeed * dt          // 340 px/s
-    if dist <= max(step, arriveEpsilon):   // arriveEpsilon = 3px
-        position = dest                    // snap
-        stop()                             // clear the order
+    dist = |dest - position|
+    step = PLAYER.moveSpeed * dt            // 340 px/s
+    if dist <= max(step, arriveEpsilon):    // 3px
+        position = dest; stop()             // snap, clear the order
     else:
-        position += (d / dist) * step      // normalised direction
+        position += normalize(dest - position) * step
 ```
 
-The `max(step, arriveEpsilon)` guard is what prevents the classic overshoot
-oscillation: at 340 px/s and 60fps a single step is ~5.7px, so a fixed 3px epsilon
-alone would let the player jitter across the destination. Taking whichever is larger
-guarantees the snap happens on the frame that would otherwise overshoot.
+`max(step, arriveEpsilon)` is what prevents overshoot jitter: at 340 px/s and 60fps a
+step is ~5.7px, so a fixed 3px epsilon alone would oscillate. `moveTo()` clamps the
+destination into the playable rect, so the player can never leave the arena.
 
-`moveTo()` clamps the destination into the playable rect:
+`blinkTo(x, y)` (E/Flash) sets position directly with the same clamp and calls
+`stop()` — so the player does not walk back toward a stale destination.
 
-```ts
-destX = clamp(x, ARENA.padding + radius, ARENA.width - ARENA.padding - radius)
-```
-
-Note the player can *never* be pushed out of bounds because position only ever moves
-toward a clamped destination.
-
-### Edge cases
-
-| Case | Behaviour |
-| --- | --- |
-| Click within 3px of the player | Snap + immediate stop; effectively a no-op with a ping |
-| Click repeatedly | Each `moveTo()` overwrites `destX/destY`; no queue, instant redirect |
-| Click during windup | The move order lands, but `rootCount > 0` so no movement happens *this* frame; the windup is cancelled by `onMoveOrder()` in the same call, which releases the root — so movement begins next frame |
-| Stop during windup | `onStop()` cancels the windup and calls `player.stop()`; stationary until a new command |
-| Arrival | `stop()` clears the order, so `isMoving` goes false and the recovery-idle metric starts counting |
-
-### Movement vs attacking
-
-Movement is locked by a **reference-counted root**, not a boolean:
-
-```ts
-root()        // rootCount++   — called by beginWindup()
-releaseRoot() // rootCount--   — called by fireAttack() and cancelWindup()
-```
-
-Reference counting means a future second root source (a cast time, a stun) cannot
-accidentally unlock movement when only one of them ends. Today only the attack
-windup ever roots, and Q explicitly does not.
+**The root is reference-counted**, not a boolean: the attack windup and a cast can
+both hold it, and neither can unlock movement the other still wants held.
 
 ---
 
-## 6. Auto-attack system
-
-This is the most important system in the project.
-
-### The state machine
+## 6. Auto attacks
 
 ```
-        commandAttack / attack-move acquisition
-                        │
-                        ▼
-   ┌──── idle ────────────────────────────────┐
-   │      │  target in range && state == idle │
-   │      ▼                                   │
-   │   WINDUP   rooted, no damage yet,        │
-   │      │     cancellable                   │
-   │      │  now >= windupEndsAt              │
-   │      ▼                                   │
-   │   RELEASE  (instantaneous — not a state) │
-   │      │     missile spawned, metrics fired│
-   │      ▼                                   │
-   │  RECOVERY  free to move, damage committed│
-   │      │  now >= cycleEndsAt               │
-   └──────┘                                   │
-          └───────────────────────────────────┘
+        idle ──(target in range && idle)──> WINDUP ──(timer)──> RELEASE ──> RECOVERY ──> idle
+                                             rooted,              missile     free to move
+                                             cancellable          spawns
 ```
 
-`AttackState` is `'idle' | 'windup' | 'recovery'`. **Release is an event, not a
-state** — it is the single frame in which `fireAttack()` runs, transitioning
-`windup → recovery`.
-
-### Timing variables
-
-All in `AttackSystem`:
-
-| Variable | Meaning |
-| --- | --- |
-| `windupEndsAt` | Timestamp when damage commits |
-| `cycleEndsAt` | Timestamp when the next attack may start |
-| `windupTarget` | The `Target` this swing committed to |
-| `currentTarget` | The order's target — may differ from `windupTarget` |
+`AttackState = 'idle' | 'windup' | 'recovery'`. Release is an **event**, not a state:
+the single frame `fireAttack()` runs.
 
 Both deadlines are set once, in `beginWindup()`:
 
@@ -621,1425 +321,648 @@ this.windupEndsAt = nowMs + this.windupMs;
 this.cycleEndsAt  = nowMs + this.cooldownMs;   // cooldown starts at WINDUP START
 ```
 
-That second line is the key design decision. Because the cooldown begins when the
-windup begins (not when the missile fires), the recovery window is
-`cooldownMs - windupMs` and **firing never extends the cycle**. This is what makes
-recovery a free movement window rather than dead time.
+That second line is the key design decision — firing never extends the cycle, so
+recovery is free movement time.
 
-### Derived durations
+### Attack speed
 
 ```
-attackSpeedT = clamp(elapsed / attackSpeedRampSeconds, 0, 1) ^ attackSpeedCurve
-cooldownMs   = lerp(baseCooldownMs, minCooldownMs, attackSpeedT)
-windupMs     = windupMsOverride ?? max(minWindupMs, cooldownMs × windupPercent)
+attackSpeedT  = clamp(elapsed / attackSpeedRampSeconds, 0, 1) ^ attackSpeedCurve
+baseCooldownMs = lerp(ATTACK.baseCooldownMs, ATTACK.minCooldownMs, attackSpeedT)
+cooldownMs     = baseCooldownMs / passive.attackSpeedMultiplier      ← authoritative
+windupMs       = windupMsOverride ?? max(minWindupMs, cooldownMs * windupPercent)
 ```
 
-With current values (`base 700`, `min 420`, `ramp 45s`, `curve 1.15`, `windupPercent
-0.25`, `minWindupMs 90`):
+With current values (`700 → 420` over 45s, curve 1.15, windup 25%, floor 90ms):
 
-| Round time | cooldown | windup | recovery | attacks/sec |
-| --- | --- | --- | --- | --- |
-| 0s | 700ms | 175ms | 525ms | 1.43 |
-| 22s | ~577ms | ~144ms | ~433ms | 1.73 |
-| 30s | ~524ms | ~131ms | ~393ms | 1.91 |
-| 45s+ | 420ms | 105ms | 315ms | 2.38 |
+| Round time | Stacks | cooldown | windup | recovery | attacks/sec |
+| --- | --- | --- | --- | --- | --- |
+| 0s | 0 | 700ms | 175ms | 525ms | 1.43 |
+| 0s | 5 | 467ms | 117ms | 350ms | 2.14 |
+| 45s+ | 0 | 420ms | 105ms | 315ms | 2.38 |
+| 45s+ | 5 | 280ms | 90ms (floor) | 190ms | 3.57 |
 
-The `minWindupMs: 90` floor is never reached at current values (105ms at max speed);
-it only engages if `minCooldownMs` drops below 360ms.
+### Chasing
 
-### How an attack starts
-
-`beginWindup()` is only ever called from one place in `update()`:
-
-```ts
-if (inRange) {
-  if (this.chasing) { this.player.stop(); this.chasing = false; }
-  if (this.state === 'idle') this.beginWindup(target, nowMs);
-}
-```
-
-So all four preconditions live in one spot: there is a `currentTarget`, it is
-`active`, it is in range, and the cycle is `idle`. `beginWindup()` then stops
-movement, roots the player, sets both deadlines, and increments
-`metrics.attacksStarted`.
-
-### Target validation and range
-
-- Dead targets are dropped at the top of `update()` (step 3): `if (currentTarget && !currentTarget.active)`.
-- Range is `isInRange()` — see §9.
-- Moving into range is `chaseToward()` — see below.
-
-### Chasing into range
-
-```ts
-private chaseToward(target: Target): void {
-  const dx = this.player.x - target.x;          // from target TOWARD player
-  const dy = this.player.y - target.y;
-  const dist = Math.hypot(dx, dy) || 1;
-  const standoff = Math.max(0, this.reachTo(target) - ATTACK.chaseBufferPx);
-  this.player.moveTo(target.x + (dx/dist) * standoff, target.y + (dy/dist) * standoff);
-  this.chasing = true;
-}
-```
-
-The destination is a point on the line between the two, `standoff` px from the
-target — so the player walks to the *edge of their range*, not onto the enemy.
-Re-issued every frame, so a drifting target is tracked.
-
-In practice the `chaseBufferPx: 24` rarely matters: the `inRange` branch fires and
-calls `player.stop()` the moment the range test passes, which happens at exactly
-`reach`. Measured: the player halts at ~277px against a reach of 278px. The buffer
+`chaseToward()` walks to a point `reach - chaseBufferPx` from the target, re-issued
+every frame. In practice the `inRange` branch calls `player.stop()` the moment the
+range test passes, so the player halts at ~277px against a reach of 278px; the buffer
 only shapes the approach to a target that is actively moving away.
-
-### Release
-
-```ts
-private fireAttack(): void {
-  const target = this.windupTarget;
-  this.state = 'recovery';
-  this.windupTarget = null;
-  this.player.releaseRoot();
-  this.lastReleaseAt = this.now;
-  this.metrics.onAttackFired();
-  if (!target || !target.active) return;
-  this.missiles.push(new AutoAttackMissile(scene, player.x, player.y, target,
-                                           target.spawnId, ATTACK.damage, onMissileHit));
-}
-```
-
-Order matters here: the root is released and the state flips to `recovery` **before**
-the missile is constructed, and unconditionally — even if the target died during the
-windup, the player still leaves the windup properly and the cooldown still runs.
-(A swing at a target that died during windup fires no missile and deals no damage,
-but is still counted in `attacksFired`. See §18.)
 
 ### Four durations that are not the same thing
 
-| Term | Value @ round start | What it is |
+| Term | @ round start | What it is |
 | --- | --- | --- |
-| **Attack windup** | 175ms | Rooted, cancellable, no damage |
-| **Attack release** | instantaneous | The frame the missile spawns; commitment point |
-| **Projectile travel** | distance / 1150 px/s (≈**226ms** from max range) | Damage delay only. Gates nothing |
-| **Attack cooldown** | 700ms | Whole cycle, windup included |
-
-Travel time is longer than you might expect. Firing from maximum range (278px
-centre-to-centre) the bolt only needs to close to within the target's 18px radius,
-so it covers ~260px at 1150 px/s ≈ **226ms** — roughly half the 525ms recovery
-window at round start. The damage lands well after you have started kiting away.
+| Windup | 175ms | Rooted, cancellable, no damage |
+| Release | instantaneous | The commitment point |
+| Projectile travel | ~226ms from max range | Damage delay only; gates nothing |
+| Cooldown | 700ms | Whole cycle, windup included |
 
 ---
 
-## 7. Attack cancellation and orbwalking
+## 7. Cancellation and orbwalking
 
-### Trace A — cancelled attack
-
-```
-t=0     right-click enemy       → commandAttack(t): currentTarget = t, source='direct'
-t=16ms  update: in range, idle  → beginWindup()
-                                   state='windup', windupTarget=t
-                                   windupEndsAt = t+175, cycleEndsAt = t+700
-                                   player.stop(), player.root()  (rootCount 0→1)
-                                   metrics.attacksStarted++
-t=80ms  right-click ground      → InputController → commandMove
-                                   AttackSystem.onMoveOrder():
-                                     state==='windup' && allowMoveCancel → cancelWindup()
-                                       state='idle'
-                                       windupTarget = null        ← no missile can ever spawn
-                                       player.releaseRoot()       (rootCount 1→0)
-                                       cycleEndsAt = 0            ← FULL cooldown refund
-                                       lastCancelAt = now
-                                       metrics.attacksCancelled++
-                                     clearOrders(): currentTarget = null, attackMove = null
-                                   player.moveTo(x, y)
-t=96ms  update: windupProgress → 0, charge ring hidden, CANCEL tag tweens up
-        No missile exists. Target HP unchanged.
-```
-
-### Trace B — completed attack, then movement
-
-```
-t=0     ... beginWindup() as above
-t=175ms update: now >= windupEndsAt → fireAttack()
-                                   state='recovery'
-                                   windupTarget = null
-                                   player.releaseRoot()  (movement free NOW)
-                                   lastReleaseAt = now
-                                   metrics.attacksFired++
-                                   new AutoAttackMissile(...) pushed to missiles[]
-        GameScene sees lastReleaseAt > lastReleaseShownAt → playReleaseBurst()
-t=180ms right-click ground      → onMoveOrder(): state is 'recovery', NOT 'windup'
-                                   → cancelWindup() is NOT called
-                                   → clearOrders() only (currentTarget = null)
-                                   player.moveTo(x, y) — player walks away
-        The missile is in `missiles[]`, which clearOrders() does not touch.
-t=~400ms missile reaches target → onHit → onMissileHit → target.takeDamage(12)
-                                   metrics.attacksLanded++
-                                   callbacks.onDamage → score += 12
-t=700ms update: now >= cycleEndsAt → state = 'idle', next attack allowed
-```
-
-### The state that makes the distinction
-
-It is a **single condition**, in `onMoveOrder()` / `onStop()`:
+The distinction lives in **one condition**, in `onMoveOrder()` / `onStop()`:
 
 ```ts
 if (this.state === 'windup' && ATTACK.allowMoveCancel) this.cancelWindup();
 ```
 
 `cancelWindup()` nulls `windupTarget`, which is the *only* path to
-`new AutoAttackMissile(...)`. Once `fireAttack()` has run, `windupTarget` is already
-null and the missile is an independent object in `missiles[]` — it holds its own
-reference to the `Target` and needs nothing from the attack system to complete.
+`new AutoAttackMissile(...)`.
 
-| Thing | On cancel | After release |
+| | On cancel | After release |
 | --- | --- | --- |
-| `windupEndsAt` | stale, ignored (state is idle) | stale, ignored |
-| `cycleEndsAt` | **reset to 0** — attack instantly available again | keeps running |
+| `cycleEndsAt` | **reset to 0** — attack instantly available | keeps running |
 | `windupTarget` | nulled → no missile | already nulled |
-| `currentTarget` | cleared by `clearOrders()` | cleared by `clearOrders()` |
 | Missiles | none exist | unaffected, keeps flying |
 | Metrics | `attacksCancelled++` | `attacksFired++`, later `attacksLanded++` |
 
-> **The cooldown refund is total.** `cycleEndsAt = 0` means a cancelled attack costs
-> nothing, so cancel-spam is free — but it also deals no damage, so it is not an
-> exploit so much as a no-op. It is what makes animation-cancel drilling possible.
+**Which orders cancel a windup**
 
-### Which orders cancel
-
-| Order | Cancels a windup? | Rationale |
+| Order | Cancels? | Why |
 | --- | --- | --- |
-| Right-click ground (move) | **Yes** | It's a move order |
-| `S` (stop) | **Yes** | It's a stop order |
-| Right-click enemy (direct attack) | No | Attack order; the committed swing resolves |
-| A-click / T (attack move) | No | Attack order — and T is *designed* to be spammed while kiting; cancelling per press would mean never landing an auto |
+| Move / `S` | **Yes** | It is a move/stop order |
+| Right-click enemy | No | Attack order; the committed swing resolves |
+| A-click / T | No | Attack order — and T is meant to be spammed while kiting |
+| Q / W / E cast | **Yes** | Casting calls `attacks.onMoveOrder()` |
+| Flash | **Yes** | Same path |
 
-That last row was a real bug: while T was cancelling windups, hammering T at 40ms
-intervals produced **zero** autos. Now T-spam is verified to fire at exactly the
-cooldown cadence (655ms measured against a 648ms cooldown).
+> The cooldown refund on cancel is **total** (`cycleEndsAt = 0`), so cancel-spam is
+> free — but it also deals no damage, so it is a no-op rather than an exploit.
 
 ---
 
-## 8. Auto-attack projectile system
+## 8. Abilities
 
-### Spawning
+### Cast windows (`CastSystem`)
 
-Constructed only in `fireAttack()`, at the player's **current position at the moment
-of release** — not at the position where the windup started. Kiting during a windup
-is impossible (rooted), so in practice these coincide.
+Q, W and E commit for a short window anchored to the auto windup:
 
-```ts
-new AutoAttackMissile(scene, player.x, player.y, target, target.spawnId,
-                      ATTACK.damage, (t, dmg) => this.onMissileHit(t, dmg))
-```
-
-### Homing and per-frame movement
-
-The missile holds a **live object reference** to its `Target` and re-reads
-`target.x/y` every frame:
-
-```ts
-const dx = target.x - this.x;
-const dy = target.y - this.y;
-const dist = Math.hypot(dx, dy) || 0.0001;
-const step = ATTACK.projectileSpeed * deltaSeconds;      // 1150 px/s
-
-if (step >= dist - this.target.radius) {  // arrival test
-  playImpact(); onHit(target, damage); kill(); return;
-}
-this.x += (dx / dist) * step;
-this.y += (dy / dist) * step;
-```
-
-This is **perfect homing** — the bolt cannot miss a living target. That is
-intentional: League auto-attacks don't miss either.
-
-### Arrival, not collision
-
-There is no overlap test. The missile arrives when the remaining gap is smaller than
-one frame's step plus the target radius. At 1150 px/s and 60fps, `step ≈ 19px`, so it
-"lands" when within roughly 37px of the target centre. At low framerates (`dt` clamped
-at 50ms → `step ≈ 57px`) it can register a hit from noticeably further out. Cosmetic,
-but it means hit distance is mildly framerate-dependent.
-
-### Damage
-
-Damage is applied in `AttackSystem.onMissileHit()`, not in the missile:
-
-```ts
-private onMissileHit(target: Target, damage: number): void {
-  if (!target.active) return;
-  const killed = target.takeDamage(damage);
-  this.metrics.onAttackLanded();
-  this.callbacks.onDamage(target, damage, killed);   // → scoring, respawn scheduling
-}
-```
-
-### Target death mid-flight, and the `spawnId` guard
-
-`Target` objects are **pooled**: a dead target is set `active = false` and the same
-object is later revived by `respawnAtPosition()`. Without protection, a bolt aimed at
-a target that died could land on its reincarnation somewhere else on the map.
-
-The guard is a monotonically increasing generation counter:
-
-```ts
-// Target.respawnAtPosition()
-this.spawnId++;
-
-// AutoAttackMissile.update(), first thing every frame
-if (!this.target.active || this.target.spawnId !== this.targetSpawnId) {
-  this.kill();   // fizzle silently
-  return;
-}
-```
-
-The missile captured `target.spawnId` at construction. Dead target → fizzle. Same
-object, new life → `spawnId` mismatch → fizzle. This is the standard
-generational-handle pattern applied to a pooled entity.
-
-### Difference from a League skillshot
-
-| | Auto bolt | Q skillshot |
+| | castTimeMs | Measured keypress → effect |
 | --- | --- | --- |
-| Targeting | Locked to a `Target` reference | A direction only |
-| Path | Curves to follow the target | Dead straight, fixed `vx/vy` |
-| Can miss | No | Yes |
-| Range limit | None (chases until arrival) | Hard 450px cap |
-| Collision | Arrival test against its own target | Circle-vs-circle against all targets |
-| On target death | Fizzles | Keeps flying to its cap |
+| Auto windup (reference) | 175ms | — |
+| Q | 165 | **167ms** to projectile spawn |
+| W | 185 | **186ms** to projectile spawn |
+| E | 210 | **211ms** to blink |
+| Flash | — | next frame, no cast state |
+
+`CastSystem` holds one `PendingCast { ability, payload, startedAt, endsAt,
+durationMs }`. `begin()` calls `player.stop()` + `player.root()`; `update()` resolves
+when `now >= endsAt`, releases the root, fires `onResolve`, then replays any buffered
+order. `progress` is derived from the deadline, so the animation can never disagree.
+
+Key properties:
+
+- **The payload is committed at keypress.** Q/W store the aim point, E stores the
+  already-clamped blink destination. Moving the mouse mid-cast cannot re-aim.
+- **Cooldowns start at cast start**, so the window never extends them.
+- **Input lockout**: while casting, Q/W/E/F are ignored entirely.
+- **Order buffering**: a move, attack-move or direct attack order issued mid-cast is
+  stashed as a thunk (latest wins) and replayed *after* the resolve — so E's blink
+  lands before the queued order runs from the new position, and no auto can start
+  during the window. Move/attack-move pings show immediately. `S` mid-cast discards
+  the buffered order (`CastSystem.clearBufferedCommand`) but never cancels the cast.
+- `castTimeMs <= 0` skips the system entirely (`GameScene.beginCastOrResolve`), so
+  any ability can be made instant from config alone.
+
+### Q — damage skillshot
+
+Quick-cast toward the cursor after its window. Straight line, fixed `vx/vy`, dies at
+`maxRange` (450) or on the first enemy touched. On hit: damage 30, passive stack, and
+`cooldowns.reduce(750, ['q','w','e'])`.
+
+### W — mark skillshot
+
+The projectile deals **zero** damage; it calls `target.applyMark(now)` and grants a
+passive stack. The mark stores `markUntil` on the `Enemy` itself, so every archetype
+gets it free and it dies with the enemy.
+
+**Detonation** is centralised in `GameScene.onTargetDamaged()` — the funnel every
+*damaging* hit already passes through (auto, Q, E bolt). W does not call it, so it
+cannot detonate its own mark. `detonateMark()` deliberately does **not** route back
+through that funnel: that would recurse, and a detonation must not grant a second
+stack.
+
+```
+W hits → mark (4s) + 1 stack
+   ↓
+auto / Q / E bolt hits the marked enemy
+   ↓
+their damage → onTargetDamaged → isMarked? → detonateMark()
+   ↓
+clearMark + 45 damage + violet burst   (no extra stack)
+```
+
+Because respawn **replaces** the enemy object outright, a fresh enemy can never
+inherit a predecessor's mark.
+
+### E — blink + homing bolt
+
+Destination is computed at keypress: cursor if within `range` (364), else the point
+at max range along that direction, clamped to the arena. After the cast window:
+`onBeforeBlink` (cancels an uncommitted auto) → `player.blinkTo()` → departure/arrival
+rings + a ~100ms streak → bolt acquisition **from the new position**.
+
+```
+inRange   = enemies within boltAcquisitionRange (455) of the NEW position
+marked    = inRange.filter(isMarked)
+pool      = marked.length ? marked : inRange
+target    = nearest of pool
+```
+
+Marked targets win because the mark is an *expiring* damage opportunity — E is the
+tool that guarantees you can cash one in after the target has left auto range. The
+bolt deals 38, grants a stack, and can detonate.
+
+### Flash
+
+Same blink geometry with `FLASH.range` (325). No bolt, no damage, no passive stack,
+and Q never refunds its cooldown. Instant by design: the hierarchy Flash-instant vs
+Q/W/E-committed is deliberate.
+
+### Shared cooldowns (`AbilityCooldowns`)
+
+One `readyAt` table for `q | w | e | flash` plus `DURATIONS` read from config.
+
+```ts
+reduce(ms, ids) { for (id of ids) readyAt[id] = Math.max(now, readyAt[id] - ms); }
+```
+
+It never restarts or extends anything — it only pulls `readyAt` toward now, clamped.
+A landed Q is therefore a single call, and the HUD reads all four slots from the same
+source (measured: W and E each drop ~750ms + elapsed; Flash drops only its natural
+decay).
+
+### Passive (`PassiveSystem`)
+
+Ownership is deliberately narrow: `SkillshotSystem`/`BlinkSystem` decide *when* a hit
+lands, this system owns the count and expiry, `AttackSystem` only reads
+`attackSpeedMultiplier`.
+
+```
+attackSpeedMultiplier = 1 + stacks * 0.10          (max 5 stacks → ×1.5)
+```
+
+One **shared** buff, not per-stack timers: every qualifying hit adds a stack (to the
+cap) and refreshes the whole 6s window; when it lapses, all stacks go together.
+Stacking events: Q hit, W mark landing, E bolt hit. **Not**: W detonation, Flash,
+autos. All three call one helper, `GameScene.grantPassiveStack()`, which also fires
+the player's pulse — so the visual cannot fire without a real stack.
 
 ---
 
-## 9. Attack range
+## 9. Enemies and the director
 
-### The model
+### `EnemyDirector`
 
-**Player centre → target hitbox edge**, which is League's model. One function is the
-single source of truth:
-
-```ts
-export function attackReach(targetRadius: number, playerRadius: number): number {
-  return ATTACK.range + targetRadius + (ATTACK.rangeFromPlayerEdge ? playerRadius : 0);
-}
-```
-
-The test itself is squared-distance (no `sqrt`):
+Owns the roster as fixed **slots** (`TARGETS.count` = 4), each `{ enemy, respawnAt }`.
+When a kill is registered, `onEnemyKilled()` sets `respawnAt = now + respawnDelayMs`;
+when that elapses the old enemy is **destroyed** and a freshly rolled archetype spawns
+in its place. That is how composition evolves rather than switching abruptly.
 
 ```ts
-isInRange(target) {
-  const reach = attackReach(target.radius, this.player.radius);
-  return (target.x - player.x)² + (target.y - player.y)² <= reach²;
-}
+const ARCHETYPES: Record<EnemyArchetype, ArchetypeSpec> = {
+  basic:   { baseHp: () => TARGETS.maxHp, create: ..., minSpawnDistance: 240 },
+  pursuer: { baseHp: () => TARGETS.maxHp * 2.5, create: ..., minSpawnDistance: 360 },
+};
 ```
 
-With current config (`range 260`, `TARGETS.radius 18`, `rangeFromPlayerEdge false`):
+Adding a third archetype = one entry here + one weight row in `ENEMY_SPAWN` + the new
+`Enemy` subclass. No system changes, because everything downstream types against
+`Enemy`.
+
+**Spawn weights** (normalised, index = level − 1):
+
+| Difficulty | 1–3 | 4 | 5 | 6 | 7 | 8+ |
+| --- | --- | --- | --- | --- | --- | --- |
+| basic | 100% | 80% | 75% | 65% | 60% | 50% |
+| pursuer | 0% | 20% | 25% | 35% | 40% | 50% |
+
+**HP scaling**: `min(1.5, 1 + max(0, level − 3) × 0.05)` — D1–3 100%, D4 105%,
+D6 115%.
+
+**Separation**: overlapping enemies are pushed apart with the share split by radius,
+so a Pursuer shoves a basic target rather than the reverse.
+
+### `Enemy` lifecycle
 
 ```
-reach = 260 + 18 + 0 = 278px   (centre-to-centre distance at which an auto connects)
+ALIVE  hp > 0, drifting/chasing, markable
+  │ takeDamage(): hp -= n, hitFlash, damage number, (mark detonation upstream)
+  ▼ hp == 0
+DEAD   active=false IMMEDIATELY, mark cleared, death anim 300ms, kill scored
+  ▼ respawnAt (1200ms)
+REPLACED  old object destroyed, new archetype rolled and spawned
 ```
 
-Setting `rangeFromPlayerEdge: true` switches to edge-to-edge (reach becomes 292px,
-because the player's own 14px radius is also subtracted from the requirement).
+`spawnId` is a generational counter captured by in-flight missiles; a bolt aimed at a
+dead enemy fizzles rather than hitting its replacement.
 
-### Mapping to the drawn ring
+### Pursuer AI
 
-`Player.attackRingRadius()` calls the **same function**:
-
-```ts
-private attackRingRadius(): number {
-  return attackReach(TARGETS.radius, this.radius);   // 278
-}
-```
-
-So the ring drawn around the player is the exact locus of attackable target
-*centres*. A target whose centre is inside the ring is attackable, always. This is
-regression-tested: a browser test compares `insideRing === isInRange(target)`.
-
-**Caveat:** the ring uses `TARGETS.radius` (the standard size). If per-target radii
-ever differ, the ring becomes an approximation for odd-sized enemies. The per-target
-truth is the reticle, which turns green only when *that* specific enemy passes
-`isInRange()`.
-
----
-
-## 10. Attack Move
-
-### Order shape
-
-```ts
-interface AttackMoveOrder {
-  destX: number; destY: number;    // where to walk
-  cursorX: number; cursorY: number; // where the click/keypress happened
-}
-```
-
-Currently `dest` and `cursor` are always the same point (both set from the click
-position). They are separate fields so that a future "attack-move toward a location
-but prioritise near the mouse" variant needs no restructuring.
-
-### Issuing
-
-```ts
-commandAttackMove(x, y) {
-  this.currentTarget = null;
-  this.chasing = false;
-  this.attackMove = { destX: x, destY: y, cursorX: x, cursorY: y };
-  this.attackMoveNeedsWalk = true;   // deferred — see below
-}
-```
-
-The walk is **deferred to `update()`** rather than issued here. That is what makes an
-enemy already standing in range get attacked with zero movement: acquisition runs
-first, and only if it fails does the walk get issued.
-
-### Acquisition algorithm
+Two states, no separate recovery — the cooldown is a timestamp checked from CHASE, so
+it keeps walking between swings.
 
 ```
-candidates = every target where target.active AND isInRange(target)
-origin     = attackMoveTargeting === 'cursor' ? order.cursor : player position
-target     = argmin over candidates of squaredDistance(candidate, origin)
+CHASE   walk at the player's CURRENT position at 55% of player speed
+        (facing smoothed via Angle.RotateTo; clamped to the arena)
+        in reach && now >= nextAttackAt → WINDUP
+WINDUP  rooted, telegraph ring contracts, 400ms
+        on expiry → resolveSwing(): damage ONLY if still in reach
+        nextAttackAt = swing start + 1200ms
 ```
 
-```ts
-private acquireAttackMoveTarget(targets: Target[]): Target | null {
-  const byCursor = ATTACK.attackMoveTargeting === 'cursor';
-  const originX = byCursor ? order.cursorX : this.player.x;
-  const originY = byCursor ? order.cursorY : this.player.y;
-  let best = null, bestDist = Infinity;
-  for (const t of targets) {
-    if (!t.active || !this.isInRange(t)) continue;
-    const d = (t.x - originX) ** 2 + (t.y - originY) ** 2;
-    if (d < bestDist) { best = t; bestDist = d; }
-  }
-  return best;
-}
-```
-
-**Only in-range enemies are ever candidates.** This is the rule that stops an A-click
-or T press from turning into a cross-arena sprint at a distant enemy.
-
-### Per-frame behaviour
-
-```
-if (attackMove && !currentTarget):
-    acquired = acquireAttackMoveTarget(targets)
-    if acquired:
-        currentTarget = acquired; targetSource = 'attack-move'
-        attackMoveNeedsWalk = false; player.stop()
-    else if attackMoveNeedsWalk && state !== 'windup':
-        player.moveTo(order.destX, order.destY)
-        attackMoveNeedsWalk = false
-```
-
-The `state !== 'windup'` guard defers the walk until a committed swing finishes —
-pressing T mid-windup does not break the root.
-
-### Losing a target
-
-If an acquired target leaves range and `attackMoveChasesAcquiredTarget` is `false`
-(the default), the target is dropped and `attackMoveNeedsWalk` is set again, so the
-player resumes walking toward the original destination. With it `true`, the player
-chases like a direct order.
-
-### Persistence
-
-The order stays alive after arriving at the destination — the player holds position
-in "attack-move stance" and keeps acquiring anything that wanders into range, until
-another command replaces it. This is what makes `T → auto → right-click away → T`
-repeatable without re-pressing on arrival.
-
-### Attack Move vs direct right-click
-
-| | Direct attack | Attack move |
-| --- | --- | --- |
-| Target | One specific object, chosen by you | Chosen dynamically from in-range candidates |
-| `targetSource` | `'direct'` | `'attack-move'` |
-| Chases out of range | Yes (`chaseOutOfRangeTargets: true`) | No (`attackMoveChasesAcquiredTarget: false`) |
-| Target dies | Order ends | Order survives, re-acquires |
-| Walks anywhere | Toward the enemy | Toward the clicked point only |
-| Cancels a windup | No | No |
-
----
-
-## 11. Difficulty scaling
-
-There are **two independent ramps**. This is deliberate — it lets the arena stay calm
-while your hands speed up.
-
-### Ramp 1 — enemy pressure (`DifficultyManager.t`)
-
-```
-start = DIFFICULTY.rampStartSeconds                              = 22s
-end   = ROUND.durationSeconds × rampCompleteAtRoundFraction      = 60 × 0.9 = 54s
-
-t = 0                                             if elapsed <= 22
-t = clamp((elapsed - 22) / (54 - 22), 0, 1) ^ 1.8 otherwise
-```
-
-Flat zero for the first 22 seconds, then a curved climb (exponent 1.8 back-loads the
-pressure), reaching full strength at 54s and holding there for the final 6 seconds.
-
-Every enemy projectile parameter is a linear interpolation on that same `t`:
-
-```ts
-private lerp(ramp: {start, end}) { return Phaser.Math.Linear(ramp.start, ramp.end, this.t); }
-```
-
-| Parameter | t=0 | t=1 | At 40s (t≈0.355) |
-| --- | --- | --- | --- |
-| `spawnIntervalMs` | 2600 | 700 | ~1926 |
-| `speed` | 250 | 520 | ~346 |
-| `radius` | 10 | 16 | ~12.1 |
-| `damage` | 8 | 16 | ~10.8 |
-| `volleySize` | 1 | 1.5 | ~1.18 |
-
-`level` is cosmetic only: `min(10, 1 + floor(t × 10))`. Because of the 1.8 exponent,
-the HUD stays on "DIFFICULTY 1" until about **31 seconds** in.
-
-### Ramp 2 — player attack speed (`AttackSystem.attackSpeedT`)
-
-```
-attackSpeedT = clamp(elapsed / attackSpeedRampSeconds, 0, 1) ^ attackSpeedCurve
-             = clamp(elapsed / 45, 0, 1) ^ 1.15
-
-cooldownMs   = lerp(700, 420, attackSpeedT)
-windupMs     = max(90, cooldownMs × 0.25)
-```
-
-Differences from ramp 1 that matter:
-
-- **No flat opening.** Attack speed starts improving from second one.
-- **Different endpoint** (45s vs 54s).
-- **Different curve** (1.15, nearly linear, vs 1.8).
-- Gated by `ATTACK.attackSpeedScaling`; set it `false` to pin at base speed.
-
-### Why later difficulty allows faster attack-moving
-
-The recovery window is `cooldownMs - windupMs`:
-
-| Time | cooldown | windup | recovery | recovery as % of cycle |
-| --- | --- | --- | --- | --- |
-| 0s | 700ms | 175ms | 525ms | 75% |
-| 45s+ | 420ms | 105ms | 315ms | 75% |
-
-The *proportion* is constant (because the windup is a ratio of the cooldown), but
-both the cycle and the rooted window shrink in absolute terms. You get 2.38 attacks
-per second instead of 1.43, and you are rooted for only 105ms per attack instead of
-175ms — so the same kiting pattern yields more autos and more movement, while the
-reaction window for cancelling gets tighter. That is the intended difficulty curve:
-the same skill, executed faster.
-
----
-
-## 12. Q skillshot system
-
-### Input → cast
-
-`keydown Q` → `InputController.onKeyDown` → `cmd.castSkillshot(activePointer.worldX,
-activePointer.worldY)` → `SkillshotSystem.castToward(x, y)`.
-
-No targeting mode, no confirming click, no aim indicator, no cast time, no root.
-On cooldown, `castToward` returns `false` immediately and nothing happens.
-
-### Firing
-
-```ts
-castToward(worldX, worldY): boolean {
-  if (!this.isReady) return false;                      // now >= readyAt
-  const angle = Math.atan2(worldY - player.y, worldX - player.x);
-  this.missiles.push(new Projectile(scene, {
-    x: player.x, y: player.y, angle,
-    speed: 1900, radius: 7, damage: 30,
-    maxRange: 450, team: 'player', trail: true,
-    shape: 'bolt', boltLength: 26,
-  }));
-  this.showCastFlash(angle);
-  this.shotsFired++;
-  this.readyAt = this.now + SKILLSHOT_Q.cooldownMs;      // 4000ms
-  return true;
-}
-```
-
-Velocity is fixed at construction — the bolt does not re-aim:
-
-```ts
-this.vx = Math.cos(angle) * speed;
-this.vy = Math.sin(angle) * speed;
-```
-
-### Travel and range cap
-
-`Projectile.update()` accumulates real distance travelled:
-
-```ts
-const dx = vx * dt, dy = vy * dt;
-this.x += dx; this.y += dy;
-this.travelled += Math.hypot(dx, dy);
-if (this.travelled >= this.maxRange || this.isOutOfBounds()) { this.kill(); return; }
-```
-
-`isOutOfBounds()` uses `ENEMY_PROJECTILES.cullMargin` (80px past the canvas) — note
-that a Q projectile is therefore culled using a constant named for enemy projectiles.
-Harmless, but misleading (§24).
-
-Measured behaviour: a bolt with a clear path dies after ~449px against the 450px cap.
-At 1900 px/s that is ~237ms of flight.
-
-### Collision
-
-Done by `SkillshotSystem`, not the projectile:
-
-```ts
-for (const missile of this.missiles) {
-  missile.update(dt);
-  if (!missile.alive) continue;
-  for (const target of targets) {
-    if (!target.active) continue;
-    if (!missile.hits(target.x, target.y, target.radius)) continue;
-    const killed = target.takeDamage(missile.damage);
-    this.shotsHit++;
-    this.showImpact(missile.x, missile.y);
-    this.callbacks.onHit(target, missile.damage, killed);
-    if (SKILLSHOT_Q.stopsOnFirstHit) missile.kill();
-    break;                       // one target per frame regardless
-  }
-}
-```
-
-`hits()` is circle-vs-circle: `(cx-x)² + (cy-y)² <= (radius + r)²`, i.e. `7 + 18 =
-25px` against a standard target.
-
-Because collision is tested only at discrete frame positions, a very fast bolt can in
-principle step past a small target — at 1900 px/s and 60fps the step is ~32px against
-a 25px collision radius, so **tunnelling is possible in a dropped-frame scenario**.
-No swept collision test exists.
-
-### How Q differs from an auto
-
-| | Auto | Q |
-| --- | --- | --- |
-| Input | Order (target or attack-move) | Direct key, instant |
-| Roots the player | Yes, for the windup | No |
-| Gated by | Attack cooldown (700→420ms) | Its own cooldown (4000ms) |
-| Path | Homing | Straight, fixed velocity |
-| Can miss | No | Yes |
-| Damage | 12 | 30 |
-| Interacts with the attack state machine | Is the state machine | **Not at all** |
-
-Q is completely orthogonal to `AttackSystem`. Casting mid-windup neither cancels nor
-delays the auto.
-
----
-
-## 13. Enemy projectile system
-
-### Spawn scheduling
-
-```ts
-if (nowMs >= this.nextSpawnAt) {
-  this.spawnVolley();
-  this.nextSpawnAt = nowMs + this.difficulty.spawnIntervalMs;   // re-read each time
-}
-```
-
-The interval is re-read from the difficulty ramp on every reschedule, so the rate
-tightens smoothly as the round progresses.
-
-### Volley size (fractional)
-
-```ts
-const size = this.difficulty.volleySize;       // e.g. 1.18
-let shots = Math.floor(size);                  // 1
-if (Math.random() < size - shots) shots++;     // 18% chance of a second
-```
-
-Probabilistic rounding keeps the ramp continuous instead of jumping a whole
-projectile at a time.
-
-### Spawn position and aim
-
-```
-pick edge ∈ {top, bottom, left, right}   uniformly
-point     = uniform random along that edge, offset 12px outside the play area
-jitter    = uniform(-3°, +3°)
-angle     = atan2(player.y - spawnY, player.x - spawnX) + jitter
-velocity  = (cos(angle), sin(angle)) × difficulty.projectileSpeed
-```
-
-Critically: the aim is computed **once, at spawn, against the player's current
-position**. There is no lead/prediction and no re-aiming. Every shot is a fixed line
-through the point where you were standing — which is precisely what makes them all
-dodgeable by moving. Non-homing is the whole design point of this system.
-
-The ±3° jitter exists so that standing still is not a perfectly readable line either.
-
-### Player collision and cleanup
-
-```ts
-if (missile.hits(player.x, player.y, player.radius)) {
-  this.callbacks.onPlayerHit(missile.damage);
-  missile.kill();
-}
-```
-
-Circle-vs-circle against the player's 14px radius. Projectiles are culled when
-`isOutOfBounds()` (80px past the canvas edge).
+| Stat | Value |
+| --- | --- |
+| HP | 60 (basic 24 × 2.5) × difficulty multiplier |
+| Move speed | 187 px/s (55% of 340) |
+| Reach | 16px + both radii ≈ 56px centre-to-centre |
+| Damage | 10 |
+| Windup | 400ms |
+| Attack cooldown | 1200ms |
+| Score | 2.25× a basic kill |
+
+Walking or blinking out during the telegraph makes the swing miss — that is the
+intended counterplay, and it is why E/Flash have a cast window at all.
+
+### Enemy projectiles
+
+Spawned on a random arena edge, aimed at the player's position **at spawn**, with ±3°
+jitter. They never re-aim, so every shot is dodgeable by moving. Fractional volley
+size rounds probabilistically. Collision is circle-vs-circle against the player.
 
 > **i-frame interaction:** the missile is killed unconditionally on overlap, but
-> `GameScene.onPlayerHit` → `Player.takeDamage()` returns 0 if the player was hit
-> within the last 250ms. So during i-frames a projectile is **consumed without
-> dealing damage** and without counting toward `projectileHitsTaken`.
+> `Player.takeDamage()` returns 0 within 250ms of the last hit — so during i-frames a
+> projectile is consumed with no damage and no `projectileHitsTaken` increment.
 
 ---
 
-## 14. Target system
+## 10. Difficulty
 
-### Lifecycle
+Two independent ramps.
+
+**Enemy pressure** (`DifficultyManager.t`):
 
 ```
-constructed at a findSpawnSpot() position
-   │
-   ▼
-ALIVE  active=true, hp=24, drifting toward a wander point
-   │   takeDamage(n): hp -= n, hitFlashUntil = now+130ms, floating damage number
-   │
-   ▼ hp reaches 0
-DEAD (instantly)  active=false  ← gameplay state flips here, immediately
-   │   deathAnimUntil = now + 300ms; ring + 6 shards tween outward
-   │   AttackSystem.onMissileHit → callbacks.onDamage(killed=true)
-   │     → ScoreSystem.addKill() (+100)
-   │     → target.scheduleRespawn(now)   respawnAt = now + 1200ms
-   ▼
-HIDDEN  death animation finished, body invisible
-   │
-   ▼ now >= respawnAt  (checked in GameScene.update)
-RESPAWN  respawnAtPosition(spot.x, spot.y, now)
-           hp = 24, ghostHp = 24, active = true, spawnId++
-           body scale/alpha/rotation reset
+start = DIFFICULTY.rampStartSeconds                          = 22s
+end   = ROUND.durationSeconds * rampCompleteAtRoundFraction  = 54s
+t = 0                                            , elapsed <= 22
+t = clamp((elapsed - 22) / 32, 0, 1) ^ 1.8       , otherwise
+level = min(10, 1 + floor(t * 10))
 ```
 
-Note the separation: `active = false` happens on the damage frame, while the fade is
-purely a render concern driven by `deathAnimUntil`. Gameplay never waits on a tween.
+Every enemy-projectile parameter is `lerp(start, end, t)`:
 
-### Drift
+| Parameter | t=0 | t=1 |
+| --- | --- | --- |
+| `spawnIntervalMs` | 2600 | 700 |
+| `speed` | 250 | 520 |
+| `radius` | 10 | 16 |
+| `damage` | 8 | 16 |
+| `volleySize` | 1 | 1.5 |
 
-Targets wander so that standstill kiting doesn't work:
+Because of the 1.8 exponent the HUD stays on "DIFFICULTY 1" until ~31s, and
+difficulty 4 (first Pursuers) lands at ~38.5s.
+
+**Attack speed** uses its own ramp (`AttackSystem.attackSpeedT`, 45s, curve 1.15, no
+flat opening) so the arena can stay calm while your hands speed up.
+
+**Stage countdown**: `secondsUntilNextLevel` inverts the ramp
+(`e = start + (end-start) * t^(1/curve)`) purely for the HUD.
+
+---
+
+## 11. Collision
+
+No physics bodies, no spatial partitioning — explicit math, O(n·m) over tiny n and m.
+
+| Interaction | Method | Math |
+| --- | --- | --- |
+| Auto/E bolt → its target | **Arrival**, not overlap | `step >= dist - target.radius` |
+| Q/W → any enemy | Circle-vs-circle | `(cx-x)² + (cy-y)² <= (r + enemy.radius)²` |
+| Enemy projectile → player | Circle-vs-circle | `… <= (r + 14)²` |
+| Attack range | Squared distance | `d² <= (260 + enemy.radius)²` |
+| Pursuer swing | Distance at resolve | `dist <= radius + playerRadius + 16` |
+| Click hit test | Distance + grace | `dist <= enemy.radius + 10` |
+
+All collision is **discrete** — positions are tested only at frame boundaries. With
+`dt` clamped at 50ms, worst-case travel is 95px for a Q bolt against a 25px collision
+radius, so tunnelling is possible on a badly stuttering frame.
+
+---
+
+## 12. Score, metrics, round flow
+
+**Score**: `1 × damage`, `100 × archetype scoreMultiplier` per kill, `5/second`
+survival (fractional carry). `projectileHitsTaken` is tracked but does not affect
+score. `killsByType` tallies per archetype.
+
+**`KitingMetrics`** — four event counters (`attacksStarted`, `attacksFired`,
+`attacksCancelled`, `attacksLanded`) and two per-frame accumulators:
 
 ```ts
-if (nowMs >= nextWanderAt) pickWanderPoint(nowMs);   // ±160px, clamped to the field
-// then move toward (wanderX, wanderY) at TARGETS.driftSpeed (45 px/s)
-nextWanderAt = nowMs + TARGETS.driftRetargetMs;      // 1800ms
+if (attackState === 'idle' && enemyInRange) idleInRangeMs += ms;
+if (attackState === 'recovery' && !playerMoving) wastedRecoveryMs += ms;
 ```
 
-### Health bars
+Both timing metrics are **approximate**: they quantise to the frame, use the clamped
+`dt`, and measure "opportunity left on the table" rather than mistakes.
+`attacksFired` also counts a release whose target died mid-windup (no missile
+spawns), so `attacksFired - attacksLanded` overstates misses.
 
-Three stacked rectangles above the target: a dark `hpBarBg` (46×7), a pale `hpGhost`
-that lags behind, and the coloured `hpBar`. The ghost drains toward the true value at
-`maxHp × 1.6` per second, making each individual hit visible. Bar colour thresholds:
-green > 50%, amber > 25%, red below.
-
-### Respawn placement
-
-`GameScene.findSpawnSpot()` is rejection sampling, up to 60 attempts:
+**Round flow**
 
 ```
-reject if distance to player < TARGETS.minSpawnDistanceFromPlayer   (240px)
-reject if distance to any active target < TARGETS.radius × 5        (90px)
-fallback after 60 failures: any point inside the margins (constraints ignored)
+Running ──(difficulty.remaining <= 0)──> Over (survived)
+Running ──(!player.isAlive)───────────> Over (defeated)
+Over ──(restartRound)──> scene.restart() → Running
+Running <──> Paused  (setPaused; update() returns early, tweens paused)
 ```
 
-Margins are `ARENA.padding + TARGETS.edgeMargin` = 84px from the canvas edge.
-
-### Respawn-related projectile protection
-
-The `spawnId` generation counter, covered in §8. It is the mechanism that prevents a
-bolt aimed at a corpse from damaging the replacement.
+`endRound()` freezes the sim, cancels attacks/casts/pending input, and snapshots an
+immutable `RoundResult`. `UIScene.syncOverlay()` notices `getRoundResult() !== null`.
 
 ---
 
-## 15. Collision detection
+## 13. Pause safety
 
-No Phaser physics bodies, no bounding boxes, no spatial partitioning. Every test is
-explicit arithmetic, all O(n·m) over very small n and m (4 targets, a handful of
-projectiles).
+The hazard: every deadline is an absolute timestamp. If "now" came from the wall
+clock, pausing would let real time run on and every deadline would fire at once on
+resume — windups completing instantly, cooldowns wiped, a volley of projectiles.
 
-| Interaction | Where | Method | Math |
-| --- | --- | --- | --- |
-| Auto bolt → its target | `AutoAttackMissile.update()` | **Arrival**, not overlap | `step >= dist - target.radius` |
-| Q → any target | `SkillshotSystem.update()` | Circle-vs-circle | `(cx-x)² + (cy-y)² <= (7 + 18)²` |
-| Enemy projectile → player | `EnemyProjectileSystem.update()` | Circle-vs-circle | `(px-x)² + (py-y)² <= (r + 14)²` |
-| Attack range test | `AttackSystem.isInRange()` | Squared distance | `d² <= (260 + 18)²` |
-| Click hit test | `GameScene.targetAt()` | Distance + grace | `dist <= target.radius + 10` |
-| Target ↔ target | `GameScene.separateTargets()` | Overlap + symmetric push | `minDist = rA + rB + 6`, each pushed `(minDist - dist)/2` |
+So gameplay reads time from `GameClock`, which only advances on frames the simulation
+runs. `setPaused(true)` makes `update()` return before `clock.advance()` and calls
+`tweens.pauseAll()` (tweens are decoration but run on wall time). Nothing is
+rescheduled; every deadline keeps exactly the remaining time it had.
 
-All comparisons that can avoid `sqrt` do (the range test and Q collision use squared
-distances); the ones that need a direction vector use `Math.hypot`.
+Input is gated separately: `InputController` checks `acceptsGameplayInput()` before
+any pointer event or gameplay key, which is what stops a click on a menu button from
+also issuing a move order underneath. Escape is handled above that gate.
 
-**All collision is discrete** — positions are tested only at frame boundaries. With
-`dt` clamped to 50ms, worst-case per-frame travel is 95px for a Q bolt and 26px for a
-max-speed enemy projectile, against collision radii of 25px and ~24-30px respectively.
-Tunnelling is unlikely at 60fps but possible on a badly stuttering frame.
+Verified frozen while paused: round timer, difficulty, player movement, attack
+windup, cast progress (held at 0.50 across 2.5 real seconds), all four ability
+cooldowns, W mark duration, Q/W/E bolts and enemy projectiles, Pursuer movement and
+swing, respawn timers, passive duration.
 
 ---
 
-## 16. Visuals vs gameplay logic
-
-This separation is the most deliberate architectural decision in the project.
-
-### The rule
+## 14. Visuals vs gameplay
 
 > Gameplay state decides what is happening. Visuals read that state and represent it.
 > No animation callback is ever authoritative.
 
-### How it is enforced
+Enforced by shape: `AttackSystem.windupProgress` and `CastSystem.progress` are derived
+from real deadlines; `Player.applyAttackVisual()` / `setCastVisual()` write only to
+visual-only fields and cannot call `root()`, change position, or touch a timer. The
+lean is a render offset applied to the body container — `this.x/this.y` stay
+authoritative.
 
-`AttackSystem` exposes derived, read-only values computed from the real deadlines:
+One-shot effects (release burst, cancel tag, cast release flash) are driven by
+polling the owning system's timestamp (`lastReleaseAt`, `lastCancelAt`,
+`lastResolveAt`) against a "last shown" value — not by callbacks. If an effect fails
+to play, nothing about the mechanic changes.
 
-```ts
-get windupProgress(): number {
-  if (this.state !== 'windup') return 0;
-  const remaining = this.windupEndsAt - this.now;
-  return Math.min(1, Math.max(0, 1 - remaining / this.windupMs));
-}
-```
+**Cast animation compression.** The charge visuals use
+`t = pow(progress, THEME.cast.anticipationCurve)` (0.55), which front-loads the
+anticipation so a 165ms cast still reads as a windup while still peaking exactly at
+t=1. Retiming `castTimeMs` needs no animation changes.
 
-`GameScene` pipes that into the player each frame:
-
-```ts
-this.player.applyAttackVisual({
-  windupProgress: this.attacks.windupProgress,
-  msSinceRelease: time - this.attacks.lastReleaseAt,
-  targetX: aimTarget ? aimTarget.x : null,
-  targetY: aimTarget ? aimTarget.y : null,
-});
-```
-
-`Player.applyAttackVisual()` writes only to visual-only fields (`visualOffsetX/Y`,
-`windupAmount`, `aimAngle`). It cannot call `root()`, cannot change position, cannot
-touch a timer. Position (`this.x`, `this.y`) remains authoritative; the lean is a
-*render offset* applied to the body container only:
-
-```ts
-const bx = this.x + this.visualOffsetX;   // visual
-const by = this.y + this.visualOffsetY;
-this.body.setPosition(bx, by);            // this.x / this.y untouched
-```
-
-### One-shot effects without callbacks
-
-Release burst and cancel tag are one-shot events, but they are still driven by
-polling the system's timestamps rather than by callbacks:
-
-```ts
-if (this.attacks.lastReleaseAt > this.lastReleaseShownAt) {
-  this.lastReleaseShownAt = this.attacks.lastReleaseAt;
-  this.player.playReleaseBurst(this);
-}
-```
-
-If the effect fails to play, nothing about the attack changes. If the game logic
-fires twice, the effect plays twice. The dependency only ever runs one way.
-
-### Why the update order matters
-
-Because `applyAttackVisual()` writes fields that `player.update()` → `syncVisuals()`
-then reads, the two calls must happen in that order *within the same frame*. When
-they were reversed, the charge ring rendered one frame late and was briefly visible
-during recovery — a visible lie about whether the attack was still cancellable. The
-frame is now explicitly ordered `attacks.update()` → `applyAttackVisual()` →
-`player.update()`, with a comment saying why.
-
-### Verified, not just asserted
-
-A browser test samples `windupProgress`, the body's visual offset and the state
-machine simultaneously across a real attack. Measured: the visual windup lasts
-**149ms against a configured 150ms**, and the missile spawns in the same frame the
-state leaves `windup`.
+Measured: the visual windup tracks the configured windup to within a frame, and the
+missile spawns in the same frame the state leaves `windup` — the animation never
+leads or lags the mechanic.
 
 ---
 
-## 17. Animation and visual feedback
+## 15. Configuration reference
 
-| Effect | Implementation | Driven by |
-| --- | --- | --- |
-| **Player idle** | `idleRing.setScale(1 + amp·sin(pulseClock))`, `pulseClock += dt·1000·idlePulseSpeed` | Per-frame interpolation |
-| **Player facing** | `Phaser.Math.Angle.RotateTo(facingAngle, desired, 0.35)` then `body.setRotation()` | Per-frame smoothing toward `aimAngle ?? moveAngle()` — see note below |
-| **Windup lean** | `visualOffsetX/Y = unit(target) × windupLeanPx × progress`; `body.setScale(1 + (windupScale-1)·progress)` | Direct function of `windupProgress` |
-| **Windup brightening** | `Phaser.Display.Color.Interpolate.ColorWithColor(core, coreBright, 100, progress·85)` | Same |
-| **Charge ring** | `Arc` radius lerped `chargeRingStartPad → chargeRingEndPad` (20→3px) over the windup, stroke width and alpha also scale with progress | Same — lands on the body exactly at release |
-| **Release burst** | **Tween** on a persistent `Arc`: radius → 30, alpha → 0, 180ms, `Quad.easeOut` | One-shot, triggered by `lastReleaseAt` |
-| **Recoil kick** | `kick = releaseKickPx × (1 - msSinceRelease/releaseKickMs)`, subtracted from the lean vector | Per-frame decay over 120ms |
-| **Cancel tag** | **Tween** on a `Text` object: y -18, alpha → 0, 420ms, then `destroy()` | One-shot, triggered by `lastCancelAt` |
-| **Auto bolt** | `Polygon` (dart) `setRotation(atan2(dy,dx))` + white `Arc` core + `Line` trail redrawn from previous position | Per-frame transform |
-| **Q bolt** | Same `Polygon` dart pattern via `Projectile`'s `shape: 'bolt'`, rotation fixed at spawn | Set once |
-| **Enemy projectile** | `Arc` + inner core `Arc` whose scale pulses `1 + 0.18·sin(travelled·0.05)` | Per-frame |
-| **Cast flash (Q)** | **Tween**: `Arc` radius → 26, alpha → 0, 160ms | One-shot |
-| **Impact rings** | **Tween**: `Arc` radius → 22 (auto) / 30 (Q), alpha → 0, ~190-200ms, then `destroy()` | One-shot |
-| **Target hit** | `flash = (hitFlashUntil - now)/hitFeedbackMs`; `setScale(1 + 0.22·flash)`, hull fill swaps to `hitFlashColor` above 0.35 | Per-frame decay over 130ms |
-| **Floating damage** | **Tween** on `Text`: y -26, alpha → 0, 520ms, `Quad.easeOut`, then `destroy()` | One-shot per hit |
-| **Target death** | Per-frame fade/shrink from `deathAnimUntil` (`scale 0.35+0.65t`, `alpha t`, spin), **plus** tweened ring + 6 tweened shard `Arc`s | Mixed |
-| **HP ghost bar** | `ghostHp` eased toward `hp` at `maxHp × 1.6` per second | Per-frame |
-| **Enemy spin** | `body.setRotation(nowMs × spinSpeed)` | Per-frame, absolute time |
-| **Move ping** | `Arc` + pip, **tween** scale → 0.35, alpha → 0, 260ms | One-shot |
-| **Attack-move ping** | `Arc` (starting at 0.5 scale) + `Graphics` crosshair, **tween** scale → 1.25, alpha → 0 | One-shot |
-| **Target reticle** | `Graphics` cleared and redrawn every frame: 4 arcs at `spin = (now/1400) mod 2π` | Per-frame |
-| **Player hit** | `cameras.main.shake(90, 0.004)` + **tween** on a full-screen `Rectangle` stroke, alpha → 0, 260ms | One-shot |
-| **Arena** | Four `Graphics` layers built once in `create()`: floor + grid + centre mark, vignette (14 nested stroked rects with `α·(1-t)^2.2`), border frame, corner brackets | Static |
-
-The pattern is consistent: **anything tied to gameplay timing is computed per-frame
-from a timestamp; anything purely decorative is a self-destructing tween.**
-
-> **Facing nuance:** `applyAttackVisual()` only sets `aimAngle` when the lean or the
-> recoil kick is non-zero — i.e. during a windup or the 120ms after a release. The
-> rest of the time `aimAngle` is `null` and the hull falls back to the movement
-> heading. So a player standing still with an acquired target does **not** turn to
-> face it until the windup starts. Minor, but it means the hull is not a reliable
-> "what am I targeting?" indicator between attacks; the reticle is.
-
----
-
-## 18. Metrics
-
-`KitingMetrics` holds six counters. Four are event-driven from `AttackSystem`, two
-accumulate per frame.
-
-| Metric | Incremented in | Meaning | Exact |
-| --- | --- | --- | --- |
-| `attacksStarted` | `beginWindup()` | Windups begun | Yes |
-| `attacksFired` | `fireAttack()` | Windups that reached the release point | Yes |
-| `attacksCancelled` | `cancelWindup()` | Windups aborted before release | Yes |
-| `attacksLanded` | `onMissileHit()` | Missiles that connected with a live target | Yes |
-| `idleInRangeMs` | `update()` per frame | Time in `idle` with any enemy in range | **Approximate** |
-| `wastedRecoveryMs` | `update()` per frame | Time in `recovery` with no move order | **Approximate** |
-
-The invariant `attacksStarted === attacksFired + attacksCancelled` holds (verified by
-test) — **except** transiently between the release frame and a cancel, and it is only
-exactly true when no attack is mid-windup at the moment of reading.
-
-The per-frame metrics:
-
-```ts
-update(deltaSeconds, ctx) {
-  const ms = deltaSeconds * 1000;
-  if (ctx.attackState === 'idle' && ctx.enemyInRange) this.idleInRangeMs += ms;
-  if (ctx.attackState === 'recovery' && !ctx.playerMoving) this.wastedRecoveryMs += ms;
-}
-```
-
-Why these are approximate:
-
-- They quantise to the frame (±16ms per sample at 60fps).
-- They use the **clamped** `dt`, so during a stutter they under-count real time.
-- `idleInRangeMs` counts any time you are off cooldown with a target in range,
-  including time when you deliberately chose not to attack. It is "DPS left on the
-  table", not "mistakes".
-- `wastedRecoveryMs` counts standing still during recovery, which is sometimes
-  correct play (you may want to hold position). It is "kiting distance left on the
-  table", not an error count.
-- `attacksFired` counts a release whose target died during the windup, even though no
-  missile spawns and no damage occurs. So `attacksFired - attacksLanded` conflates
-  "missile fizzled because the target died" with "still in flight".
-
-They are measurements for future scoring, not a score.
-
----
-
-## 19. Score and round logic
-
-### Score sources (`ScoreSystem`)
-
-| Source | Rate | Method |
-| --- | --- | --- |
-| Damage to targets | `1 × damage` | `addDamage()` — called from `onTargetDamaged` for both autos and Q |
-| Kills | `+100` | `addKill()` |
-| Survival | `+5 / second` | `tickSurvival(dt)`, with fractional carry so partial seconds are not lost |
-
-`projectileHitsTaken` is counted but **does not affect score**.
-
-A full 60-second round is worth 300 points of survival alone. A target killed with
-two autos is worth `24 + 100 = 124`.
-
-### Round lifecycle
-
-```mermaid
-stateDiagram-v2
-    [*] --> Running: create()
-    Running --> Over: difficulty.remaining <= 0 (survived = true)
-    Running --> Over: !player.isAlive (survived = false)
-    Over --> Running: restartRound() → scene.restart()
-```
-
-`endRound(survived)`:
-
-1. `state = 'over'` — which makes `update()` return early on every subsequent frame, freezing the simulation.
-2. `attacks.cancel()`, `inputs.cancelPending()`, `player.stop()`, range ring reset.
-3. Builds the immutable `RoundResult` snapshot (score, kills, damage, hits taken, Q accuracy, survival time, and all six metrics).
-
-`UIScene.syncOverlay()` notices `getRoundResult() !== null` and shows the end screen
-(it uses an `overlayVisible` latch so the text is only rebuilt on transition).
-
-`restartRound()` clears in-flight missiles from both systems and calls
-`scene.restart()`, which re-runs `create()` from scratch. `UIScene` keeps running and
-simply starts seeing fresh polled values.
-
-### Pause
-
-`GameScene.setPaused(true)` flips a flag that makes `update()` return before it
-advances the clock, and calls `tweens.pauseAll()` so decoration stops with the
-simulation. Nothing is rescheduled on resume: because every deadline is measured
-against `GameClock` — which stopped — each one keeps exactly the remaining time it
-had. A windup frozen 20% of the way through resumes 20% of the way through.
-
-Input is gated separately: `InputController` checks
-`cmd.acceptsGameplayInput()` (false while paused) before acting on any pointer
-event or gameplay key, which is what stops a click on a menu button from also
-issuing a move order underneath the overlay. Escape is handled *above* that gate,
-and is contextual — it backs out of armed A-targeting first, and otherwise toggles
-the menu.
-
-> **Artifact:** because `update()` returns early when `state === 'over'`, any
-> auto-attack missiles and enemy projectiles in flight at the buzzer freeze mid-air
-> and remain visible under the end-screen overlay until restart.
-
----
-
-## 20. Configuration system
-
-Two files. `balance.ts` = feel, `theme.ts` = look. `main.ts` exposes the whole balance
-module as `window.__balance`, and since most values are read every frame, edits from
-the browser console apply on the next frame.
-
-### `ARENA`
-
-| Variable | Meaning | Value | Effect of increasing |
-| --- | --- | --- | --- |
-| `width` / `height` | Canvas size | 1280 / 720 | Bigger play space; UI is positioned relative to these |
-| `padding` | Playable inset | 24 | Smaller play field |
-
-### `ROUND` / `PLAYER`
-
-| Variable | Meaning | Value | Effect of increasing |
-| --- | --- | --- | --- |
-| `durationSeconds` | Round length | 60 | Longer round; also shifts the difficulty ramp end (`0.9 × duration`) |
-| `radius` | Player hitbox | 14 | Easier to hit by enemy projectiles |
-| `maxHp` | Player HP | 100 | More forgiving |
-| `moveSpeed` | Movement | 340 px/s | Easier kiting, easier dodging |
-| `arriveEpsilon` | Snap threshold | 3px | Sloppier arrival at the destination |
-| `hitInvulnerabilityMs` | i-frames after a hit | 250 | Fewer multi-hits from dense volleys |
-
-### `ATTACK` — mechanics
-
-| Variable | Meaning | Value | Effect of increasing |
-| --- | --- | --- | --- |
-| `range` | Attack range (centre→edge) | 260 | Attack from further; ring grows to match |
-| `baseCooldownMs` | Cycle at round start | 700 | Slower opening attack speed |
-| `minCooldownMs` | Cycle at full ramp | 420 | Slower end-of-round attack speed |
-| `attackSpeedRampSeconds` | Time to reach min | 45 | Slower attack-speed growth |
-| `attackSpeedCurve` | Ramp shape | 1.15 | >1 back-loads the gains |
-| `attackSpeedScaling` | Master switch | `true` | `false` pins at base |
-| `windupPercent` | Rooted fraction of cycle | 0.25 | Longer root, harder kiting |
-| `windupMsOverride` | Absolute windup | `null` | Fixes windup, breaks the proportional scaling |
-| `minWindupMs` | Windup floor | 90 | Guards readability at extreme attack speed |
-| `damage` | Auto damage | 12 | Faster kills |
-| `allowMoveCancel` | Move cancels windup | `true` | `false` commits every auto |
-| `chaseOutOfRangeTargets` | Direct orders chase | `true` | `false` ignores out-of-range attack commands |
-| `chaseBufferPx` | Chase standoff inset | 24 | Walks slightly deeper into range |
-| `attackMoveTargeting` | A/T selection origin | `'cursor'` | `'player'` picks nearest to you |
-| `attackMoveChasesAcquiredTarget` | A/T chases | `false` | `true` makes A/T drag you around |
-| `rangeFromPlayerEdge` | Range model | `false` | `true` = edge-to-edge (+14px effective) |
-| `projectileSpeed` | Auto bolt speed | 1150 px/s | Damage lands sooner; no effect on cadence |
-| `projectileRadius` | Auto bolt draw size | 6 | Visual only |
-
-### `ATTACK` — visual tuning
-
-| Variable | Value | Effect |
-| --- | --- | --- |
-| `windupLeanPx` | 9 | Lean distance at full windup |
-| `windupScale` | 1.18 | Body stretch at full windup |
-| `releaseKickPx` / `releaseKickMs` | 8 / 120 | Recoil distance and decay |
-| `chargeRingStartPad` / `chargeRingEndPad` | 20 / 3 | Charge ring travel |
-| `releaseRingRadius` / `releaseRingMs` | 30 / 180 | Release burst size and duration |
-
-### `SKILLSHOT_Q`
-
-| Variable | Meaning | Value | Effect of increasing |
-| --- | --- | --- | --- |
-| `speed` | Bolt speed | **1250 px/s** | Less leading required |
-| `radius` | Collision half-width | 7 | Easier to land |
-| `maxRange` | Hard travel cap | 450 (1.73× attack range) | Longer reach |
-| `damage` | Hit damage | 30 | — |
-| `cooldownMs` | Cooldown | **3000** | Less frequent casts |
-| `hitCooldownReductionMs` | Refund on a landed Q | **750** | Bigger reward for hitting |
-| `castTimeMs` | Cast time | 0 | **Declared but never read** (§24) |
-| `stopsOnFirstHit` | No pierce | `true` | `false` would pierce (untested path) |
-| `boltLength` / `castFlashRadius` / `castFlashMs` / `impactRadius` / `impactMs` | Visuals | 26 / 26 / 160 / 30 / 200 | Visual only |
-
-### `TARGETS`
-
-| Variable | Meaning | Value | Effect of increasing |
-| --- | --- | --- | --- |
-| `count` | Simultaneous dummies | 4 | More targets available |
-| `radius` | Hitbox | 18 | Bigger; also grows the drawn range ring |
-| `maxHp` | HP | 24 (= 2 autos at 12 dmg) | Longer to kill |
-| `respawnDelayMs` | Respawn delay | 1200 | Longer gaps between targets |
-| `deathAnimMs` / `deathShards` / `hitFeedbackMs` | Feedback | 300 / 6 / 130 | Visual only |
-| `hpBarWidth/Height/OffsetY` | Bar geometry | 46 / 7 / 16 | Visual only |
-| `minSpawnDistanceFromPlayer` | Respawn exclusion | 240 | Targets spawn further away |
-| `edgeMargin` | Border keep-out | 60 | Targets stay more central |
-| `driftSpeed` | Wander speed | 45 px/s | More movement to track (0 = static) |
-| `driftRetargetMs` | Wander re-pick | 1800 | Longer straight drifts |
-
-`Target` is constructed with a `GameClock` reference and stamps its hit-flash and
-death-fade deadlines from it, so target feedback freezes with a pause too.
-
-### `ENEMY_PROJECTILES` (all `{start, end}` ramp on `DifficultyManager.t`)
-
-| Variable | Start → End | Effect of increasing |
-| --- | --- | --- |
-| `spawnIntervalMs` | 2600 → 700 | **Higher = fewer projectiles** |
-| `speed` | 250 → 520 | Harder to dodge |
-| `radius` | 10 → 16 | Bigger hitbox, harder to dodge |
-| `damage` | 8 → 16 | More punishing |
-| `volleySize` | 1 → 1.5 | More shots per tick |
-| `aimJitterDegrees` | 3 | More spray, less predictable |
-| `cullMargin` | 80 | Projectiles live longer off-screen |
-
-### `DIFFICULTY` / `SCORE`
+### `ATTACK` (mechanics)
 
 | Variable | Value | Effect of increasing |
 | --- | --- | --- |
-| `rampStartSeconds` | 22 | Longer calm opening |
-| `rampCompleteAtRoundFraction` | 0.9 | Ramp peaks later |
-| `rampCurve` | 1.8 | Gentler early ramp, sharper late |
-| `levels` | 10 | More HUD tiers (cosmetic) |
-| `pointsPerDamage` | 1 | — |
-| `pointsPerKill` | 100 | Base kill value, multiplied by each archetype's `scoreMultiplier` |
-| `pointsPerSecondAlive` | 5 | Rewards surviving over fighting |
+| `range` | 260 | Attack from further; ring grows to match |
+| `baseCooldownMs` / `minCooldownMs` | 700 / 420 | Slower attack speed at start / cap |
+| `attackSpeedRampSeconds` / `attackSpeedCurve` | 45 / 1.15 | Slower growth / back-loaded |
+| `attackSpeedScaling` | `true` | `false` pins at base |
+| `windupPercent` / `minWindupMs` | 0.25 / 90 | Longer root, harder kiting |
+| `windupMsOverride` | `null` | Fixes windup, breaks proportional scaling |
+| `damage` | 12 | Faster kills |
+| `allowMoveCancel` | `true` | `false` commits every auto |
+| `chaseOutOfRangeTargets` / `chaseBufferPx` | `true` / 24 | — |
+| `attackMoveTargeting` | `'cursor'` | `'player'` picks nearest to you |
+| `attackMoveChasesAcquiredTarget` | `false` | `true` makes A/T drag you around |
+| `rangeFromPlayerEdge` | `false` | `true` = edge-to-edge (+14px effective) |
+| `projectileSpeed` / `projectileRadius` | 1150 / 6 | Damage lands sooner |
 
-### `DEBUG` / `KEYBINDS` / `INDICATORS`
+Visual-only: `windupLeanPx` 9, `windupScale` 1.18, `releaseKickPx/Ms` 8/120,
+`chargeRingStartPad/EndPad` 20/3, `releaseRingRadius/Ms` 30/180.
 
-`DEBUG` — all pure overlay, and the first three are editable live from the pause
-menu:
+### Abilities
 
-| Variable | Value | Meaning |
-| --- | --- | --- |
-| `attackRangeDisplay` | `'contextual'` | `'contextual'` shows the range ring only while an Attack Move command is in play (A armed, or briefly after T); `'always'` / `'off'` also available |
-| `showDamageNumbers` | `true` | Floating damage numbers |
-| `showAttackState` | `true` | The whole top-right debug panel |
-| `showCancelFeedback` | `true` | The "CANCEL" tag |
-| `showTargetMarker` | `true` | Rotating reticle on the current target |
+| | `castTimeMs` | `cooldownMs` | Range | Speed | Damage | Notes |
+| --- | --- | --- | --- | --- | --- | --- |
+| `SKILLSHOT_Q` | 165 | 3000 | 450 | 1250 | 30 | `hitCooldownReductionMs` 750, radius 7, `boltLength` 26 |
+| `SKILLSHOT_W` | 185 | 6000 | 450 | 1000 | 0 / **45** detonation | `markDurationMs` 4000, radius 12 |
+| `BLINK_E` | 210 | 8000 | 364 | bolt 1050 | 38 | `boltAcquisitionRange` 455, `boltRadius` 7, `blinkStreakMs` 100 |
+| `FLASH` | — | 20000 | 325 | — | — | `burstMs` 200 |
 
-`KEYBINDS` — `attackMove: ['A']`, `attackMoveClick: ['T']`, `stop: ['S']`,
-`skillshotQ: ['Q']`, `cancel: ['ESCAPE']`, `restart: ['R','SPACE']`. Arrays, so
-multiple bindings per action already work.
+`PASSIVE`: `maxStacks` 5, `attackSpeedPerStack` 0.10, `durationMs` 6000.
 
-`INDICATORS` — ping colours and `pingDurationMs: 260`, `pingRadius: 15`.
+### Enemies
+
+`TARGETS`: count 4, radius 18, maxHp 24, respawn 1200ms, deathAnim 300ms,
+hitFeedback 130ms, drift 45 px/s every 1800ms, minSpawnDistance 240, edgeMargin 60.
+
+`PURSUER`: `baseHpMultiplier` 2.5, radius 26, `moveSpeedFraction` 0.55,
+`attackRange` 16, `attackDamage` 10, `windupMs` 400, `attackCooldownMs` 1200,
+`scoreMultiplier` 2.25.
+
+`ENEMY_SCALING`: `hpRampStartDifficulty` 4, `hpPerDifficulty` 0.05,
+`maxHpMultiplier` 1.5. `STAGE`: `countdownSeconds` 3, `bannerMs` 1500.
+
+`ENEMY_PROJECTILES` ramps: interval 2600→700, speed 250→520, radius 10→16,
+damage 8→16, volley 1→1.5, `aimJitterDegrees` 3, `cullMargin` 80.
+
+`DIFFICULTY`: `rampStartSeconds` 22, `rampCompleteAtRoundFraction` 0.9,
+`rampCurve` 1.8, `levels` 10.
+
+### Other
+
+`PLAYER`: radius 14, maxHp 100, moveSpeed 340, arriveEpsilon 3,
+hitInvulnerabilityMs 250. `ROUND.durationSeconds` 60.
+`SCORE`: 1/damage, 100/kill (× archetype), 5/second.
+`DEBUG`: `attackRangeDisplay` `'contextual'`, `showAttackState`,
+`showCancelFeedback`, `showTargetMarker`, `showDamageNumbers` — all overlay only, the
+first three editable from the pause menu.
+`KEYBINDS`: A, T, S, Q, W, E, F, ESCAPE, R/SPACE — arrays, so multiple bindings per
+action already work.
 
 ---
 
-## 21. Important formulas
-
-**Movement**
+## 16. Formulas
 
 ```
-step         = PLAYER.moveSpeed × dt
-direction    = (dest - position) / |dest - position|
-position    += direction × step            (if |dest - position| > max(step, 3))
-```
-
-**Attack range**
-
-```
-reach        = ATTACK.range + target.radius + (rangeFromPlayerEdge ? player.radius : 0)
-             = 260 + 18 + 0 = 278
-inRange      ⟺ (tx - px)² + (ty - py)² ≤ reach²
-```
-
-**Attack speed scaling**
-
-```
-attackSpeedT = clamp(elapsed / 45, 0, 1) ^ 1.15
-cooldownMs   = 700 + (420 - 700) × attackSpeedT
-windupMs     = max(90, cooldownMs × 0.25)
-recoveryMs   = cooldownMs - windupMs
-windupEndsAt = start + windupMs
-cycleEndsAt  = start + cooldownMs          ← both set at windup START
-windupProgress = clamp(1 - (windupEndsAt - now) / windupMs, 0, 1)
-```
-
-**Enemy difficulty ramp**
-
-```
-t            = 0                                          , elapsed ≤ 22
-             = clamp((elapsed - 22) / (54 - 22), 0, 1)^1.8, otherwise
-param        = lerp(param.start, param.end, t)
-level        = min(10, 1 + floor(t × 10))
-```
-
-**Chase standoff**
-
-```
-standoff     = max(0, reach - chaseBufferPx) = 278 - 24 = 254
-destination  = target + normalize(player - target) × standoff
-```
-
-**Straight-line projectile (Q, enemy)**
-
-```
-vx, vy       = cos(angle) × speed, sin(angle) × speed
-position    += (vx, vy) × dt
-travelled   += |(vx, vy) × dt|
-dies when     travelled ≥ maxRange  ∨  out of bounds
-hits(c, r)   ⟺ (cx - x)² + (cy - y)² ≤ (radius + r)²
-```
-
-**Homing auto bolt**
-
-```
-step         = 1150 × dt
-arrives when  step ≥ |target - position| - target.radius
-else          position += normalize(target - position) × step
-```
-
-**Enemy spawn aim**
-
-```
-angle        = atan2(player.y - spawn.y, player.x - spawn.x) + uniform(-3°, +3°)
-shots        = floor(volleySize) + (random() < frac(volleySize) ? 1 : 0)
-```
-
-**Score**
-
-```
-score        = Σ damage × 1  +  kills × 100  +  floor-accumulated(5 × elapsed)
+movement        step = moveSpeed * dt;  position += normalize(dest - pos) * step
+attack reach    reach = ATTACK.range + enemy.radius + (rangeFromPlayerEdge ? player.radius : 0)
+                inRange ⟺ (dx² + dy²) <= reach²
+attack speed    t   = clamp(elapsed / 45, 0, 1) ^ 1.15
+                cd  = lerp(700, 420, t) / (1 + stacks * 0.10)
+                wind= max(90, cd * 0.25)
+cast progress   1 - (endsAt - now) / durationMs          (animation uses pow(·, 0.55))
+cooldown refund readyAt[id] = max(now, readyAt[id] - 750)   for q, w, e
+difficulty      t = elapsed <= 22 ? 0 : clamp((elapsed-22)/32, 0, 1) ^ 1.8
+enemy hp        hp = archetypeBaseHp * min(1.5, 1 + max(0, level-3) * 0.05)
+blink dest      d = cursor - player; dest = |d| > range ? player + normalize(d)*range : cursor
+                dest = clamp(dest, arena padding + player radius)
+straight shot   vx,vy = cos/sin(angle) * speed;  dies when travelled >= maxRange
+homing shot     arrives when speed*dt >= |target - pos| - target.radius
+score           Σ damage + Σ (100 × scoreMultiplier) + floor-accumulated(5 × elapsed)
 ```
 
 ---
 
-## 22. End-to-end traces
+## 17. End-to-end traces
 
-### A — Direct auto attack (right-click an out-of-range enemy)
+**Direct auto attack.** right-click enemy → `commandAttack` (source `direct`) →
+`update()` sees out of range → `chaseToward` each frame → in range → `player.stop()` +
+`beginWindup()` → rooted 175ms, charge ring contracts → `fireAttack()`: state
+`recovery`, root released, `AutoAttackMissile` spawned with `target.spawnId` →
+`playReleaseBurst` → missile homes at 1150 px/s → on arrival `onMissileHit` →
+`takeDamage(12)` → hit flash, damage number → `onTargetDamaged` → score, and mark
+detonation if marked → `cycleEndsAt` → `idle` → next windup starts immediately.
 
-1. `InputController.onPointerDown` — `rightButtonDown()`, `cmd.targetAt(x,y)` finds a target within `radius + 10`.
-2. `GameScene.commandHandler().commandAttackTarget(t)` → `AttackSystem.commandAttack(t)`: `attackMove = null`, `currentTarget = t`, `targetSource = 'direct'`. No windup cancel.
-3. Next `AttackSystem.update()` — step 5: `isInRange(t)` is false, `state !== 'windup'`, `targetSource === 'direct'` so `mayChase = chaseOutOfRangeTargets = true` → `chaseToward(t)` issues `player.moveTo(standoff point)`, `chasing = true`.
-4. `Player.update(dt)` walks the player ~5.7px per frame; chase destination is recomputed every frame.
-5. When `isInRange(t)` becomes true: `player.stop()`, `chasing = false`, and since `state === 'idle'` → `beginWindup(t, now)`.
-6. Rooted for `windupMs` (175ms at round start). `windupProgress` drives the lean, the stretch, the brightening, and the charge ring contracting from 20px to 3px of padding.
-7. `now >= windupEndsAt` → `fireAttack()`: state → `recovery`, root released, `lastReleaseAt = now`, `attacksFired++`, `AutoAttackMissile` constructed at the player's position with `target.spawnId` captured.
-8. `GameScene` sees `lastReleaseAt > lastReleaseShownAt` → `player.playReleaseBurst()`.
-9. Missile homes at 1150 px/s; on arrival `playImpact()` then `AttackSystem.onMissileHit()` → `target.takeDamage(12)` → hit flash, squash, floating "-12", ghost-bar drain → `attacksLanded++` → `GameScene.onTargetDamaged()` → `scoring.addDamage(12)`.
-10. `now >= cycleEndsAt` → `state = 'idle'`. `currentTarget` is still `t`, still in range → step 5 starts the next windup immediately.
+**W → auto detonation.** press W → `attacks.onMoveOrder()` (cancels any windup),
+`cooldowns.start('w')`, `cast.begin('w', aim, 185ms)` → rooted, violet orb gathers →
+resolve → `skillshot.fire('w')` → orb flies → touches enemy → `onWHit` →
+`applyMark(now)` + `grantPassiveStack()` (no damage) → later an auto lands →
+`onTargetDamaged` → `isMarked` → `detonateMark()` → `clearMark` + 45 damage + violet
+burst, **no** second stack.
 
-### B — Attack Move Click (T)
+**E combo.** press E → cooldown starts, destination computed **and clamped now** →
+`cast.begin('e', dest, 210ms)` → rooted, pink ring contracts → resolve →
+`executeBlink`: `onBeforeBlink` → `player.blinkTo(dest)` → departure/arrival rings →
+acquisition from the **new** position, W-marked first → bolt spawns → on impact 38
+damage, a stack, and a detonation if marked. A move order pressed mid-cast replays
+immediately after the blink.
 
-1. `InputController.onKeyDown`, `normalizeKey('t')` → `'T'`, matches `KEYBINDS.attackMoveClick`.
-2. `attackMovePending = false`; `cursor()` reads `scene.input.activePointer.worldX/Y`.
-3. `cmd.commandAttackMove(x, y)` → `GameScene` fires the red bloom ping and calls `AttackSystem.commandAttackMove(x, y)`: `currentTarget = null`, `attackMove = {dest, cursor}`, `attackMoveNeedsWalk = true`. **No windup cancel.**
-4. Next `AttackSystem.update()` step 4: `acquireAttackMoveTarget()` filters to `active && isInRange`, then picks the minimum squared distance to the cursor (`attackMoveTargeting: 'cursor'`).
-   - **Found** → `currentTarget = it`, `targetSource = 'attack-move'`, `attackMoveNeedsWalk = false`, `player.stop()`. Step 5 then calls `beginWindup()` on the same frame if `state === 'idle'`. No movement occurs at all.
-   - **Not found** → `player.moveTo(dest)` (unless mid-windup, in which case the walk is deferred). The player walks; acquisition is retried every frame; the instant something enters range, `player.stop()` and the windup begins.
-5. From here it is identical to trace A from step 6 — same state machine, same timing, same metrics.
-6. Press T again during recovery: `commandAttackMove` replaces the order, `currentTarget` is cleared and immediately re-acquired, but `beginWindup()` still requires `state === 'idle'`, so **the cooldown is never bypassed**.
+**Q cooldown refund.** Q lands → `onQHit` → `onTargetDamaged` (+ detonation) →
+`grantPassiveStack()` → `cooldowns.reduce(750, ['q','w','e'])` → the HUD's three kit
+slots all jump down on the next frame; Flash is untouched.
 
-### C — Cancelled auto
-
-Covered in detail in §7 Trace A. Summary of state deltas:
-`state: windup → idle`, `windupTarget: t → null`, `cycleEndsAt: start+700 → 0`,
-`rootCount: 1 → 0`, `currentTarget: t → null`, `attackMove → null`,
-`lastCancelAt = now`, `attacksCancelled++`, **no `AutoAttackMissile` ever constructed**,
-target HP unchanged.
-
-### D — Q, keypress to destruction
-
-1. `keydown Q` → `KEYBINDS.skillshotQ` match → `cmd.castSkillshot(cursor.x, cursor.y)`.
-2. `SkillshotSystem.castToward()`: `isReady` = `now >= readyAt`. If not ready, return `false` — no feedback beyond the HUD countdown.
-3. `angle = atan2(cursorY - player.y, cursorX - player.x)`.
-4. `new Projectile({x: player.x, y: player.y, angle, speed: 1900, radius: 7, damage: 30, maxRange: 450, shape: 'bolt', trail: true})` — `vx/vy` fixed at construction.
-5. `showCastFlash(angle)` tweens an `Arc` outward from the player's edge. `shotsFired++`. `readyAt = now + 4000`.
-6. Each frame `Projectile.update(dt)` advances by `(vx,vy)·dt`, redraws the trail from the previous position, accumulates `travelled`.
-7. `SkillshotSystem.update()` then tests every active target with `hits(tx, ty, 18)` → circle-vs-circle at `7+18 = 25px`.
-   - **Hit** → `takeDamage(30)` (kills a full-HP 24 HP target outright), `shotsHit++`, `showImpact()`, `callbacks.onHit` → scoring, `missile.kill()` because `stopsOnFirstHit`. `break` — no pierce.
-   - **Miss** → continues until `travelled >= 450` (~237ms) → `kill()`.
-8. `kill()` destroys the body, core and trail game objects; the dead entry is spliced out of `missiles[]` at the end of the same update.
-
-### E — Enemy projectile to player damage
-
-1. `EnemyProjectileSystem.update()`: `now >= nextSpawnAt` → `spawnVolley()`; `nextSpawnAt = now + difficulty.spawnIntervalMs` (2600ms early, ~700ms at full ramp).
-2. `spawnVolley()` rolls the fractional volley size; `spawnOne()` per shot.
-3. `randomEdgePoint()` picks one of four edges uniformly, then a uniform point along it, 12px outside the play area.
-4. `angle = atan2(player.y - y, player.x - x) + jitter(±3°)` — aimed at **where you are now**, never re-aimed.
-5. `new Projectile({speed, radius, damage from the difficulty ramp, heavyOutline: true})` — fat amber orb with a dark rim and a pulsing core.
-6. Each frame it advances along its fixed velocity; `hits(player.x, player.y, 14)` is tested.
-7. On overlap: `callbacks.onPlayerHit(damage)` and `missile.kill()` **unconditionally**.
-8. `GameScene.onPlayerHit()` → `Player.takeDamage(amount, now)`:
-   - Within 250ms of the last hit → returns 0, `GameScene` returns early. The projectile is still gone, no damage, no hit counted.
-   - Otherwise → `lastHitAt = now`, `hp -= amount`, returns the amount. `scoring.addProjectileHit()`, camera shake (90ms, 0.004), red rim flash tween.
-9. If `hp` reaches 0, the next `GameScene.update()` sees `!player.isAlive` → `endRound(false)` → "DEFEATED".
+**Player hit.** Spawn on a random edge → aimed at the player's position at spawn ±3° →
+straight line → overlap with the player → missile killed unconditionally →
+`Player.takeDamage(amount, now)` → 0 within i-frames, else HP drops, camera shake, red
+rim flash → at 0 HP the next frame ends the round.
 
 ---
 
-## 23. Known simplifications vs League
+## 18. Known simplifications vs League
 
 | Mechanic | League | Here |
 | --- | --- | --- |
-| **Attack windup** | Fixed cast time in seconds, scales with attack speed in a more complex way | A flat `windupPercent` of the cycle, floored at 90ms |
-| **Cancel refund** | Strict rules about when the cooldown is refunded | Total refund (`cycleEndsAt = 0`) — cancel-spam is completely free |
-| **Attack speed** | Stat with a hard cap, from items/levels/buffs | A pure function of round elapsed time |
-| **Auto projectiles** | Ranged autos travel and can be dodged by some abilities | Perfect homing, cannot be lost except by target death |
-| **Target acquisition** | Acquisition range larger than attack range; priority rules (champions, lowest effective HP, etc.) | Only in-range enemies; nearest-to-cursor or nearest-to-player |
-| **Attack-move chase** | Sticks to the acquired target and chases | Drops it when it leaves range (configurable) |
-| **Attack-move order lifetime** | Ends on arrival at the location | Persists as a stance until another command |
-| **Movement** | Pathfinding, unit collision, turn rate, acceleration | Straight line to a point; instant direction changes; no collision with anything |
-| **Hitboxes** | Per-unit gameplay radii, some non-circular | Uniform circles; 14px player, 18px targets |
-| **Q** | Ezreal's Q: ~0.25s cast time, roots briefly, applies on-hit effects, refunds cooldown on hit, ~1150 range (≈2.1× his attack range) | No cast time, no root, no on-hit, no refund, 450 range (1.73× attack range) |
-| **Enemy behaviour** | Units attack, path, and threaten | Dummies that drift; all danger comes from edge-spawned projectiles |
-| **Death/respawn** | Complex | Instant flag flip, 300ms fade, fixed 1200ms respawn |
-| **i-frames** | Not a League concept for basic damage | 250ms of invulnerability after any hit |
+| Cancel refund | Strict rules | Total refund; cancel-spam is free (and damage-free) |
+| Attack speed | Stat with a cap | Pure function of round time × passive stacks |
+| Auto projectiles | Dodgeable by some abilities | Perfect homing; only target death stops them |
+| Target acquisition | Acquisition range > attack range, priority rules | Only in-range enemies; nearest-to-cursor or nearest-to-player |
+| Attack-move | Sticks to and chases the acquired target | Drops it when it leaves range (configurable) |
+| Attack-move order | Ends on arrival | Persists as a stance until the next command |
+| Movement | Pathfinding, unit collision, turn rate | Straight line, instant direction changes |
+| Hitboxes | Per-unit, some non-circular | Uniform circles |
+| Q | Ezreal: ~0.25s cast, on-hit effects, cooldown refund on hit | 165ms cast, no on-hit, refunds Q/W/E |
+| W | Targets specific unit types, damages on mark application | Marks any `Enemy`, damage is entirely on detonation |
+| E | Blink + bolt, on-hit effects | Blink + bolt, no on-hit |
+| Flash | Multi-minute cooldown | 20s, so it appears in a 60s round |
+| Casting | Spell queueing, buffered casts | Hard ability lockout; move, attack-move and attack orders are buffered |
+| i-frames | Not a League concept | 250ms after any hit |
 
-Where behaviour *does* match League closely: the cooldown starting at windup start
-(so recovery is a free movement window), centre-to-hitbox-edge range measurement,
-right-click contextual move/attack, attack orders not cancelling committed swings,
-and move orders cancelling uncommitted ones.
+Where it *does* match: cooldown starting at windup start, centre-to-hitbox-edge range,
+contextual right-click, attack orders not cancelling committed swings, move orders
+cancelling uncommitted ones, and cast windows committing their aim at keypress.
 
 ---
 
-## 24. Potential bugs and technical debt
+## 19. Technical debt
 
 ### Important
 
-1. **Config has two overlapping sources of truth for colour.** `theme.ts` was added
-   later, and `balance.ts` still declares colours that nothing reads. Verified dead:
-   `UI` (the entire block, 0 references), `ARENA.floorColor`, `ARENA.borderColor`,
-   `PLAYER.color`, `TARGETS.color`, `ENEMY_PROJECTILES.color`, `ATTACK.projectileColor`.
-   Only `ARENA.backgroundColor` is still used (in `main.ts`). Editing any of the dead
-   ones does nothing, which is an actively misleading trap while tuning.
-
-2. **`SKILLSHOT_Q.castTimeMs` is declared, documented, and never read.** The comment
-   says "0 = instant, and you keep moving" — which is accurate only because nothing
-   implements it. Setting it non-zero has no effect.
-
-3. **Round timing is simulation time, not wall time.** `dt` is clamped at 50ms and
-   both `DifficultyManager` and `GameClock` accumulate the clamped value, so a
-   stuttering machine gets a longer real-time round and a slower difficulty ramp.
-   Deadlines and movement now share that same clamped source, so they no longer
-   disagree with each other — but neither tracks a wall clock.
-
-4. **In-flight projectiles freeze on round end.** `update()` returns early when
-   `state === 'over'`, so missiles hang in mid-air under the end overlay.
-
-5. **Discrete collision with no swept test.** At the `dt` clamp (50ms) a Q bolt moves
-   95px per frame against a 25px collision radius. Tunnelling through a target is
-   possible on a stuttering frame.
+1. **Two sources of truth for colour.** `theme.ts` owns the look, but `balance.ts`
+   still declares colours nothing reads. Verified dead: the entire `UI` block,
+   `ARENA.floorColor`, `ARENA.borderColor`, `PLAYER.color`, `TARGETS.color`,
+   `ENEMY_PROJECTILES.color`, `ATTACK.projectileColor`. Editing them does nothing —
+   an active trap while tuning. (`ARENA.backgroundColor` *is* used, in `main.ts`.)
+2. **`stopsOnFirstHit` is now dead.** Both `SKILLSHOT_Q.stopsOnFirstHit` and
+   `SKILLSHOT_W.stopsOnFirstHit` are documented but unread — the generalised
+   `SkillshotSystem` kills the missile unconditionally on contact. Setting either
+   `false` does not produce a piercing shot.
+3. **`GameScene` is ~760 lines** and has become the ability orchestrator by accident:
+   arena drawing, command handling, hit testing, ping effects, cast routing,
+   detonation, passive granting, round lifecycle and the HUD snapshot all live there.
+4. **In-flight projectiles freeze on round end.** `update()` returns early when the
+   round is over, so missiles hang mid-air under the end overlay.
+5. **Discrete collision, no swept test.** At the `dt` clamp a Q bolt moves 95px per
+   frame against a 25px collision radius.
 
 ### Minor
 
-6. **`separateTargets()` can push targets out of the play area.** The push has no
-   clamp against `ARENA.padding`, unlike every other position write.
-
-7. **Ordering artefact:** `separateTargets()` runs *after* `target.update()`, which is
-   what syncs target visuals. A pushed target therefore renders one frame behind its
-   gameplay position.
-
-8. **Dead public API.** `AttackSystem.hasFired` and `AttackSystem.cooldownRemaining`
-   are read by nothing in `src/` (only by the browser test suites).
-   `HudState.qCooldownTotalMs` is populated and never displayed.
-   `Projectile.team` is assigned and never read.
-
-9. **`Projectile.isOutOfBounds()` uses `ENEMY_PROJECTILES.cullMargin`** even for the
-   player's Q. Correct behaviour, misleading source of the constant.
-
-10. **The drawn range ring assumes all targets share `TARGETS.radius`.** True today;
-    it silently becomes an approximation if per-target sizes are ever introduced.
-
-11. **`attacksFired` counts releases with no missile.** If the target dies during the
-    windup, `fireAttack()` still increments the counter and returns before
-    constructing a missile, so `attacksFired - attacksLanded` overstates misses.
-
-12. **i-frames consume projectiles.** A shot that overlaps during invulnerability is
-    destroyed without dealing damage or counting as a hit — arguably correct, but it
-    is implicit rather than a decision made in one place.
-
-13. **`GameScene` is doing a lot.** ~520 lines covering arena rendering, command
-    handling, hit testing, ping effects, target separation, spawn placement, round
-    lifecycle and the HUD snapshot. The arena drawing and the ping effects in
-    particular have no reason to live in the same file as the round logic.
-
-14. **Magic numbers remain in visual code** despite `theme.ts`: the `0.22` hit-squash
-    factor and `1.6` ghost-bar drain rate in `Target`, the `10px` click grace and
-    `6px` separation padding in `GameScene`, the `0.35` rotation smoothing in
-    `Player`, arc counts and `1400` spin divisor in the reticle.
+6. **Dead public API**: `AttackSystem.hasFired`, `AttackSystem.cooldownRemaining`,
+   `Projectile.team` are read by nothing in `src/`.
+7. **`Projectile.isOutOfBounds()` uses `ENEMY_PROJECTILES.cullMargin`** for the
+   player's Q and W too — correct behaviour, misleading constant.
+8. **The drawn range ring assumes all enemies share `TARGETS.radius`.** With the
+   Pursuer at radius 26, the ring is exact for basic targets and conservative for
+   Pursuers; the per-target reticle is the accurate cue.
+9. **`TARGETS` config is doing double duty** — `hitFeedbackMs`, `deathAnimMs`,
+   `deathShards`, `respawnDelayMs` are read by *all* enemies from a block named for
+   the basic target.
+10. **`attacksFired` counts releases with no missile** (target died mid-windup).
+11. **i-frames are global**, so a Pursuer swing and a projectile landing together
+    means one is silently eaten.
+12. **`HudState` is ~30 fields** — one grab-bag for every HUD region.
+13. **Magic numbers remain in visual code** despite `theme.ts`: the 0.22 hit-squash,
+    1.6 ghost-bar drain rate, 10px click grace, 0.35 rotation smoothing, reticle arc
+    count and 1400 spin divisor.
+14. **`AbilityId` / `CastAbility` unions are declared in three places** (cooldown
+    durations, cast system, HUD).
 
 ### Future cleanup
 
 15. No object pooling — every projectile, damage number, ping and shard is a fresh
-    Phaser GameObject that is destroyed on completion. Fine at current densities;
-    would matter if projectile counts rose by an order of magnitude.
-
-16. `GameScene.update()` calls `attacks.hasTargetInRange(targets)` every frame purely
-    for metrics, duplicating the range scan already done inside `attacks.update()`.
-
-17. No automated tests live in the repository. The six browser suites that validated
-    each iteration live in the scratchpad directory, not in `src/` or a `tests/`
-    folder, so they are not runnable from a clean checkout.
-
-18. The `AttackMoveOrder.dest` / `.cursor` split exists but both fields are always
-    set to the same point.
+    GameObject destroyed on completion. Fine at current densities.
+16. `GameScene.update()` calls `attacks.hasTargetInRange(enemies)` purely for metrics,
+    duplicating the range scan `attacks.update()` already did.
+17. **No tests live in the repository.** The eleven browser suites that validate every
+    system live in the session scratchpad, not in `src/` or `tests/`, so they are not
+    runnable from a clean checkout. This is the single biggest gap.
+18. `AttackMoveOrder.dest` / `.cursor` are always set to the same point.
 
 ---
 
-## 25. Future architecture
+## 20. Extending it
 
-**More abilities (W/E/R).** `SkillshotSystem` is already parameterised by a config
-block — a second instance with a different block is the intended path. The work is in
-`InputController` (a case per key, bindings already array-shaped in `KEYBINDS`) and in
-`CommandHandler` (one method per ability, or one `castAbility(slot, x, y)`). Abilities
-needing a cast time would use `Player.root()` / `releaseRoot()`, which is already
-reference-counted for exactly this.
+**More abilities (R).** `SkillshotSystem`'s `SPECS` table is the seam: one projectile
+loop, per-ability config + on-hit effect. Add a config block, a `SPECS` entry, an
+`AbilityId`, a keybind, a `CommandHandler` method and an `AbilityBar` slot. Cast
+windows come free via `beginCastOrResolve`.
 
-**Enemies that attack.** `Target` currently owns position, HP and drift. An enemy AI
-system would sit beside `EnemyProjectileSystem`, consume the target list, and emit
-`Projectile`s using the existing entity. The player-side damage path
-(`onPlayerHit` → `Player.takeDamage` with i-frames) already exists and is agnostic
-about the source.
-
-**Champion-like kits.** The natural seam is a per-champion config object replacing the
-`ATTACK` / `SKILLSHOT_Q` singletons — `AttackSystem` already reads all its numbers
-through getters, so making those getters read from an injected kit rather than the
-module import is a contained change.
+**More enemies.** One `Enemy` subclass + one `ARCHETYPES` entry + one weight row.
+Nothing else changes.
 
 **Configurable keybinds.** Already 90% there: `KEYBINDS` is the only source,
-`InputController` is the only reader, keys are normalised strings, and every action
-accepts an array of bindings. A settings UI would write to that object and (for
-persistence) mirror it into `localStorage`.
+`InputController` the only reader, every action takes an array.
 
-**More drill types.** `GameScene` currently hard-codes one round shape. A drill would
-become a small strategy object supplying: spawn rules, win/lose conditions, which
-systems are active, and which metrics matter. `DifficultyManager` and `ScoreSystem`
-are already independent enough to be swapped per drill.
-
-**Advanced statistics.** `KitingMetrics` is the hook. It already receives a per-frame
-context object; adding time-series sampling (attack cadence histogram, distance-to-
-target over time, dodge reaction latency) means extending that context and buffering
-samples rather than only accumulating counters.
-
-**Persistent scores.** `RoundResult` is already a flat, serialisable snapshot built in
-one place (`endRound`). Writing it to `localStorage` and reading a personal best into
-`UIScene` requires no changes to any gameplay system.
+**Drill types / persistence.** `RoundResult` is a flat serialisable snapshot built in
+one place; `DifficultyManager` and `ScoreSystem` are independent enough to swap per
+drill.
 
 ---
 
-## 26. Accuracy notes
+## 21. Accuracy notes
 
-Everything above was read from the source at the time of writing. Specific
-verifications performed:
+Verified while writing: config values quoted from source; the frame order transcribed
+from `GameScene.update()`; dead-config claims established by grepping each symbol
+across `src/` excluding `balance.ts`; measured timings (167/186/211ms cast→effect,
+750ms cooldown refund, 277px chase stop, 449px Q travel) taken from browser test
+runs, not from reading config.
 
-- Config values quoted directly from `src/config/balance.ts`.
-- Update order transcribed from `GameScene.update()`.
-- Dead-config claims verified by grepping each symbol across `src/` excluding `balance.ts`.
-- Timing figures (149ms measured windup, 655ms T-spam cadence, 449px Q travel,
-  277px chase stop) come from the browser test runs performed during development,
-  not from reading the config.
-
-Where the code and its comments disagree, or where a config value has no effect, it
-is flagged in §24 rather than described as working.
+Where code and comments disagree, or a config value has no effect, it is listed in
+§19 rather than described as working.

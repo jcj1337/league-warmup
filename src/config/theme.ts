@@ -74,6 +74,12 @@ export const THEME = {
    * when a cast completes; these only shape how that reads on screen.
    */
   cast: {
+    /**
+     * Shape of the charge-up. <1 front-loads it: the anticipation is visible
+     * almost immediately and then eases into the peak, so a 165ms cast still
+     * reads as a real windup instead of a blur. Applied as pow(progress, this).
+     */
+    anticipationCurve: 0.55,
     /** How much the player compresses at full charge. */
     compression: 0.14,
     /** W: the gathering orb grows between these radii over the cast. */
@@ -85,7 +91,7 @@ export const THEME = {
     eRingStartPad: 24,
     eRingEndPad: 2,
     /** Peak flash at the moment a cast completes. */
-    releaseFlashMs: 140,
+    releaseFlashMs: 105,
     releaseFlashRadius: 30,
   },
 
@@ -97,7 +103,7 @@ export const THEME = {
     spinSpeed: 0.0026,
   },
 
-  /** Q passive: stack pips + duration bar under the ability bar. */
+  /** Ability passive: stack pips + duration bar under the ability bar. */
   passive: {
     pipFilled: 0x7cf3c0,
     pipEmpty: 0x25323f,
@@ -168,7 +174,7 @@ export const THEME = {
     fadeMs: 160,
   },
 
-  /** Bottom-centre ability bar. Laid out for N slots; only Q exists today. */
+  /** Bottom-centre ability bar: the Q/W/E kit row plus a separate Flash slot. */
   ability: {
     slotSize: 62,
     slotGap: 10,
