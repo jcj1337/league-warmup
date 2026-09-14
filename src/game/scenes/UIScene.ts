@@ -101,8 +101,14 @@ export class UIScene extends Phaser.Scene {
     this.hintText = label(ARENA.width - M, ARENA.height - 44, 12, THEME.ui.faint).setOrigin(1, 0);
     this.hintText.setText('ESC   menu & settings');
 
-    // ---- bottom-centre: ability bar (Q today, room for W/E/R) ------------
-    this.abilityBar = new AbilityBar(this, ['Q']);
+    // ---- bottom-centre: ability bar + summoner slot ----------------------
+    // Q/W/E as the kit row (R slots in later), Flash set apart to its right.
+    this.abilityBar = new AbilityBar(this, [
+      { key: 'Q', icon: 'q' },
+      { key: 'W', icon: 'w' },
+      { key: 'E', icon: 'e' },
+      { key: 'F', icon: 'flash', summoner: true },
+    ]);
 
     // Passive pips sit just above the bar.
     const slotTop = ARENA.height - THEME.ability.bottomMargin - THEME.ability.slotSize;
@@ -173,7 +179,10 @@ export class UIScene extends Phaser.Scene {
         'T | attack-move at cursor',
         'A + LMB | attack-move at a point',
         'S | stop',
-        'Q | skillshot toward cursor',
+        'Q | damage skillshot',
+        'W | mark skillshot',
+        'E | blink + homing bolt',
+        'F | flash (summoner)',
       ],
     );
   }
@@ -242,8 +251,15 @@ export class UIScene extends Phaser.Scene {
 
     // The ability bar is the single authoritative Q display. It is handed the
     // real numbers from SkillshotSystem and derives nothing itself.
+    // Every slot is handed the real numbers from AbilityCooldowns and derives
+    // nothing — which is why a Q hit refunding W/E shows up instantly on all three.
+    const cd = hud.abilityCooldowns;
+    const castOf = (id: string) => (hud.castingAbility === id ? hud.castProgress : 0);
     this.abilityBar.update([
-      { cooldownMs: hud.qCooldownMs, cooldownTotalMs: hud.qCooldownTotalMs },
+      { cooldownMs: cd.q.remaining, cooldownTotalMs: cd.q.total, castProgress: castOf('q') },
+      { cooldownMs: cd.w.remaining, cooldownTotalMs: cd.w.total, castProgress: castOf('w') },
+      { cooldownMs: cd.e.remaining, cooldownTotalMs: cd.e.total, castProgress: castOf('e') },
+      { cooldownMs: cd.flash.remaining, cooldownTotalMs: cd.flash.total, castProgress: 0 },
     ]);
 
     this.modeText

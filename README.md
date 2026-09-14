@@ -18,7 +18,10 @@ npm run build    # typecheck + production build
 | `T` | Attack Move Click: same order as A + left-click, issued at the cursor |
 | `A` then left-click | Attack Move toward that point; attacks the first enemy in range |
 | `S` | Stop: freeze in place, drop all pending orders |
-| `Q` | Quick-cast the skillshot toward the cursor — fires instantly, no click |
+| `Q` | Quick-cast damage skillshot toward the cursor |
+| `W` | Quick-cast mark skillshot — marks on contact, detonates on your next hit |
+| `E` | Blink toward the cursor, then a homing bolt (prefers a W-marked enemy) |
+| `F` | Flash: summoner blink, no damage |
 | Left-click on a target | Direct attack order (convenience) |
 | `Esc` | Back out of armed A-targeting, or open/close the pause menu |
 | `R` / `Space` / button | Restart from the end screen |
@@ -75,15 +78,36 @@ What you see maps 1:1 onto the state machine:
 The charge ring is the precise cancel cue: while it is still shrinking you can
 cancel; the frame it reaches the body, the auto is gone.
 
-## Q passive
+## The kit
 
-Landing a Q grants a stack (max 5), each worth **+10% attack speed**, and
-refreshes the whole buff to 6s. Missing gives nothing. A landed Q also takes
-750ms off Q's *remaining* cooldown. Stacks show as pips above the ability bar.
+| | Cast time | Cooldown | Range | Speed | Damage |
+| --- | --- | --- | --- | --- | --- |
+| Q | instant | 3000ms | 450 | 1250 px/s | 30 |
+| W | **250ms** | 6000ms | 450 | 1000 px/s | 0 on contact, **45 on detonation** |
+| E | **250ms** | 8000ms | 364 blink / 455 bolt acquisition | 1050 px/s bolt | 38 |
+| F | instant | 20000ms | 325 | instant | — |
+
+**Cast windows.** W and E commit: the aim (W) / destination (E) is frozen at
+keypress, the player is rooted for the window, and other ability inputs are
+ignored until it resolves. Move and attack-move orders issued mid-cast are
+**buffered** and replay the instant the cast lands. Cooldowns start at cast
+*start*, so the window never extends them. Q and Flash stay instant by design.
+
+**Passive.** Any landed ability hit — Q, the W mark landing, or the E bolt —
+grants a stack (max 5, +10% attack speed each) and refreshes the shared 6s
+timer. A W *detonation* grants none (the stack came when the mark landed), and
+Flash never does.
 
 ```
 cooldownMs = rampCooldown / (1 + stacks * 0.10)
 ```
+
+**Cooldown refund.** A landed Q takes 750ms off the *remaining* cooldown of
+Q, W and E — never Flash, and never by restarting a cooldown.
+
+**W combo.** W marks on contact and deals nothing. The mark detonates for 45 the
+next time that enemy is hit by an auto, Q or the E bolt, and lapses harmlessly
+after 4s. E's bolt prefers a marked target, so W → E cashes the mark in.
 
 ## Attack speed scaling
 

@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { DEBUG, TARGETS } from '../../config/balance';
+import { DEBUG, SKILLSHOT_W, TARGETS } from '../../config/balance';
 import { THEME } from '../../config/theme';
 import type { GameClock } from '../systems/GameClock';
 
@@ -72,6 +72,17 @@ export abstract class Enemy {
   /** Trails behind `hp` so you can see how much was just taken off. */
   private ghostHp: number;
 
+  /**
+   * W mark: clock time at which it lapses, or 0 for unmarked.
+   *
+   * Marks live on the enemy itself so every archetype gets them for free and so
+   * they die with the enemy. Respawning REPLACES the enemy object outright, so
+   * a fresh enemy can never inherit a predecessor's mark.
+   */
+  private markUntil = 0;
+  /** The rotating ring drawn on a marked enemy. */
+  private readonly markGfx: Phaser.GameObjects.Graphics;
+
   /** The silhouette, built by the subclass. */
   protected body!: Phaser.GameObjects.Container;
 
@@ -110,6 +121,61 @@ export abstract class Enemy {
       .rectangle(x - opts.hpBarWidth / 2, barY, opts.hpBarWidth, opts.hpBarHeight - 2, 0x62d26f)
       .setOrigin(0, 0.5)
       .setDepth(10);
+
+    this.markGfx = scene.add.graphics().setDepth(11).setVisible(false);
+  }
+
+  // ------------------------------------------------------------------ W mark
+
+  /** Apply (or refresh) the W mark. */
+  applyMark(nowMs: number): void {
+    this.markUntil = nowMs + SKILLSHOT_W.markDurationMs;
+  }
+
+  isMarked(nowMs: number): boolean {
+    return this.active && nowMs < this.markUntil;
+  }
+
+  /** Consume the mark — on detonation, or when it lapses/the enemy dies. */
+  clearMark(): void {
+    this.markUntil = 0;
+    this.markGfx.clear().setVisible(false);
+  }
+
+  /**
+   * Rotating ring + orbiting accents. Deliberately loud: a marked enemy is a
+   * damage opportunity and must be identifiable at a glance.
+   */
+  private drawMark(nowMs: number): void {
+    if (!this.isMarked(nowMs)) {
+      if (this.markGfx.visible) this.markGfx.clear().setVisible(false);
+      return;
+    }
+
+    const g = this.markGfx;
+    const spin = nowMs * THEME.mark.spinSpeed;
+    // Gentle pulse, plus a fade over the last 600ms so the lapse is readable.
+    const remaining = this.markUntil - nowMs;
+    const fade = Math.min(1, remaining / 600);
+    const r = this.radius + 9 + Math.sin(nowMs * 0.006) * 1.5;
+
+    g.clear().setVisible(true);
+    g.lineStyle(2, THEME.mark.color, 0.85 * fade);
+    g.strokeCircle(this.x, this.y, r);
+
+    // Four orbiting ticks.
+    g.lineStyle(3, THEME.mark.accent, 0.95 * fade);
+    for (let i = 0; i < 4; i++) {
+      const a = spin + (Math.PI / 2) * i;
+      const inner = r + 2;
+      const outer = r + 7;
+      g.lineBetween(
+        this.x + Math.cos(a) * inner,
+        this.y + Math.sin(a) * inner,
+        this.x + Math.cos(a) * outer,
+        this.y + Math.sin(a) * outer,
+      );
+    }
   }
 
   /** @returns true if this hit killed the enemy. */
@@ -123,6 +189,7 @@ export abstract class Enemy {
     if (this.hp === 0) {
       // State flips NOW; the fade below is only decoration.
       this.active = false;
+      this.clearMark();
       this.deathAnimUntil = this.clock.now + TARGETS.deathAnimMs;
       this.playDeathBurst();
       return true;
@@ -170,12 +237,14 @@ export abstract class Enemy {
       this.hpBar.setVisible(false);
       this.hpGhost.setVisible(false);
       this.shadow.setVisible(false);
+      this.markGfx.clear().setVisible(false);
       return;
     }
 
     const flash = Math.max(0, (this.hitFlashUntil - nowMs) / TARGETS.hitFeedbackMs);
     this.body.setVisible(true).setAlpha(1);
     this.syncBody(nowMs, flash);
+    this.drawMark(nowMs);
 
     const o = this.opts;
     const barY = this.y - this.radius - o.hpBarOffsetY;
@@ -248,6 +317,7 @@ export abstract class Enemy {
   }
 
   destroy(): void {
+    this.markGfx.destroy();
     this.body.destroy();
     this.shadow.destroy();
     this.hpBar.destroy();

@@ -53,6 +53,12 @@ export class Player {
   private facingAngle = -Math.PI / 2;
   /** 0..1, written by setRangeRingState(); gates the ring in syncVisuals(). */
   private rangeVisibility = 0;
+
+  /** Ability cast animation state, written by setCastVisual(). */
+  private castAbility: 'w' | 'e' | null = null;
+  private castProgress = 0;
+  private castAngle: number | null = null;
+  private readonly castGfx: Phaser.GameObjects.Graphics;
   /** Contracts onto the body through the windup: the "can I still cancel?" cue. */
   private readonly chargeRing: Phaser.GameObjects.Arc;
   /** Expands outward at the instant of release. */
@@ -135,6 +141,102 @@ export class Player {
       .setStrokeStyle(1.5, THEME.player.ringColor, 0.5);
 
     this.body = scene.add.container(x, y, [this.idleRing, this.hull, this.core]).setDepth(10);
+
+    this.castGfx = scene.add.graphics().setDepth(11).setVisible(false);
+  }
+
+  /**
+   * Ability cast animation. A pure READ of CastSystem state — the scene passes
+   * in what the cast timer already decided, so the charge always finishes
+   * exactly when the spell fires, whatever castTimeMs is set to.
+   */
+  setCastVisual(ability: 'w' | 'e' | null, progress: number, aimX: number | null, aimY: number | null): void {
+    this.castAbility = ability;
+    this.castProgress = Phaser.Math.Clamp(progress, 0, 1);
+    this.castAngle =
+      ability !== null && aimX !== null && aimY !== null
+        ? Math.atan2(aimY - this.y, aimX - this.x)
+        : null;
+  }
+
+  /** Bright peak flash at the instant a cast completes. */
+  playCastRelease(scene: Phaser.Scene, ability: 'w' | 'e'): void {
+    const color = ability === 'w' ? THEME.projectiles.wCore : THEME.projectiles.eCore;
+    const ring = scene.add
+      .circle(this.x, this.y, this.radius, 0x000000, 0)
+      .setStrokeStyle(3, color, 0.95)
+      .setDepth(13);
+
+    scene.tweens.add({
+      targets: ring,
+      radius: THEME.cast.releaseFlashRadius,
+      alpha: 0,
+      duration: THEME.cast.releaseFlashMs,
+      ease: 'Quad.easeOut',
+      onComplete: () => ring.destroy(),
+    });
+  }
+
+  /**
+   * Charge-up visuals, driven entirely by cast progress:
+   *   W  a gathering orb in front of the player, growing toward release
+   *   E  a ring of energy contracting onto the body before the blink
+   */
+  private drawCast(): void {
+    const g = this.castGfx;
+
+    if (this.castAbility === null || this.castProgress <= 0) {
+      if (g.visible) g.clear().setVisible(false);
+      return;
+    }
+
+    const t = this.castProgress;
+    const C = THEME.cast;
+    g.clear().setVisible(true);
+
+    if (this.castAbility === 'w') {
+      const a = this.castAngle ?? this.facingAngle;
+      const ox = this.x + Math.cos(a) * (this.radius + C.wOrbOffset);
+      const oy = this.y + Math.sin(a) * (this.radius + C.wOrbOffset);
+      const r = Phaser.Math.Linear(C.wOrbStartRadius, C.wOrbEndRadius, t);
+
+      // Energy converging into the orb from behind the player.
+      g.lineStyle(2, THEME.projectiles.wColor, 0.25 + 0.5 * t);
+      for (let i = -1; i <= 1; i++) {
+        const spread = a + i * 0.55;
+        const from = 1 - t;
+        g.lineBetween(
+          this.x + Math.cos(spread) * (this.radius + 20 * from + 6),
+          this.y + Math.sin(spread) * (this.radius + 20 * from + 6),
+          ox,
+          oy,
+        );
+      }
+
+      g.fillStyle(THEME.projectiles.wColor, 0.55 + 0.4 * t);
+      g.fillCircle(ox, oy, r);
+      g.fillStyle(THEME.projectiles.wCore, 0.6 + 0.4 * t);
+      g.fillCircle(ox, oy, r * 0.45);
+      return;
+    }
+
+    // E: a ring collapsing onto the body — "about to leave".
+    const pad = Phaser.Math.Linear(C.eRingStartPad, C.eRingEndPad, t);
+    g.lineStyle(2 + 2 * t, THEME.projectiles.eColor, 0.35 + 0.6 * t);
+    g.strokeCircle(this.x, this.y, this.radius + pad);
+
+    if (this.castAngle !== null) {
+      // Brief directional accent toward the committed destination. Deliberately
+      // a short stub, never a line reaching the cursor.
+      const a = this.castAngle;
+      g.lineStyle(3, THEME.projectiles.eCore, 0.5 + 0.45 * t);
+      g.lineBetween(
+        this.x + Math.cos(a) * (this.radius + 4),
+        this.y + Math.sin(a) * (this.radius + 4),
+        this.x + Math.cos(a) * (this.radius + 10 + 12 * t),
+        this.y + Math.sin(a) * (this.radius + 10 + 12 * t),
+      );
+    }
   }
 
   get isRooted(): boolean {
@@ -158,6 +260,17 @@ export class Player {
   stop(): void {
     this.destX = null;
     this.destY = null;
+  }
+
+  /**
+   * Instant relocation (E / Flash). Clears any move order so the player does
+   * not immediately walk back toward a stale destination, and clamps to the
+   * arena exactly like moveTo() does.
+   */
+  blinkTo(x: number, y: number): void {
+    this.x = Phaser.Math.Clamp(x, ARENA.padding + this.radius, ARENA.width - ARENA.padding - this.radius);
+    this.y = Phaser.Math.Clamp(y, ARENA.padding + this.radius, ARENA.height - ARENA.padding - this.radius);
+    this.stop();
   }
 
   /**
@@ -353,6 +466,7 @@ export class Player {
 
     this.body.setPosition(bx, by);
     this.shadow.setPosition(this.x, this.y + this.radius * 0.75);
+    this.drawCast();
 
     // Max-stack aura: a steady ring that breathes very slightly.
     if (this.passiveMaxed) {
@@ -394,9 +508,10 @@ export class Player {
     } else {
       this.chargeRing.setVisible(false);
     }
-    // Stretch toward the target during windup, so the "wind up" reads even
-    // when the lean itself is small.
-    this.body.setScale(1 + (ATTACK.windupScale - 1) * this.windupAmount);
+    // Stretch toward the target during an auto windup; compress slightly while
+    // casting an ability, so the two read as different kinds of commitment.
+    const castSquash = this.castAbility !== null ? THEME.cast.compression * this.castProgress : 0;
+    this.body.setScale(1 + (ATTACK.windupScale - 1) * this.windupAmount - castSquash);
 
     // Radius re-read every frame so live-tuning ATTACK.range updates the ring.
     this.rangeRing
@@ -435,6 +550,7 @@ export class Player {
 
   destroy(): void {
     this.body.destroy();
+    this.castGfx.destroy();
     this.passiveAura.destroy();
     this.shadow.destroy();
     this.chargeRing.destroy();

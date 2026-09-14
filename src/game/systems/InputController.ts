@@ -20,8 +20,14 @@ export interface CommandHandler {
   /** Stop: freeze in place, drop pending orders. */
   commandStop(): void;
 
-  /** Q: quick-cast the skillshot toward a world point. */
+  /** Q: quick-cast the damage skillshot toward a world point. */
   castSkillshot(x: number, y: number): void;
+  /** W: quick-cast the mark skillshot. */
+  castMark(x: number, y: number): void;
+  /** E: blink toward the cursor, then a homing bolt. */
+  castBlink(x: number, y: number): void;
+  /** F: summoner-style blink. */
+  castFlash(x: number, y: number): void;
 
   /** Enemy under a world point, if any (click hit test). */
   targetAt(x: number, y: number): Enemy | null;
@@ -158,11 +164,27 @@ export class InputController {
       return;
     }
 
+    // All four abilities are quick-cast: they resolve this frame toward the
+    // cursor, are no-ops on cooldown, and never disturb a pending attack move.
+    const { x, y } = this.cursor();
+
     if (KEYBINDS.skillshotQ.includes(key)) {
-      // Quick-cast: fires this frame toward the cursor. On cooldown it is a
-      // no-op, and it deliberately does not disturb a pending attack move.
-      const { x, y } = this.cursor();
       this.cmd.castSkillshot(x, y);
+      return;
+    }
+
+    if (KEYBINDS.skillshotW.includes(key)) {
+      this.cmd.castMark(x, y);
+      return;
+    }
+
+    if (KEYBINDS.blinkE.includes(key)) {
+      this.cmd.castBlink(x, y);
+      return;
+    }
+
+    if (KEYBINDS.flash.includes(key)) {
+      this.cmd.castFlash(x, y);
       return;
     }
   }

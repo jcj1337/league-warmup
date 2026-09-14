@@ -69,6 +69,34 @@ export const THEME = {
     windupColor: 0xff7a6b,
   },
 
+  /**
+   * Ability cast animations. Pure presentation — the CastSystem timer decides
+   * when a cast completes; these only shape how that reads on screen.
+   */
+  cast: {
+    /** How much the player compresses at full charge. */
+    compression: 0.14,
+    /** W: the gathering orb grows between these radii over the cast. */
+    wOrbStartRadius: 2,
+    wOrbEndRadius: 9,
+    /** W: how far in front of the player the orb gathers. */
+    wOrbOffset: 8,
+    /** E: the gathering ring contracts between these pads over the cast. */
+    eRingStartPad: 24,
+    eRingEndPad: 2,
+    /** Peak flash at the moment a cast completes. */
+    releaseFlashMs: 140,
+    releaseFlashRadius: 30,
+  },
+
+  /** The W mark drawn on a marked enemy. */
+  mark: {
+    color: 0x9d7cf3,
+    accent: 0xe8dcff,
+    /** Radians per ms for the rotating accents. */
+    spinSpeed: 0.0026,
+  },
+
   /** Q passive: stack pips + duration bar under the ability bar. */
   passive: {
     pipFilled: 0x7cf3c0,
@@ -91,6 +119,14 @@ export const THEME = {
     /** Q: chunkier, green, unmistakably an ability. */
     qColor: 0x7cf3c0,
     qCore: 0xe8fff6,
+    /** W: violet mark orb — fatter and unmistakably not Q. */
+    wColor: 0x9d7cf3,
+    wCore: 0xe8dcff,
+    /** E: hot-pink homing bolt, and the blink flashes that go with it. */
+    eColor: 0xff5fa8,
+    eCore: 0xffd9ec,
+    /** Flash: pale gold starburst. */
+    flashColor: 0xfff3c4,
     /** Incoming: fat, amber, heavy dark rim — "dodge me". */
     enemyColor: 0xffb347,
     enemyRim: 0x3a2405,
@@ -138,6 +174,9 @@ export const THEME = {
     slotGap: 10,
     /** Distance from the bottom of the arena to the bottom of the slots. */
     bottomMargin: 40,
+    /** Summoner spells (Flash) are smaller and set apart from the kit row. */
+    summonerSize: 46,
+    summonerGap: 26,
     radius: 10,
     readyFill: 0x152233,
     readyStroke: 0x5fb0ff,

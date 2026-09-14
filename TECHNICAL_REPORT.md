@@ -219,6 +219,25 @@ archetype — which is why adding a mob touches no system code.
 The first mob with movement AI: a two-state machine (`chase` / `windup`) that
 walks the player down and swings on a cooldown. See §14b.
 
+### `src/game/systems/AbilityCooldowns.ts` — shared cooldown state *(gameplay)*
+
+One `readyAt` table for `q | w | e | flash`. Every ability system asks this
+instead of tracking its own timer, which is what makes a landed Q refunding
+Q/W/E a single `reduce(ms, ids)` call and gives the HUD one consistent source
+for all four slots.
+
+### `src/game/systems/CastSystem.ts` — ability cast windows *(gameplay)*
+
+Owns the pending cast for W and E: the committed payload (W's aim / E's
+destination), the deadline, `progress` for the animation, the movement root, and
+the buffered move order replayed on resolve. The timer here is authoritative —
+no animation callback decides when a spell happens.
+
+### `src/game/systems/BlinkSystem.ts` — E and Flash *(gameplay + rendering)*
+
+Blink geometry (cursor-or-max-range, clamped to the arena), the post-blink bolt
+acquisition with W-mark priority, and the departure/arrival visuals for both.
+
 ### `src/game/systems/PassiveSystem.ts` — the Q passive *(gameplay)*
 
 Owns the stack count and the shared expiry. `SkillshotSystem` calls `addStack()`

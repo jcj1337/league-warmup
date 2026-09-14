@@ -14,6 +14,22 @@ import type { Enemy } from './Enemy';
  * It tracks its target (League autos do not miss), and fizzles harmlessly if
  * the target dies or is recycled before it lands.
  */
+/** Per-ability look and speed, so autos and the E bolt share one missile. */
+export interface HomingMissileSpec {
+  speed: number;
+  radius: number;
+  color: number;
+  coreColor: number;
+}
+
+/** The player's basic attack missile spec. */
+export const AUTO_MISSILE_SPEC = (): HomingMissileSpec => ({
+  speed: ATTACK.projectileSpeed,
+  radius: ATTACK.projectileRadius,
+  color: THEME.projectiles.autoColor,
+  coreColor: THEME.projectiles.autoCore,
+});
+
 export class AutoAttackMissile {
   public alive = true;
 
@@ -34,31 +50,30 @@ export class AutoAttackMissile {
     private readonly targetSpawnId: number,
     private readonly damage: number,
     private readonly onHit: (target: Enemy, damage: number) => void,
+    private readonly spec: HomingMissileSpec = AUTO_MISSILE_SPEC(),
   ) {
     this.scene = scene;
     this.x = startX;
     this.y = startY;
 
-    // Cyan streak: visually distinct from the green Q missile and the fat
-    // amber enemy projectiles you have to dodge.
     // Streak behind the bolt, redrawn from the previous position each frame.
+    // The colour is per-ability, so autos (cyan) and the E bolt (pink) stay
+    // distinguishable even though they share this class.
     this.trail = scene.add
-      .line(0, 0, 0, 0, 0, 0, THEME.projectiles.autoColor, 0.4)
+      .line(0, 0, 0, 0, 0, 0, spec.color, 0.4)
       .setOrigin(0, 0)
-      .setLineWidth(ATTACK.projectileRadius * 0.5)
+      .setLineWidth(spec.radius * 0.5)
       .setDepth(11);
 
     // An elongated dart rather than a ball — direction is readable in a still.
-    const r = ATTACK.projectileRadius;
+    const r = spec.radius;
     this.body = scene.add
-      .polygon(startX, startY, [r * 2.1, 0, -r, r * 0.85, -r * 0.4, 0, -r, -r * 0.85], THEME.projectiles.autoColor)
+      .polygon(startX, startY, [r * 2.1, 0, -r, r * 0.85, -r * 0.4, 0, -r, -r * 0.85], spec.color)
       .setOrigin(0, 0)
       .setDepth(12);
     this.body.setStrokeStyle(1, 0xffffff, 0.6);
 
-    this.core = scene.add
-      .circle(startX, startY, r * 0.42, THEME.projectiles.autoCore, 0.95)
-      .setDepth(13);
+    this.core = scene.add.circle(startX, startY, r * 0.42, spec.coreColor, 0.95).setDepth(13);
   }
 
   update(deltaSeconds: number): void {
@@ -76,7 +91,7 @@ export class AutoAttackMissile {
     const dx = this.target.x - this.x;
     const dy = this.target.y - this.y;
     const dist = Math.hypot(dx, dy) || 0.0001;
-    const step = ATTACK.projectileSpeed * deltaSeconds;
+    const step = this.spec.speed * deltaSeconds;
 
     if (step >= dist - this.target.radius) {
       this.playImpact(this.target.x, this.target.y);
@@ -103,8 +118,8 @@ export class AutoAttackMissile {
   /** Small expanding ring where the bolt connects. */
   private playImpact(x: number, y: number): void {
     const ring = this.scene.add
-      .circle(x, y, ATTACK.projectileRadius, 0x000000, 0)
-      .setStrokeStyle(2.5, THEME.projectiles.autoColor, 0.95)
+      .circle(x, y, this.spec.radius, 0x000000, 0)
+      .setStrokeStyle(2.5, this.spec.color, 0.95)
       .setDepth(14);
 
     this.scene.tweens.add({

@@ -202,6 +202,12 @@ export const KEYBINDS = {
   stop: ['S'],
   /** Q: quick-cast, fires instantly toward the cursor. */
   skillshotQ: ['Q'],
+  /** W: quick-cast mark skillshot. */
+  skillshotW: ['W'],
+  /** E: quick-cast blink toward the cursor, then a homing bolt. */
+  blinkE: ['E'],
+  /** F: summoner-style blink. */
+  flash: ['F'],
   cancel: ['ESCAPE'],
   restart: ['R', 'SPACE'],
 };
@@ -264,8 +270,8 @@ export const SKILLSHOT_Q = {
   damage: 30,
   cooldownMs: 3000,
   /**
-   * A landed Q takes this much off the REMAINING cooldown (it never restarts
-   * the cooldown). Missing gives nothing: no refund, no passive stack.
+   * A landed Q takes this much off the REMAINING cooldown of Q, W AND E — never
+   * Flash, and it never restarts a cooldown. Missing gives nothing.
    */
   hitCooldownReductionMs: 750,
   /** Cast time before the missile spawns. 0 = instant, and you keep moving. */
@@ -283,7 +289,74 @@ export const SKILLSHOT_Q = {
 } as const;
 
 /**
+ * W: an Essence-Flux-flavoured MARK skillshot.
+ *
+ * The projectile itself deals no damage — it marks whatever it touches. The
+ * mark then detonates for real damage the next time that enemy is hit by an
+ * auto, Q, or the E bolt.
+ */
+export const SKILLSHOT_W = {
+  /**
+   * Commitment window before the orb actually leaves. The direction is locked
+   * in when the key goes down, so moving the mouse mid-cast cannot re-aim it.
+   */
+  castTimeMs: 250,
+  /** Fatter and slower than Q, so it reads as a different kind of shot. */
+  speed: 1000,
+  radius: 12,
+  maxRange: 450,
+  cooldownMs: 6000,
+  /** Marks last this long before lapsing harmlessly. */
+  markDurationMs: 4000,
+  /** Detonation damage: 1.5x a Q hit (SKILLSHOT_Q.damage 30). */
+  detonationDamage: 45,
+  /** Marks stop on the first enemy touched — no pierce. */
+  stopsOnFirstHit: true,
+  castFlashRadius: 30,
+  castFlashMs: 170,
+  impactRadius: 34,
+  impactMs: 220,
+} as const;
+
+/**
+ * E: an Arcane-Shift-flavoured blink that fires a homing bolt on arrival.
+ *
+ * The blink always happens; the bolt only spawns if something is nearby. The
+ * bolt prefers a W-marked enemy, which is what makes W -> E a real combo.
+ */
+export const BLINK_E = {
+  /**
+   * Commitment window before the blink fires. The destination is committed at
+   * keypress, so this is a real decision rather than a reflex escape.
+   */
+  castTimeMs: 250,
+  cooldownMs: 8000,
+  /** ~1.4x attack range. Real repositioning, well short of Q/W reach. */
+  range: 364,
+  /** Post-blink search radius for the bolt. ~1.75x attack range. */
+  boltAcquisitionRange: 455,
+  boltSpeed: 1050,
+  boltRadius: 7,
+  /** 1.25x a Q hit. */
+  damage: 38,
+  /** How long the departure/arrival streak lingers. Kept very short. */
+  blinkStreakMs: 130,
+} as const;
+
+/** F: a summoner-style blink. No damage, no passive, no cooldown refund. */
+export const FLASH = {
+  cooldownMs: 20000,
+  /** ~1.25x attack range — a touch shorter than E. */
+  range: 325,
+  burstMs: 200,
+} as const;
+
+/**
  * The Ezreal-flavoured passive: landing Q ramps your attack speed.
+ *
+ * Any damaging/marking ability hit stacks it: Q, the W mark landing, and the E
+ * bolt. A W DETONATION does not (the stack was already granted when the mark
+ * landed), and Flash never does.
  *
  * One shared timed buff, not per-stack timers — every hit adds a stack (to the
  * cap) AND refreshes the whole buff. When it expires, all stacks go at once.
