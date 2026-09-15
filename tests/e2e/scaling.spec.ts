@@ -1,12 +1,16 @@
 import { test } from '@playwright/test';
 import { startSuite } from './support/harness';
 
-test('scaling: attack-speed ramp, measured cycle, cancel + orbwalk at max speed, windup/release cues', async ({ page }, testInfo) => {
+test('scaling: stage-based attack speed, measured cycle, passive on top, cancel + orbwalk at max speed, cues', async ({ page }, testInfo) => {
   const { pass, fail, section, finish } = await startSuite(page, testInfo, 400);
 
-  const setElapsed = (s) => page.evaluate((s) => {
-    window.__warmup.scene.getScene('GameScene').difficulty.elapsedSeconds = s;
-  }, s);
+  /**
+   * Put the run on a given stage for attack-speed purposes. The base auto cycle
+   * is read live from the director's current stage, so no respawn is needed.
+   */
+  const setStage = (stage) => page.evaluate((s) => {
+    window.__warmup.scene.getScene('GameScene').director.stageIndex = s - 1;
+  }, stage);
   const calm = () => page.evaluate(() => {
     const g = window.__warmup.scene.getScene('GameScene');
     g.enemyProjectiles.clear();
@@ -26,75 +30,108 @@ test('scaling: attack-speed ramp, measured cycle, cancel + orbwalk at max speed,
   }, { spots, hp });
   const atk = () => page.evaluate(() => {
     const a = window.__warmup.scene.getScene('GameScene').attacks;
-    return { t: a.attackSpeedT, cd: a.cooldownMs, windup: a.windupMs, aps: a.attacksPerSecond, state: a.state };
+    return { base: a.baseCooldownMs, cd: a.cooldownMs, windup: a.windupMs, aps: a.attacksPerSecond, state: a.state };
   });
   const rclick = (x, y) => page.mouse.click(x, y, { button: 'right' });
 
   const cfg = await page.evaluate(() => ({
-    base: window.__balance.ATTACK.baseCooldownMs,
-    min: window.__balance.ATTACK.minCooldownMs,
-    ramp: window.__balance.ATTACK.attackSpeedRampSeconds,
+    stages: window.__balance.STAGES,
     windupPct: window.__balance.ATTACK.windupPercent,
     minWindup: window.__balance.ATTACK.minWindupMs,
     dmg: window.__balance.ATTACK.damage,
     hp: window.__balance.TARGETS.maxHp,
     spawn: window.__balance.ENEMY_PROJECTILES.spawnIntervalMs,
+    passive: window.__balance.PASSIVE,
   }));
+  const baseOf = (stage) => cfg.stages[stage - 1].baseAttackCooldownMs;
+  const last = cfg.stages.length;
 
-  // === 1. Attack speed scales with round time ================================
-  section('1. Attack speed scales with round time');
+  // === 1. Base attack speed scales with stage, not time ======================
+  section('1. Base attack speed scales with stage, not time');
   await calm();
-  await setElapsed(0);
+  await setStage(1);
   const early = await atk();
-  await setElapsed(cfg.ramp + 5);
+  await setStage(last);
   const late = await atk();
-  await setElapsed(cfg.ramp / 2);
+  await setStage(5);
   const mid = await atk();
 
-  Math.abs(early.cd - cfg.base) < 1
-    ? pass(`start of round: cooldown ${early.cd.toFixed(0)}ms (${early.aps.toFixed(2)}/s)`)
-    : fail(`early cooldown ${early.cd} vs base ${cfg.base}`);
-  Math.abs(late.cd - cfg.min) < 1
-    ? pass(`end of ramp: cooldown ${late.cd.toFixed(0)}ms (${late.aps.toFixed(2)}/s)`)
-    : fail(`late cooldown ${late.cd} vs min ${cfg.min}`);
+  Math.abs(early.cd - baseOf(1)) < 1
+    ? pass(`Stage 1: cooldown ${early.cd.toFixed(0)}ms (${early.aps.toFixed(2)}/s)`)
+    : fail(`Stage 1 cooldown ${early.cd} vs ${baseOf(1)}`);
+  Math.abs(late.cd - baseOf(last)) < 1
+    ? pass(`Stage ${last}: cooldown ${late.cd.toFixed(0)}ms (${late.aps.toFixed(2)}/s)`)
+    : fail(`Stage ${last} cooldown ${late.cd} vs ${baseOf(last)}`);
   mid.cd < early.cd && mid.cd > late.cd
-    ? pass(`mid-round is between the two (${mid.cd.toFixed(0)}ms, ${mid.aps.toFixed(2)}/s)`)
-    : fail(`mid cooldown ${mid.cd} not between ${late.cd} and ${early.cd}`);
+    ? pass(`Stage 5 is between the two (${mid.cd.toFixed(0)}ms, ${mid.aps.toFixed(2)}/s)`)
+    : fail(`Stage 5 cooldown ${mid.cd} not between ${late.cd} and ${early.cd}`);
   late.aps / early.aps > 1.3
-    ? pass(`attack speed ramps ${((late.aps / early.aps - 1) * 100).toFixed(0)}% over the round`)
+    ? pass(`base attack speed rises ${((late.aps / early.aps - 1) * 100).toFixed(0)}% from Stage 1 to Stage ${last}`)
     : fail(`ramp only ${(late.aps / early.aps).toFixed(2)}x`);
 
   // Windup scales with the cycle but respects the floor.
-  Math.abs(early.windup - Math.max(cfg.minWindup, cfg.base * cfg.windupPct)) < 1
-    ? pass(`early windup ${early.windup.toFixed(0)}ms = ${cfg.windupPct} x cooldown`)
-    : fail(`early windup ${early.windup}`);
-  Math.abs(late.windup - Math.max(cfg.minWindup, cfg.min * cfg.windupPct)) < 1
-    ? pass(`late windup ${late.windup.toFixed(0)}ms (floor ${cfg.minWindup}ms respected)`)
-    : fail(`late windup ${late.windup}`);
+  Math.abs(early.windup - Math.max(cfg.minWindup, baseOf(1) * cfg.windupPct)) < 1
+    ? pass(`Stage 1 windup ${early.windup.toFixed(0)}ms = ${cfg.windupPct} x cooldown`)
+    : fail(`Stage 1 windup ${early.windup}`);
+  Math.abs(late.windup - Math.max(cfg.minWindup, baseOf(last) * cfg.windupPct)) < 1
+    ? pass(`Stage ${last} windup ${late.windup.toFixed(0)}ms (floor ${cfg.minWindup}ms respected)`)
+    : fail(`Stage ${last} windup ${late.windup}`);
   late.windup / late.cd <= cfg.windupPct + 0.02
-    ? pass('windup stays a proportional slice of the cycle as speed ramps')
+    ? pass('windup stays a proportional slice of the cycle as speed rises')
     : fail(`windup ratio drifted to ${(late.windup / late.cd).toFixed(2)}`);
 
-  // === 2. The scaled timing is what actually runs ============================
-  section('2. The scaled timing is what actually runs');
-  const measureCycle = async (elapsed) => {
+  // Run time alone must not speed autos up.
+  await setStage(1);
+  const beforeJump = await page.evaluate(() => {
+    const g = window.__warmup.scene.getScene('GameScene');
+    return { clock: g.clock.now, cd: g.attacks.cooldownMs };
+  });
+  await page.evaluate(() => { window.__warmup.scene.getScene('GameScene').clock.ms += 120_000; });
+  await page.waitForFunction((c) => window.__warmup.scene.getScene('GameScene').clock.now > c + 100, beforeJump.clock + 120_000);
+  const afterJump = await atk();
+  afterJump.cd === beforeJump.cd
+    ? pass(`two extra minutes of run time leave Stage 1 autos at ${afterJump.cd.toFixed(0)}ms`)
+    : fail(`cooldown changed with time: ${beforeJump.cd} -> ${afterJump.cd}`);
+
+  // === 2. Passive stacks multiply the stage base =============================
+  section('2. Passive stacks multiply the stage base');
+  const stacked = await page.evaluate((last) => {
+    const g = window.__warmup.scene.getScene('GameScene');
+    const d = g.director;
+    const out = [];
+    for (const stage of [1, last]) {
+      d.stageIndex = stage - 1;
+      g.passive.reset();
+      const bare = g.attacks.cooldownMs;
+      for (let i = 0; i < 5; i++) g.passive.addStack();
+      out.push({ stage, base: g.attacks.baseCooldownMs, bare, stacked: g.attacks.cooldownMs, mult: g.passive.attackSpeedMultiplier });
+    }
+    g.passive.reset();
+    d.stageIndex = 0;
+    return out;
+  }, last);
+  stacked.every((r) => Math.abs(r.stacked - r.base / (1 + 5 * cfg.passive.attackSpeedPerStack)) < 1e-6 && r.stacked < r.bare)
+    ? pass(`5 stacks on top of each stage base: ${stacked.map((r) => `Stage ${r.stage} ${r.bare.toFixed(0)} -> ${r.stacked.toFixed(0)}ms`).join(', ')}`)
+    : fail(`passive over stage base: ${JSON.stringify(stacked)}`);
+
+  // === 3. The stage timing is what actually runs =============================
+  section('3. The stage timing is what actually runs');
+  const measureCycle = async (stage) => {
     await calm();
-    await setElapsed(elapsed);
+    await setStage(stage);
     await place([{ x: 800, y: 360 }], 9999);
     await page.waitForTimeout(60);
     await rclick(800, 360);
-    // Sample state transitions for ~1.6s, pinning elapsed so it cannot drift.
-    return page.evaluate((elapsed) => new Promise<any>((res) => {
+    return page.evaluate(() => new Promise<any>((res) => {
       const g = window.__warmup.scene.getScene('GameScene');
       const out = [];
       const t0 = performance.now();
       const tick = () => {
-        g.difficulty.elapsedSeconds = elapsed;
         out.push({ t: performance.now() - t0, state: g.attacks.state, m: g.attacks.missilesInFlight, fired: g.metrics.attacksFired });
         if (performance.now() - t0 < 1700) requestAnimationFrame(tick); else res(out);
       };
       tick();
-    }), elapsed);
+    }));
   };
 
   const runSpan = (samples) => {
@@ -113,34 +150,34 @@ test('scaling: attack-speed ramp, measured cycle, cancel + orbwalk at max speed,
     return (samples[j]?.t ?? samples[j - 1].t) - samples[i].t;
   };
 
-  const slowRun = await measureCycle(0);
-  const fastRun = await measureCycle(cfg.ramp + 5);
+  const slowRun = await measureCycle(1);
+  const fastRun = await measureCycle(last);
   const slow = runSpan(slowRun);
   const fastS = runSpan(fastRun);
 
-  Math.abs(slow.avgGap - cfg.base) < 60
-    ? pass(`early autos fire every ${slow.avgGap.toFixed(0)}ms (configured ${cfg.base}ms)`)
-    : fail(`early gap ${slow.avgGap.toFixed(0)}ms vs ${cfg.base}ms`);
-  Math.abs(fastS.avgGap - cfg.min) < 60
-    ? pass(`late autos fire every ${fastS.avgGap.toFixed(0)}ms (configured ${cfg.min}ms)`)
-    : fail(`late gap ${fastS.avgGap.toFixed(0)}ms vs ${cfg.min}ms`);
+  Math.abs(slow.avgGap - baseOf(1)) < 60
+    ? pass(`Stage 1 autos fire every ${slow.avgGap.toFixed(0)}ms (configured ${baseOf(1)}ms)`)
+    : fail(`Stage 1 gap ${slow.avgGap.toFixed(0)}ms vs ${baseOf(1)}ms`);
+  Math.abs(fastS.avgGap - baseOf(last)) < 60
+    ? pass(`Stage ${last} autos fire every ${fastS.avgGap.toFixed(0)}ms (configured ${baseOf(last)}ms)`)
+    : fail(`Stage ${last} gap ${fastS.avgGap.toFixed(0)}ms vs ${baseOf(last)}ms`);
   fastS.fires > slow.fires
-    ? pass(`more autos in the same window when sped up (${slow.fires} -> ${fastS.fires})`)
+    ? pass(`more autos in the same window at Stage ${last} (${slow.fires} -> ${fastS.fires})`)
     : fail(`auto count did not increase (${slow.fires} vs ${fastS.fires})`);
 
   const slowWindup = firstWindup(slowRun);
   const fastWindup = firstWindup(fastRun);
-  Math.abs(slowWindup - cfg.base * cfg.windupPct) < 40
-    ? pass(`visual+mechanical windup at base speed: ${slowWindup.toFixed(0)}ms`)
-    : fail(`slow windup measured ${slowWindup.toFixed(0)}ms`);
+  Math.abs(slowWindup - baseOf(1) * cfg.windupPct) < 40
+    ? pass(`visual+mechanical windup at Stage 1: ${slowWindup.toFixed(0)}ms`)
+    : fail(`Stage 1 windup measured ${slowWindup.toFixed(0)}ms`);
   fastWindup < slowWindup - 20
-    ? pass(`windup shortens with attack speed (${slowWindup.toFixed(0)} -> ${fastWindup.toFixed(0)}ms)`)
+    ? pass(`windup shortens with stage attack speed (${slowWindup.toFixed(0)} -> ${fastWindup.toFixed(0)}ms)`)
     : fail(`windup did not shorten (${slowWindup} -> ${fastWindup})`);
 
-  // === 3. Cancel + orbwalk still work at max attack speed ====================
-  section('3. Cancel + orbwalk still work at max attack speed');
+  // === 4. Cancel + orbwalk still work at max attack speed ====================
+  section('4. Cancel + orbwalk still work at max attack speed');
   await calm();
-  await setElapsed(cfg.ramp + 5);
+  await setStage(last);
   await place([{ x: 800, y: 360 }], 9999);
   await page.waitForTimeout(60);
   const before = await page.evaluate(() => {
@@ -161,7 +198,7 @@ test('scaling: attack-speed ramp, measured cycle, cancel + orbwalk at max speed,
 
   // Orbwalk loop at max speed.
   await calm();
-  await setElapsed(cfg.ramp + 5);
+  await setStage(last);
   await place([{ x: 760, y: 360 }], 9999);
   await page.waitForTimeout(60);
   const firedCount = () => page.evaluate(() => window.__warmup.scene.getScene('GameScene').metrics.attacksFired);
@@ -173,7 +210,6 @@ test('scaling: attack-speed ramp, measured cycle, cancel + orbwalk at max speed,
     const target = fires + 1;
     let ok = false;
     for (let j = 0; j < 250 && !ok; j++) {
-      await setElapsed(cfg.ramp + 5);
       if ((await firedCount()) >= target) ok = true; else await page.waitForTimeout(8);
     }
     if (ok) { cycles++; fires++; }
@@ -183,10 +219,10 @@ test('scaling: attack-speed ramp, measured cycle, cancel + orbwalk at max speed,
   cycles === 4 ? pass('A-click -> release -> kite loop still works at max attack speed')
     : fail(`orbwalk at speed: only ${cycles}/4 cycles`);
 
-  // === 4. Windup/release visual cues =========================================
-  section('4. Windup/release visual cues');
+  // === 5. Windup/release visual cues =========================================
+  section('5. Windup/release visual cues');
   await calm();
-  await setElapsed(0);
+  await setStage(1);
   await place([{ x: 800, y: 360 }], 9999);
   await page.waitForTimeout(60);
   await rclick(800, 360);
@@ -218,14 +254,14 @@ test('scaling: attack-speed ramp, measured cycle, cancel + orbwalk at max speed,
   const chargeAfter = vis.filter((s) => s.state === 'recovery').every((s) => !s.chargeVisible);
   chargeAfter ? pass('charge ring clears once the auto is committed') : fail('charge ring lingers into recovery');
 
-  // === 5. Pressure / lethality ===============================================
-  section('5. Pressure / lethality');
+  // === 6. Pressure / lethality ===============================================
+  section('6. Pressure / lethality');
   Math.round(cfg.hp / cfg.dmg) === 2
     ? pass(`targets die in 2 autos (${cfg.hp} hp / ${cfg.dmg} dmg)`)
     : fail(`targets take ${cfg.hp / cfg.dmg} autos`);
-  cfg.spawn.start >= 2400
-    ? pass(`enemy projectile interval starts at ${cfg.spawn.start}ms (calmer opening)`)
-    : fail(`spawn interval ${cfg.spawn.start}ms`);
+  cfg.spawn.start >= 2400 && cfg.stages[0].enemyFire === 0
+    ? pass(`Stage 1 enemy fire sits at the ramp start: ${cfg.spawn.start}ms interval (calm opening)`)
+    : fail(`Stage 1 fire: interval start ${cfg.spawn.start}ms, enemyFire ${cfg.stages[0].enemyFire}`);
 
   await finish();
 });

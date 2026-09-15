@@ -1,7 +1,7 @@
 import { test } from '@playwright/test';
 import { startSuite } from './support/harness';
 
-test('mobs: passive stacks, Q cooldown refund, Pursuer AI, spawn weights, HP scaling, stage countdown, pause', async ({ page }, testInfo) => {
+test('mobs: passive stacks, Q cooldown refund, Pursuer AI, stage HP scaling + composition, pause', async ({ page }, testInfo) => {
   const { pass, fail, section, finish } = await startSuite(page, testInfo, 400);
 
   const G = () => page.evaluate(() => {
@@ -16,19 +16,14 @@ test('mobs: passive stacks, Q cooldown refund, Pursuer AI, spawn weights, HP sca
       aps: g.attacks.attacksPerSecond,
       qCd: g.skillshot.cooldownRemainingMs,
       qFired: g.skillshot.shotsFired, qHit: g.skillshot.shotsHit,
-      level: hud.difficultyLevel,
-      nextStage: hud.nextStage, untilStage: hud.secondsUntilNextStage,
+      stage: hud.stage,
       hpMult: g.director.hpMultiplier,
-      weights: g.director.spawnWeights,
       enemies: g.director.enemies.map((e) => ({ type: e.archetype, hp: e.hp, maxHp: e.maxHp, x: e.x, y: e.y, active: e.active, r: e.radius })),
       px: g.player.x, py: g.player.y, playerHp: g.player.hp,
       paused: g.isPaused,
       clock: g.clock.now,
     };
   });
-  const setElapsed = (s) => page.evaluate((s) => {
-    window.__warmup.scene.getScene('GameScene').difficulty.elapsedSeconds = s;
-  }, s);
   const calm = () => page.evaluate(() => {
     const g = window.__warmup.scene.getScene('GameScene');
     g.enemyProjectiles.clear();
@@ -39,13 +34,13 @@ test('mobs: passive stacks, Q cooldown refund, Pursuer AI, spawn weights, HP sca
   const placeOne = (type, x, y, hp?) => page.evaluate(({ type, x, y, hp }) => {
     const g = window.__warmup.scene.getScene('GameScene');
     const d = g.director;
-    d.slots.forEach((s) => s.enemy.destroy());
-    d.slots.length = 0;
-    const e = d.spawn(type);
+    d.enemies.forEach((en) => en.destroy());
+    d.enemies.length = 0;
+    const e = d.spawnEnemy(type);
     e.x = x; e.y = y;
     if (hp) { e.hp = hp; }
     e.__tag = 1;
-    d.slots.push({ enemy: e, respawnAt: null });
+    d.enemies.push(e);
     g.enemies = d.enemies;
     g.attacks.cancel(); g.attacks.state = 'idle'; g.attacks.clearMissiles(); g.skillshot.clear();
     g.player.x = 640; g.player.y = 360; g.player.stop();
@@ -59,7 +54,7 @@ test('mobs: passive stacks, Q cooldown refund, Pursuer AI, spawn weights, HP sca
     pursuer: window.__balance.PURSUER,
     basicHp: window.__balance.TARGETS.maxHp,
     playerSpeed: window.__balance.PLAYER.moveSpeed,
-    scaling: window.__balance.ENEMY_SCALING,
+    stages: window.__balance.STAGES,
   }));
 
   // === Config sanity =========================================================
@@ -70,7 +65,7 @@ test('mobs: passive stacks, Q cooldown refund, Pursuer AI, spawn weights, HP sca
   // === PART A: passive =======================================================
   section('PART A: passive');
   await calm();
-  await setElapsed(0);
+  // The run stays on Stage 1 throughout, so the base auto cycle is constant.
   await placeOne('basic', 900, 360, 9999);
   await page.waitForTimeout(80);
 
@@ -119,15 +114,14 @@ test('mobs: passive stacks, Q cooldown refund, Pursuer AI, spawn weights, HP sca
   monotonic ? pass(`attack speed rises per stack (${stackTable.map((r) => r.aps.toFixed(2)).join(' -> ')}/s)`)
     : fail('attack speed did not rise with stacks');
 
-  // Cooldown must be base / multiplier — sampled in ONE snapshot so the
-  // difficulty ramp cannot advance between the two reads.
+  // Cooldown must be stage base / multiplier — sampled in ONE snapshot.
   const formula = await page.evaluate(() => {
     const a = window.__warmup.scene.getScene('GameScene').attacks;
     const p = window.__warmup.scene.getScene('GameScene').passive;
     return { cd: a.cooldownMs, base: a.baseCooldownMs, mult: p.attackSpeedMultiplier };
   });
   Math.abs(formula.cd - formula.base / formula.mult) < 1e-6
-    ? pass(`cooldown == rampCooldown / passiveMultiplier (${formula.base.toFixed(0)} / ${formula.mult} = ${formula.cd.toFixed(0)}ms)`)
+    ? pass(`cooldown == stageBaseCooldown / passiveMultiplier (${formula.base.toFixed(0)} / ${formula.mult} = ${formula.cd.toFixed(0)}ms)`)
     : fail(`cooldown formula mismatch: ${formula.cd} vs ${formula.base}/${formula.mult}`);
 
   // Refresh: the timer goes back to full on every hit.
@@ -207,7 +201,7 @@ test('mobs: passive stacks, Q cooldown refund, Pursuer AI, spawn weights, HP sca
   spawned.type === 'pursuer' ? pass('pursuer archetype spawns') : fail(`spawned ${spawned.type}`);
   const expectedHp = Math.round(cfg.basicHp * cfg.pursuer.baseHpMultiplier * (await G()).hpMult);
   spawned.maxHp === expectedHp
-    ? pass(`pursuer HP ${spawned.maxHp} = basic ${cfg.basicHp} x ${cfg.pursuer.baseHpMultiplier} (x${(await G()).hpMult} scaling)`)
+    ? pass(`pursuer HP ${spawned.maxHp} = basic ${cfg.basicHp} x ${cfg.pursuer.baseHpMultiplier} (x${(await G()).hpMult} stage scaling)`)
     : fail(`pursuer HP ${spawned.maxHp}, expected ${expectedHp}`);
   spawned.r > 18 ? pass(`pursuer is visually larger (r${spawned.r} vs basic r18)`) : fail(`pursuer radius ${spawned.r}`);
 
@@ -316,86 +310,55 @@ test('mobs: passive stacks, Q cooldown refund, Pursuer AI, spawn weights, HP sca
     ? pass(`pursuer kill is worth ${scoreCheck.mult}x a basic kill`)
     : fail(`pursuer score multiplier ${scoreCheck.mult}`);
 
-  // === Spawn weighting by difficulty ========================================
-  section('Spawn weighting by difficulty');
-  const weightsAt = async (level) => {
-    // Drive elapsed to the time that produces this level.
-    await page.evaluate((lv) => {
-      const g = window.__warmup.scene.getScene('GameScene');
-      const D = window.__balance.DIFFICULTY, R = window.__balance.ROUND;
-      const tAt = (lv - 1) / D.levels + 0.0001;
-      const start = D.rampStartSeconds;
-      const end = R.durationSeconds * D.rampCompleteAtRoundFraction;
-      g.difficulty.elapsedSeconds = start + (end - start) * Math.pow(tAt, 1 / D.rampCurve);
-    }, level);
-    await page.waitForTimeout(50);
-    const s = await G();
-    return { level: s.level, weights: s.weights, hpMult: s.hpMult };
+  // === Stage-based enemy HP scaling ==========================================
+  section('Stage-based enemy HP scaling');
+  // Spawn one of each archetype on every stage and compare with the table.
+  const hpTable = await page.evaluate(() => {
+    const d = window.__warmup.scene.getScene('GameScene').director;
+    const out = [];
+    for (let s = 0; s < window.__balance.STAGES.length; s++) {
+      d.stageIndex = s;
+      const b = d.spawnEnemy('basic');
+      const p = d.spawnEnemy('pursuer');
+      out.push({ stage: s + 1, mult: d.hpMultiplier, basic: b.maxHp, pursuer: p.maxHp });
+      b.destroy(); p.destroy();
+    }
+    d.stageIndex = 0;
+    return out;
+  });
+  const pursuerBase = cfg.basicHp * cfg.pursuer.baseHpMultiplier;
+  hpTable.every((r) => r.mult === cfg.stages[r.stage - 1].enemyHpMultiplier
+    && r.basic === Math.round(cfg.basicHp * r.mult) && r.pursuer === Math.round(pursuerBase * r.mult))
+    ? pass(`HP = archetype base x stage multiplier on all ${hpTable.length} stages (basic ${hpTable.map((r) => r.basic).join('/')})`)
+    : fail(`HP table: ${JSON.stringify(hpTable)}`);
+  hpTable.slice(0, 3).every((r) => r.mult === 1) && hpTable.every((r, i) => i === 0 || r.mult >= hpTable[i - 1].mult)
+    && hpTable[hpTable.length - 1].mult > 1
+    ? pass(`Stages 1-3 at 100% HP, never decreasing, x${hpTable[hpTable.length - 1].mult} by Stage ${hpTable.length}`)
+    : fail(`HP multipliers: ${hpTable.map((r) => r.mult).join(', ')}`);
+
+  // === Stage composition =====================================================
+  section('Stage composition');
+  const pursuersIn = (stage) => stage.waves.reduce((n, w) => n + (w.pursuer ?? 0), 0);
+  const basicsIn = (stage) => stage.waves.reduce((n, w) => n + (w.basic ?? 0), 0);
+  const share = (stages) => {
+    const p = stages.reduce((n, s) => n + pursuersIn(s), 0);
+    const b = stages.reduce((n, s) => n + basicsIn(s), 0);
+    return p / (p + b);
   };
-  const w1 = await weightsAt(1);
-  const w3 = await weightsAt(3);
-  const w4 = await weightsAt(4);
-  const w6 = await weightsAt(6);
-  const w8 = await weightsAt(8);
-
-  (w1.weights.pursuer ?? 0) === 0 && (w3.weights.pursuer ?? 0) === 0
-    ? pass('difficulty 1-3: basic targets only (0% pursuer)')
-    : fail(`early pursuer weight: D1 ${w1.weights.pursuer}, D3 ${w3.weights.pursuer}`);
-  w4.weights.pursuer > 0
-    ? pass(`pursuers appear at difficulty ${w4.level} (${Math.round(w4.weights.pursuer * 100)}%)`)
-    : fail('no pursuers at difficulty 4');
-  w6.weights.pursuer > w4.weights.pursuer && w8.weights.pursuer >= w6.weights.pursuer
-    ? pass(`pursuer share grows: D4 ${Math.round(w4.weights.pursuer * 100)}% -> D6 ${Math.round(w6.weights.pursuer * 100)}% -> D8 ${Math.round(w8.weights.pursuer * 100)}%`)
-    : fail('pursuer share did not grow with difficulty');
-  w8.weights.basic > 0 ? pass('basic targets never disappear entirely') : fail('basic weight hit zero');
-
-  // === HP scaling ============================================================
-  section('HP scaling');
-  Math.abs(w1.hpMult - 1) < 1e-9 && Math.abs(w3.hpMult - 1) < 1e-9
-    ? pass('difficulty 1-3: 100% enemy HP')
-    : fail(`early hp multiplier: ${w1.hpMult}, ${w3.hpMult}`);
-  Math.abs(w4.hpMult - 1.05) < 1e-9 && Math.abs(w6.hpMult - 1.15) < 1e-9
-    ? pass(`HP scales +${cfg.scaling.hpPerDifficulty * 100}%/level after D${cfg.scaling.hpRampStartDifficulty} (D4 ${w4.hpMult}, D6 ${w6.hpMult})`)
-    : fail(`hp multipliers: D4 ${w4.hpMult}, D6 ${w6.hpMult}`);
-
-  // === Stage countdown =======================================================
-  section('Stage countdown');
-  const countdown = await page.evaluate(() => {
-    const g = window.__warmup.scene.getScene('GameScene');
-    const D = window.__balance.DIFFICULTY, R = window.__balance.ROUND;
-    const start = D.rampStartSeconds;
-    const end = R.durationSeconds * D.rampCompleteAtRoundFraction;
-    // Sit 2s before difficulty 4 lands.
-    const tAt = 3 / D.levels;
-    const timeAt4 = start + (end - start) * Math.pow(tAt, 1 / D.rampCurve);
-    g.difficulty.elapsedSeconds = timeAt4 - 2;
-    const hud = g.getHudState();
-    return { until: hud.secondsUntilNextStage, next: hud.nextStage, level: hud.difficultyLevel };
-  });
-  Math.abs(countdown.until - 2) < 0.3 && countdown.next === 4
-    ? pass(`stage countdown reports ${countdown.until.toFixed(1)}s until stage ${countdown.next}`)
-    : fail(`countdown: ${JSON.stringify(countdown)}`);
-  // Jumping elapsed also fires the "entered stage 3" banner, which correctly
-  // takes priority for STAGE.bannerMs. Consume it so the countdown is visible.
-  await page.evaluate(() => {
-    const ui = window.__warmup.scene.getScene('UIScene');
-    const g = window.__warmup.scene.getScene('GameScene');
-    ui.lastStage = g.getHudState().difficultyLevel;
-    ui.stageBannerUntil = 0;
-  });
-  await page.waitForTimeout(120);
-  const banner = await page.evaluate(() => {
-    const ui = window.__warmup.scene.getScene('UIScene');
-    return { visible: ui.stageText.visible, text: ui.stageText.text };
-  });
-  banner.visible && /STAGE 4 IN \d/.test(banner.text)
-    ? pass(`countdown is on screen: "${banner.text}"`)
-    : fail(`stage text: visible=${banner.visible} "${banner.text}"`);
+  pursuersIn(cfg.stages[0]) === 0 && cfg.stages.slice(1).every((s) => pursuersIn(s) > 0)
+    ? pass('Stage 1 fields basic targets only; every later stage includes Pursuers')
+    : fail(`pursuers per stage: ${cfg.stages.map(pursuersIn).join(', ')}`);
+  share(cfg.stages.slice(0, 3)) < share(cfg.stages.slice(-3))
+    ? pass(`Pursuer share grows: ${Math.round(share(cfg.stages.slice(0, 3)) * 100)}% in Stages 1-3 -> ${Math.round(share(cfg.stages.slice(-3)) * 100)}% in the last three`)
+    : fail('Pursuer share did not grow across the run');
+  cfg.stages.every((s) => basicsIn(s) > 0)
+    ? pass('basic targets appear in every stage (mixed pressure throughout)')
+    : fail(`basics per stage: ${cfg.stages.map(basicsIn).join(', ')}`);
 
   // === PART I: pause freezes the new systems =================================
   section('PART I: pause freezes the new systems');
   // Fresh live enemy: the score test above killed one directly, bypassing the
-  // kill callback, so that slot holds a permanently dead enemy.
+  // kill callback, so that enemy is permanently dead.
   await placeOne('pursuer', 900, 360, 9999);
   await page.evaluate(() => {
     const g = window.__warmup.scene.getScene('GameScene');

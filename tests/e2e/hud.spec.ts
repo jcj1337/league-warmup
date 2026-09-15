@@ -1,7 +1,7 @@
 import { test } from '@playwright/test';
 import { startSuite } from './support/harness';
 
-test('hud: contextual range ring, pause freeze + input gate, Q slot, settings menu', async ({ page }, testInfo) => {
+test('hud: contextual range ring, pause freeze + input gate, Q slot, settings menu, stage banners across restarts', async ({ page }, testInfo) => {
   const { pass, fail, section, finish } = await startSuite(page, testInfo, 400);
 
   const G = () => page.evaluate(() => {
@@ -10,8 +10,7 @@ test('hud: contextual range ring, pause freeze + input gate, Q slot, settings me
     return {
       paused: g.isPaused,
       clock: g.clock.now,
-      elapsed: g.difficulty.elapsed,
-      timeRemaining: g.getHudState().timeRemaining,
+      runTime: g.getHudState().runTime,
       ringVisible: g.player.rangeRing.visible,
       ringAlpha: g.player.rangeRing.strokeAlpha,
       ringRadius: g.player.rangeRing.radius,
@@ -127,8 +126,7 @@ test('hud: contextual range ring, pause freeze + input gate, Q slot, settings me
   await page.waitForTimeout(700);            // let real time pass while paused
   const p1 = await G();
   p1.clock === p0.clock ? pass(`game clock frozen (${p0.clock.toFixed(0)}ms)`) : fail(`clock advanced ${p1.clock - p0.clock}ms while paused`);
-  Math.abs(p1.elapsed - p0.elapsed) < 1e-6 ? pass('difficulty timer frozen') : fail('difficulty advanced while paused');
-  Math.abs(p1.timeRemaining - p0.timeRemaining) < 1e-6 ? pass('round timer frozen') : fail('round timer advanced while paused');
+  Math.abs(p1.runTime - p0.runTime) < 1e-6 ? pass('run timer frozen') : fail('run timer advanced while paused');
   p1.px === p0.px && p1.py === p0.py ? pass('player movement frozen') : fail('player moved while paused');
   p1.qMissiles === p0.qMissiles && p1.enemyShots === p0.enemyShots
     ? pass(`projectiles frozen (${p0.qMissiles} Q, ${p0.enemyShots} enemy)`)
@@ -282,40 +280,51 @@ test('hud: contextual range ring, pause freeze + input gate, Q slot, settings me
 
   // === 6. Stage banner state across round restarts ===========================
   section('6. Stage banner state across round restarts');
-  // UIScene never restarts, so its stage tracking must start over with every
-  // new round. Each scenario leaves a round at a LATER stage, restarts through a
-  // real supported input, then checks the new round's opening frames and a
+  // UIScene never restarts, so its stage/wave tracking must start over with
+  // every new run. Each scenario leaves a run at a LATER stage, restarts through
+  // a real supported input, then checks the new run's opening frames and a
   // genuine stage transition inside it.
-  const maxLevel = await page.evaluate(() => window.__balance.DIFFICULTY.levels);
-  /** Elapsed round time at which `level` begins (the inverse of the ramp). */
-  const timeForLevel = (level) => page.evaluate((lv) => {
-    const D = window.__balance.DIFFICULTY, R = window.__balance.ROUND;
-    const start = D.rampStartSeconds;
-    const end = R.durationSeconds * D.rampCompleteAtRoundFraction;
-    return start + (end - start) * Math.pow((lv - 1) / D.levels, 1 / D.rampCurve);
-  }, level);
-  /** Test-only acceleration: jump the difficulty clock, keeping the arena quiet. */
-  const jumpTo = (seconds) => page.evaluate((s) => {
+  const cfg6 = await page.evaluate(() => ({ stages: window.__balance.STAGES, run: window.__balance.RUN }));
+  const lastStage = cfg6.stages.length;
+  const lastWaveOf = (stage) => cfg6.stages[stage - 1].waves.length;
+  const firstWaveSize = Object.values(cfg6.stages[0].waves[0]).reduce((a: any, b: any) => a + b, 0);
+  /** Test-only setup: put the director on a stage/wave with a fresh roster, arena quiet. */
+  const jumpTo = (stage, wave) => page.evaluate(([st, wv]) => {
     const g = window.__warmup.scene.getScene('GameScene');
     g.enemyProjectiles.clear();
     g.enemyProjectiles.nextSpawnAt = Number.POSITIVE_INFINITY;
     g.player.hp = 100;
-    g.difficulty.elapsedSeconds = s;
-  }, seconds);
+    g.director.stageIndex = st - 1;
+    g.director.waveIndex = wv - 1;
+    g.director.spawnWave();
+  }, [stage, wave]);
+  /** Kill the current wave through the scene's real damage funnel. */
+  const clearWave = () => page.evaluate(() => {
+    const g = window.__warmup.scene.getScene('GameScene');
+    for (const e of g.director.enemies) {
+      if (!e.active) continue;
+      const damage = e.hp;
+      g.onTargetDamaged(e, damage, e.takeDamage(damage));
+    }
+  });
   const waitFor = (fn, arg = null, timeout = 5000) =>
     page.waitForFunction(fn, arg, { timeout }).then(() => true).catch(() => false);
-  const bannerShows = (text) => waitFor((text) => {
+  const bannerShows = (text, timeout = 3000) => waitFor((text) => {
     const ui = window.__warmup.scene.getScene('UIScene');
     return ui.stageText.visible && ui.stageText.text === text;
-  }, text, 3000);
+  }, text, timeout);
   const bannerNow = () => page.evaluate(() => {
     const ui = window.__warmup.scene.getScene('UIScene');
     return ui.stageText.visible ? `"${ui.stageText.text}"` : '(hidden)';
   });
+  const uiTracks = (stage, wave) => waitFor(([st, wv]) => {
+    const ui = window.__warmup.scene.getScene('UIScene');
+    return ui.lastStage === st && ui.lastWave === wv;
+  }, [stage, wave]);
   /**
-   * Sample every frame from just before a restart input until the NEW round has
-   * run 0.6s of game time. The new round is recognised by GameScene.create()
-   * building a new GameClock — independent of the HUD round id under test.
+   * Sample every frame from just before a restart input until the NEW run has
+   * 0.6s of run time. The new run is recognised by GameScene.create() building a
+   * new GameClock — independent of the HUD round id under test.
    */
   const watchRestart = () => page.evaluate(() => {
     const g = window.__warmup.scene.getScene('GameScene');
@@ -327,11 +336,12 @@ test('hud: contextual range ring, pause freeze + input gate, Q slot, settings me
       if (g.clock !== oldClock) {
         const hud = g.getHudState();
         probe.frames.push({
-          round: hud.round, level: hud.difficultyLevel, elapsed: hud.elapsed,
-          over: g.getRoundResult() !== null, lastStage: ui.lastStage,
+          round: hud.round, stage: hud.stage, wave: hud.wave, phase: hud.wavePhase, runTime: hud.runTime,
+          over: g.getRoundResult() !== null, alive: hud.enemiesRemaining, shots: g.enemyProjectiles.activeCount,
+          lastStage: ui.lastStage, lastWave: ui.lastWave,
           banner: ui.stageText.visible ? ui.stageText.text : null,
         });
-        if (hud.elapsed >= 0.6) { probe.done = true; return; }
+        if (hud.runTime >= 0.6) { probe.done = true; return; }
       }
       requestAnimationFrame(tick);
     };
@@ -344,42 +354,48 @@ test('hud: contextual range ring, pause freeze + input gate, Q slot, settings me
   const checkFreshRound = (probe, label) => {
     const f = probe.frames;
     f.length > 0
-      ? pass(`${label}: a new round started`)
-      : fail(`${label}: no new round was observed after the restart input`);
+      ? pass(`${label}: a new run started`)
+      : fail(`${label}: no new run was observed after the restart input`);
     f.length > 0 && f.every((x) => x.round === probe.roundBefore + 1)
       ? pass(`${label}: HUD round id advanced ${probe.roundBefore} -> ${f[0].round}`)
       : fail(`${label}: HUD round id ${probe.roundBefore} -> ${JSON.stringify(f.slice(0, 3).map((x) => x.round))}`);
-    f.length > 0 && f.every((x) => x.level === 1 && !x.over && x.lastStage === 1)
-      ? pass(`${label}: new round opens at stage 1 with the UI tracking stage 1`)
-      : fail(`${label}: wrong opening stage state: ${JSON.stringify(f.find((x) => x.level !== 1 || x.over || x.lastStage !== 1) ?? f.length)}`);
+    f.length > 0 && f.every((x) => x.stage === 1 && x.wave === 1 && x.phase === 'wave' && !x.over && x.lastStage === 1 && x.lastWave === 1)
+      ? pass(`${label}: new run opens at Stage 1 Wave 1 with the UI tracking Stage 1 Wave 1`)
+      : fail(`${label}: wrong opening state: ${JSON.stringify(f.find((x) => x.stage !== 1 || x.wave !== 1 || x.phase !== 'wave' || x.over || x.lastStage !== 1 || x.lastWave !== 1) ?? f.length)}`);
+    f.length > 0 && f.every((x) => x.alive === firstWaveSize && x.shots === 0)
+      ? pass(`${label}: a fresh Stage 1 Wave 1 roster (${firstWaveSize} enemies), no hostile shots carried over`)
+      : fail(`${label}: leftovers after restart: ${JSON.stringify(f.find((x) => x.alive !== firstWaveSize || x.shots !== 0) ?? f.length)}`);
     f.length > 0 && f.every((x) => x.banner === null)
-      ? pass(`${label}: no stage banner in the new round's first ${f[f.length - 1].elapsed.toFixed(1)}s (${f.length} frames)`)
+      ? pass(`${label}: no stage banner in the new run's first ${f[f.length - 1].runTime.toFixed(1)}s (${f.length} frames)`)
       : fail(`${label}: false stage banner after restart: ${JSON.stringify(f.find((x) => x.banner !== null) ?? f.length)}`);
   };
   const checkGenuineTransition = async (label) => {
-    await jumpTo((await timeForLevel(2)) - 0.25);
-    const reached = await waitFor(() => window.__warmup.scene.getScene('GameScene').getHudState().difficultyLevel === 2);
-    const shown = reached && (await bannerShows('STAGE 2'));
+    await jumpTo(1, lastWaveOf(1));
+    await clearWave();
+    const shown = await bannerShows('STAGE 2', cfg6.run.interStageDelayMs + 2500);
     shown
-      ? pass(`${label}: the real stage 2 transition in the new round still shows "STAGE 2"`)
-      : fail(`${label}: no "STAGE 2" banner (level 2 reached=${reached}, stage text ${await bannerNow()})`);
+      ? pass(`${label}: clearing Stage 1's last wave still brings up the real "STAGE 2" banner`)
+      : fail(`${label}: no "STAGE 2" banner (stage text ${await bannerNow()})`);
   };
 
-  // A: the round runs out at the final stage; R on the end screen restarts it.
-  await jumpTo(59.6);
-  const endedA = await waitFor(() => window.__warmup.scene.getScene('GameScene').getRoundResult() !== null);
-  const lateA = await bannerShows(`STAGE ${maxLevel}`);
-  endedA && lateA
-    ? pass(`A: round ended at stage ${maxLevel} with the UI showing "STAGE ${maxLevel}"`)
-    : fail(`A: setup — round over=${endedA}, stage text ${await bannerNow()}`);
+  // A: complete the run (the final stage's last wave cleared), then R on the end screen.
+  await jumpTo(lastStage, lastWaveOf(lastStage));
+  const trackedA = await uiTracks(lastStage, lastWaveOf(lastStage));
+  await clearWave();
+  const endedA = await waitFor(() =>
+    window.__warmup.scene.getScene('GameScene').getRoundResult()?.outcome === 'completed'
+    && window.__warmup.scene.getScene('UIScene').overlay.visible);
+  trackedA && endedA
+    ? pass(`A: run completed at Stage ${lastStage} with the UI tracking Stage ${lastStage}`)
+    : fail(`A: setup — UI tracked=${trackedA}, completed=${endedA}`);
   await watchRestart();
   await page.keyboard.press('r');
   checkFreshRound(await restartProbe(), 'A: R on the end screen');
   await checkGenuineTransition('A');
 
-  // B: mid-round at stage 6, restart from the pause menu's RESTART ROUND button.
-  await jumpTo((await timeForLevel(6)) + 0.1);
-  const midB = await bannerShows('STAGE 6');
+  // B: mid-run at Stage 6, restart from the pause menu's RESTART ROUND button.
+  await jumpTo(6, 1);
+  const midB = (await uiTracks(6, 1)) && (await bannerShows('STAGE 6'));
   await page.keyboard.press('Escape');
   const pausedB = await waitFor(() =>
     window.__warmup.scene.getScene('GameScene').isPaused && window.__warmup.scene.getScene('UIScene').pauseMenu.visible);
@@ -389,19 +405,19 @@ test('hud: contextual range ring, pause freeze + input gate, Q slot, settings me
     return t ? { x: t.x, y: t.y } : null;
   });
   midB && pausedB && restartButton
-    ? pass('B: paused at stage 6 (UI showing "STAGE 6") with RESTART ROUND available')
+    ? pass('B: paused on Stage 6 (UI showing "STAGE 6") with RESTART ROUND available')
     : fail(`B: setup — stage text ${await bannerNow()}, paused=${pausedB}, button=${JSON.stringify(restartButton)}`);
   await watchRestart();
   if (restartButton) await page.mouse.click(restartButton.x, restartButton.y);
   checkFreshRound(await restartProbe(), 'B: pause menu RESTART ROUND');
   await checkGenuineTransition('B');
 
-  // C: defeated at stage 4, restart with the end screen's PLAY AGAIN button.
-  await jumpTo((await timeForLevel(4)) + 0.1);
-  const midC = await bannerShows('STAGE 4');
+  // C: defeated on Stage 4 Wave 2, restart with the end screen's PLAY AGAIN button.
+  await jumpTo(4, 2);
+  const midC = await uiTracks(4, 2);
   await page.evaluate(() => { window.__warmup.scene.getScene('GameScene').player.hp = 0; });
   const endedC = await waitFor(() =>
-    window.__warmup.scene.getScene('GameScene').getRoundResult()?.survived === false
+    window.__warmup.scene.getScene('GameScene').getRoundResult()?.outcome === 'defeated'
     && window.__warmup.scene.getScene('UIScene').overlay.visible);
   const playAgain = await page.evaluate(() => {
     const t = window.__warmup.scene.getScene('UIScene').overlay.list
@@ -409,8 +425,8 @@ test('hud: contextual range ring, pause freeze + input gate, Q slot, settings me
     return t ? { x: t.x, y: t.y } : null;
   });
   midC && endedC && playAgain
-    ? pass('C: defeated at stage 4 (UI showing "STAGE 4") with PLAY AGAIN available')
-    : fail(`C: setup — stage text ${await bannerNow()}, defeated=${endedC}, button=${JSON.stringify(playAgain)}`);
+    ? pass('C: defeated on Stage 4 Wave 2 (UI tracking it) with PLAY AGAIN available')
+    : fail(`C: setup — UI tracked=${midC}, defeated=${endedC}, button=${JSON.stringify(playAgain)}`);
   await watchRestart();
   if (playAgain) await page.mouse.click(playAgain.x, playAgain.y);
   checkFreshRound(await restartProbe(), 'C: PLAY AGAIN button');

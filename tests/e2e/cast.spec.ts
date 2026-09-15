@@ -20,12 +20,12 @@ test('cast: Q/W/E cast windows, committed aim, buffered orders, lockout, Flash, 
       const d = g.director;
       g.enemyProjectiles.clear();
       g.enemyProjectiles.nextSpawnAt = Number.POSITIVE_INFINITY;
-      d.slots.forEach((s) => s.enemy.destroy());
-      d.slots.length = 0;
+      d.enemies.forEach((e) => e.destroy());
+      d.enemies.length = 0;
       for (const s of spots) {
-        const e = d.spawn(s.type);
+        const e = d.spawnEnemy(s.type);
         e.x = s.x; e.y = s.y; e.hp = hp; e.clearMark();
-        d.slots.push({ enemy: e, respawnAt: null });
+        d.enemies.push(e);
       }
       g.enemies = d.enemies;
       g.player.x = 640; g.player.y = 360; g.player.hp = 100; g.player.stop();

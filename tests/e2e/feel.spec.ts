@@ -1,7 +1,7 @@
 import { test } from '@playwright/test';
 import { startSuite } from './support/harness';
 
-test('feel: windup animation timing, release/impact, cancel, kill + respawn, opening density', async ({ page }, testInfo) => {
+test('feel: windup animation timing, release/impact, cancel, kill feedback + no refill, opening fire', async ({ page }, testInfo) => {
   const { pass, fail, warn, section, finish } = await startSuite(page, testInfo, 400);
 
   const calm = () => page.evaluate(() => {
@@ -48,11 +48,9 @@ test('feel: windup animation timing, release/impact, cancel, kill + respawn, ope
   section('Config sanity');
   const cfg = await page.evaluate(() => ({
     windupMs: window.__warmup.scene.getScene('GameScene').attacks.windupMs,
-    cooldown: window.__balance.ATTACK.baseCooldownMs,
     projSpeed: window.__balance.ATTACK.projectileSpeed,
     dmg: window.__balance.ATTACK.damage,
     targetHp: window.__balance.TARGETS.maxHp,
-    respawn: window.__balance.TARGETS.respawnDelayMs,
     spawnStart: window.__balance.ENEMY_PROJECTILES.spawnIntervalMs.start,
   }));
   const autosToKill = Math.ceil(cfg.targetHp / cfg.dmg);
@@ -157,10 +155,11 @@ test('feel: windup animation timing, release/impact, cancel, kill + respawn, ope
   afterCancel.cancelled > beforeCancel.cancelled ? pass(`cancel metric incremented (${afterCancel.cancelled})`) : fail('cancel metric flat');
   afterCancel.windupProgress === 0 ? pass('windup visual resets on cancel') : fail('windup progress stuck after cancel');
 
-  // === 5. Three autos kill, death feedback, respawn ===========================
-  section('5. Three autos kill, death feedback, respawn');
+  // === 5. Autos kill, death feedback, no refill ===============================
+  section('5. Autos kill, death feedback, no refill');
   await calm();
-  await place([{ x: 800, y: 360 }]);
+  // A second, distant enemy stays alive, so this kill does not clear the wave.
+  await place([{ x: 800, y: 360 }, { x: 200, y: 650 }]);
   await page.waitForTimeout(50);
   const t0 = await tagged(1);
   const scoreBefore = (await G()).score;
@@ -174,7 +173,7 @@ test('feel: windup animation timing, release/impact, cancel, kill + respawn, ope
   !dead.active ? pass(`target died to autos (${cfg.targetHp}/${cfg.dmg} = ${autosToKill} hits)`) : fail(`target still alive, hp ${dead.hp}`);
   (await G()).score > scoreBefore ? pass('kill awarded score') : fail('no score for the kill');
 
-  // Death animation then respawn away from the player.
+  // Death animation.
   await page.waitForTimeout(60);
   const midDeath = await page.evaluate(() => {
     const s = window.__warmup.scene.getScene('GameScene');
@@ -185,38 +184,30 @@ test('feel: windup animation timing, release/impact, cancel, kill + respawn, ope
     ? pass(`death animates (alpha ${midDeath.alpha.toFixed(2)}, scale ${midDeath.scale.toFixed(2)})`)
     : warn(`death anim sample: ${JSON.stringify(midDeath)} (may have finished)`);
 
-  const liveBefore = await page.evaluate(
-    () => window.__warmup.scene.getScene('GameScene').director.enemies.filter((e) => e.active).length,
-  );
-  await page.waitForTimeout(cfg.respawn + 500);
-  // Respawn now REPLACES the dead enemy with a freshly rolled archetype (that is
-  // how composition evolves with difficulty), so assert the roster refilled
-  // rather than tracking the old object.
-  const refilled = await page.evaluate(() => {
-    const s = window.__warmup.scene.getScene('GameScene');
-    const live = s.director.enemies.filter((e) => e.active);
+  // Waves are finite: a kill is never refilled while the wave is still being
+  // fought. Watch past the old 1200ms respawn delay. (Wave/stage progression
+  // itself is covered by the waves suite.)
+  const rosterNow = () => page.evaluate(() => {
+    const d = window.__warmup.scene.getScene('GameScene').director;
     return {
-      liveCount: live.length,
-      total: s.director.enemies.length,
-      minDistToPlayer: Math.min(
-        ...live.map((e) => Math.hypot(e.x - s.player.x, e.y - s.player.y)),
-      ),
+      ids: d.enemies.map((e) => (e.__feelId ??= Math.random())),
+      alive: d.enemies.filter((e) => e.active).length,
+      phase: d.phase,
     };
   });
-  // Only the slot that actually died is refilled; this test deactivates the
-  // other enemies by hand, and those were never registered as kills.
-  refilled.liveCount > liveBefore
-    ? pass(`killed slot refilled after ~${cfg.respawn}ms (${liveBefore} -> ${refilled.liveCount} alive)`)
-    : fail(`roster not refilled: ${liveBefore} -> ${refilled.liveCount}`);
-  refilled.minDistToPlayer >= 200
-    ? pass('replacement enemy is not spawned on top of the player')
-    : fail(`replacement spawned ${refilled.minDistToPlayer.toFixed(0)}px from player`);
+  const rosterAfterKill = await rosterNow();
+  await page.waitForTimeout(1700);
+  const rosterLater = await rosterNow();
+  rosterLater.phase === 'wave' && rosterLater.alive === rosterAfterKill.alive
+    && rosterLater.ids.length === rosterAfterKill.ids.length && rosterLater.ids.every((id, i) => id === rosterAfterKill.ids[i])
+    ? pass(`the killed enemy is not replaced (${rosterLater.alive} alive, same roster 1.7s later)`)
+    : fail(`roster changed after a mid-wave kill: ${JSON.stringify({ rosterAfterKill, rosterLater })}`);
 
-  // A missile in flight must not damage the respawned target.
+  // A missile in flight must not damage a later enemy.
   const stale = await page.evaluate(() => {
     const s = window.__warmup.scene.getScene('GameScene');
     // Every enemy carries the generational guard an in-flight missile compares
-    // against; a replaced enemy can never be hit by a bolt aimed at its predecessor.
+    // against; a later enemy can never be hit by a bolt aimed at a dead one.
     const all = s.director.enemies;
     return {
       guard: all.length > 0 && all.every((e) => typeof e.spawnId === 'number'),
@@ -225,8 +216,8 @@ test('feel: windup animation timing, release/impact, cancel, kill + respawn, ope
   });
   stale.guard ? pass('targets carry a spawnId guard for in-flight missiles') : fail('no spawnId guard');
 
-  // === 6. Enemy projectile density in the opening =============================
-  section('6. Enemy projectile density in the opening');
+  // === 6. Enemy fire in the opening ===========================================
+  section('6. Enemy fire in the opening');
   await page.evaluate(() => {
     const s = window.__warmup.scene.getScene('GameScene');
     s.scene.restart();
@@ -235,23 +226,21 @@ test('feel: windup animation timing, release/impact, cancel, kill + respawn, ope
   await page.waitForFunction(() => window.__warmup.scene.getScene('GameScene').enemyProjectiles);
   const density = await page.evaluate(() => new Promise<any>((res) => {
     const s = window.__warmup.scene.getScene('GameScene');
-    // Count spawns over 10 seconds of the opening by sampling the interval.
-    const start = s.difficulty.elapsed;
-    const interval = s.difficulty.spawnIntervalMs;
+    const interval = s.enemyProjectiles.spawnIntervalMs;
     setTimeout(() => res({
-      start,
       intervalAtStart: interval,
-      intervalNow: s.difficulty.spawnIntervalMs,
-      t: s.difficulty.t,
-      elapsed: s.difficulty.elapsed,
+      intervalNow: s.enemyProjectiles.spawnIntervalMs,
+      stage: s.director.stage,
+      fire: s.director.fireIntensity,
+      runTime: s.getHudState().runTime,
     }), 1500);
   }));
   density.intervalAtStart >= 1800
     ? pass(`opening spawn interval is ${Math.round(density.intervalAtStart)}ms (was 900ms) — ~${Math.round(900 / density.intervalAtStart * 100)}% of the old rate`)
     : fail(`opening interval only ${density.intervalAtStart}ms`);
-  density.t === 0
-    ? pass(`difficulty stays flat for the first ${await page.evaluate(() => window.__balance.DIFFICULTY.rampStartSeconds)}s (t=0 at ${density.elapsed.toFixed(1)}s)`)
-    : fail(`ramp already started at ${density.elapsed.toFixed(1)}s (t=${density.t})`);
+  density.stage === 1 && density.fire === 0 && density.intervalNow === density.intervalAtStart
+    ? pass(`enemy fire stays at Stage 1's calm level while time passes (${Math.round(density.intervalNow)}ms at ${density.runTime.toFixed(1)}s)`)
+    : fail(`opening fire changed: ${JSON.stringify(density)}`);
 
   await finish();
 });

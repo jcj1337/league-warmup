@@ -1,9 +1,9 @@
 import { test } from '@playwright/test';
 import { startSuite } from './support/harness';
 
-// Unlike the other suites, smoke plays the real, unsterilized round: live
-// enemy fire, random spawns and drift, the round timer, restart and death.
-test('smoke: movement, attack, Q, enemy fire, context menu, round end + restart, death', async ({ page }, testInfo) => {
+// Unlike the other suites, smoke plays the real, unsterilized run: live enemy
+// fire, random spawns and drift, run completion, restart and death.
+test('smoke: movement, attack, Q, enemy fire, context menu, run end + restart, death', async ({ page }, testInfo) => {
   const { pass, fail, warn, section, finish } = await startSuite(page, testInfo, 600);
 
   const state = () => page.evaluate(() => {
@@ -76,7 +76,7 @@ test('smoke: movement, attack, Q, enemy fire, context menu, round end + restart,
 
   // --- 3. Q skillshot (quick-cast) --------------------------------------------
   section('3. Q skillshot (quick-cast)');
-  // Deterministic geometry for the hit check. The round is live, so the nearest
+  // Deterministic geometry for the hit check. The run is live, so the nearest
   // enemy may be drifting, beyond Q range, or about to die to the autos from
   // section 2 before the bolt arrives. Drop the attack order, put the player at
   // a fixed spot, and park that enemy — frozen, with a deep HP pool — 200px
@@ -128,11 +128,11 @@ test('smoke: movement, attack, Q, enemy fire, context menu, round end + restart,
   await page.waitForTimeout(6000);
   const hurt = await state();
   hurt.hud.hp < 100 ? pass(`enemy projectiles damage the player (hp ${hurt.hud.hp.toFixed(0)})`) : warn('player took no damage while idle');
-  // The ramp deliberately stays flat for DIFFICULTY.rampStartSeconds so the
-  // opening is calm; this samples well inside that window.
-  hurt.hud.difficultyLevel === 1
-    ? pass(`difficulty still level 1 early on (calm opening, ${hurt.hud.elapsed.toFixed(0)}s in)`)
-    : pass(`difficulty ramping (level ${hurt.hud.difficultyLevel})`);
+  // Progression only moves on kills: this late in the run, without clearing the
+  // wave, it is still Stage 1 Wave 1.
+  hurt.hud.stage === 1 && hurt.hud.wave === 1
+    ? pass(`still Stage 1 Wave 1 after ${hurt.hud.runTime.toFixed(0)}s — time alone does not advance the run`)
+    : fail(`run advanced to stage ${hurt.hud.stage} wave ${hurt.hud.wave} without the wave being cleared`);
 
   // --- 5. context menu suppressed ---------------------------------------------
   section('5. context menu suppressed');
@@ -144,35 +144,55 @@ test('smoke: movement, attack, Q, enemy fire, context menu, round end + restart,
   });
   ctxPrevented ? pass('right-click context menu suppressed on canvas') : fail('contextmenu not prevented');
 
-  // --- 6. round end + restart --------------------------------------------------
-  section('6. round end + restart');
+  // --- 6. run end + restart ----------------------------------------------------
+  section('6. run end + restart');
+  // End the run the way it ends for real: jump to the final wave and clear it
+  // through the scene's damage funnel.
   await page.evaluate(() => {
-    const s = window.__warmup.scene.getScene('GameScene');
-    s.difficulty.elapsedSeconds = 59.6;
+    const g = window.__warmup.scene.getScene('GameScene');
+    const d = g.director;
+    d.stageIndex = d.stageCount - 1;
+    d.waveIndex = d.stageDefinition.waves.length - 1;
+    d.spawnWave();
+    for (const e of d.enemies) {
+      const damage = e.hp;
+      g.onTargetDamaged(e, damage, e.takeDamage(damage));
+    }
   });
-  await page.waitForTimeout(900);
+  await page.waitForFunction(() => window.__warmup.scene.getScene('GameScene').getRoundResult() !== null, null, { timeout: 3000 }).catch(() => {});
   const over = await state();
-  over.result ? pass(`round ends on timer (score ${over.result.score}, kills ${over.result.targetsKilled}, hits taken ${over.result.projectileHitsTaken}, Q ${over.result.qHit}/${over.result.qFired})`) : fail('round did not end');
+  over.result && over.result.outcome === 'completed'
+    ? pass(`run ends on clearing the final wave (score ${over.result.score}, kills ${over.result.targetsKilled}, hits taken ${over.result.projectileHitsTaken}, Q ${over.result.qHit}/${over.result.qFired})`)
+    : fail(`run did not end as completed: ${JSON.stringify(over.result)}`);
   const overlayVisible = await page.evaluate(() => window.__warmup.scene.getScene('UIScene').overlay.visible);
   overlayVisible ? pass('end screen shown') : fail('end screen not shown');
 
   await page.keyboard.press('r');
   await page.waitForTimeout(700);
   const fresh = await state();
-  fresh.result === null && fresh.hud.hp === 100 && fresh.hud.score < over.result.score
-    ? pass('restart resets the round')
-    : fail(`restart state: hp=${fresh.hud.hp} score=${fresh.hud.score} result=${JSON.stringify(fresh.result)}`);
+  fresh.result === null && fresh.hud.hp === 100 && fresh.hud.score < over.result.score && fresh.hud.stage === 1 && fresh.hud.wave === 1
+    ? pass('restart resets the run to Stage 1 Wave 1')
+    : fail(`restart state: hp=${fresh.hud.hp} score=${fresh.hud.score} stage=${fresh.hud.stage} wave=${fresh.hud.wave} result=${JSON.stringify(fresh.result)}`);
   const overlayHidden = await page.evaluate(() => window.__warmup.scene.getScene('UIScene').overlay.visible);
   !overlayHidden ? pass('end screen hidden after restart') : fail('end screen still visible after restart');
 
-  // Movement still works after restart (input rewiring check).
+  // Movement still works after restart (input rewiring check). Spawns are
+  // random, so click empty ground: a right-click that lands on an enemy is an
+  // attack order, not a move, and would stop short at attack range.
   const p0 = await state();
-  await rclick(900, 200);
+  const moveTarget = await page.evaluate(() => {
+    const g = window.__warmup.scene.getScene('GameScene');
+    const candidates = [{ x: 900, y: 200 }, { x: 380, y: 560 }, { x: 900, y: 560 }, { x: 380, y: 160 }];
+    const isEmpty = (c) => g.director.enemies.every((e) => !e.active || Math.hypot(e.x - c.x, e.y - c.y) > e.radius + 60);
+    return candidates.find(isEmpty) ?? candidates[0];
+  });
+  await rclick(moveTarget.x, moveTarget.y);
   await page.waitForTimeout(500);
   const p1 = await state();
-  Math.hypot(p1.player.x - p0.player.x, p1.player.y - p0.player.y) > 80
+  const movedAfterRestart = Math.hypot(p1.player.x - p0.player.x, p1.player.y - p0.player.y);
+  movedAfterRestart > 80
     ? pass('input still works after restart')
-    : fail('movement broken after restart');
+    : fail(`movement broken after restart: moved ${movedAfterRestart.toFixed(0)}px toward (${moveTarget.x},${moveTarget.y}), player at (${p1.player.x.toFixed(0)},${p1.player.y.toFixed(0)}), attack state ${p1.attackState}`);
 
   // --- 7. death path -----------------------------------------------------------
   section('7. death path');
@@ -183,7 +203,7 @@ test('smoke: movement, attack, Q, enemy fire, context menu, round end + restart,
   });
   await page.waitForTimeout(8000);
   const dead = await state();
-  dead.result && !dead.result.survived ? pass('death ends the round with survived=false')
+  dead.result && dead.result.outcome === 'defeated' ? pass('death ends the run as defeated')
     : warn('player survived at 1hp for 8s (hp=' + dead.hud.hp.toFixed(0) + ')');
 
   await finish();

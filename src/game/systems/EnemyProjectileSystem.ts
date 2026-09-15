@@ -3,7 +3,16 @@ import { ARENA, ENEMY_PROJECTILES } from '../../config/balance';
 import { THEME } from '../../config/theme';
 import { Projectile } from '../entities/Projectile';
 import type { Player } from '../entities/Player';
-import type { DifficultyManager } from './DifficultyManager';
+
+type Ramp = { start: number; end: number };
+
+/** What enemy fire needs to know about the run. The WaveDirector provides it. */
+export interface EnemyFirePressure {
+  /** Fire only while a wave is being fought — never during a breather. */
+  readonly isWaveActive: boolean;
+  /** 0..1 position on the ENEMY_PROJECTILES start → end ramps, set per stage. */
+  readonly fireIntensity: number;
+}
 
 interface EnemyProjectileCallbacks {
   onPlayerHit: (damage: number) => void;
@@ -14,17 +23,24 @@ interface EnemyProjectileCallbacks {
  *
  * Shots originate on the arena border and are aimed at the player's position at
  * the moment of firing — they never re-aim, so every shot is dodgeable if you
- * read it early. Spawn rate, speed, size and damage all come from the
- * DifficultyManager ramp.
+ * read it early. No individual enemy fires them: the volleys belong to the wave
+ * being fought. Spawn rate, speed, size and damage come from the current
+ * stage's fire intensity.
+ *
+ * Wave boundaries: as soon as a wave is cleared, every hostile shot in flight is
+ * removed — before this frame's collision test — and nothing new is scheduled.
+ * The next wave's first volley comes one full spawn interval after it starts.
+ * A cleared wave can therefore never damage the player during the breather.
  */
 export class EnemyProjectileSystem {
   private readonly missiles: Projectile[] = [];
-  private nextSpawnAt = 0;
+  /** Clock time of the next volley; null while no wave is being fought. */
+  private nextSpawnAt: number | null = null;
 
   constructor(
     private readonly scene: Phaser.Scene,
     private readonly player: Player,
-    private readonly difficulty: DifficultyManager,
+    private readonly pressure: EnemyFirePressure,
     private readonly callbacks: EnemyProjectileCallbacks,
   ) {}
 
@@ -32,10 +48,45 @@ export class EnemyProjectileSystem {
     return this.missiles.length;
   }
 
+  get spawnIntervalMs(): number {
+    return this.ramp(ENEMY_PROJECTILES.spawnIntervalMs);
+  }
+
+  get projectileSpeed(): number {
+    return this.ramp(ENEMY_PROJECTILES.speed);
+  }
+
+  get projectileRadius(): number {
+    return this.ramp(ENEMY_PROJECTILES.radius);
+  }
+
+  get projectileDamage(): number {
+    return this.ramp(ENEMY_PROJECTILES.damage);
+  }
+
+  /**
+   * Fractional volley size: 2.4 means "2 shots, plus a 40% chance of a third".
+   * Keeps the ramp smooth instead of jumping a whole projectile at a time.
+   */
+  get volleySize(): number {
+    return this.ramp(ENEMY_PROJECTILES.volleySize);
+  }
+
   update(deltaSeconds: number, nowMs: number): void {
+    if (!this.pressure.isWaveActive) {
+      // The wave was cleared: its shots fizzle before they can reach the player,
+      // and no volley is queued until the next wave begins.
+      if (this.missiles.length > 0) this.clear();
+      this.nextSpawnAt = null;
+      return;
+    }
+
+    if (this.nextSpawnAt === null) {
+      this.nextSpawnAt = nowMs + this.spawnIntervalMs;
+    }
     if (nowMs >= this.nextSpawnAt) {
       this.spawnVolley();
-      this.nextSpawnAt = nowMs + this.difficulty.spawnIntervalMs;
+      this.nextSpawnAt = nowMs + this.spawnIntervalMs;
     }
 
     for (const missile of this.missiles) {
@@ -53,8 +104,12 @@ export class EnemyProjectileSystem {
     }
   }
 
+  private ramp(ramp: Ramp): number {
+    return Phaser.Math.Linear(ramp.start, ramp.end, Phaser.Math.Clamp(this.pressure.fireIntensity, 0, 1));
+  }
+
   private spawnVolley(): void {
-    const size = this.difficulty.volleySize;
+    const size = this.volleySize;
     // Whole part fires for sure, fractional part is a coin flip.
     let shots = Math.floor(size);
     if (Math.random() < size - shots) shots++;
@@ -75,9 +130,9 @@ export class EnemyProjectileSystem {
         x,
         y,
         angle,
-        speed: this.difficulty.projectileSpeed,
-        radius: this.difficulty.projectileRadius,
-        damage: this.difficulty.projectileDamage,
+        speed: this.projectileSpeed,
+        radius: this.projectileRadius,
+        damage: this.projectileDamage,
         color: THEME.projectiles.enemyColor,
         team: 'enemy',
         heavyOutline: true,

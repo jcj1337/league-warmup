@@ -11,9 +11,10 @@ currently in `src/config/balance.ts` and `src/config/theme.ts`.
 
 ## 1. Overview
 
-A 60-second mechanical warm-up trainer for League-style ADC play. The player
-practises positioning, kiting/orbwalking, dodging, and an Ezreal-flavoured kit
-(Q/W/E + Flash) against two enemy archetypes while difficulty ramps.
+A mechanical warm-up trainer for League-style ADC play, structured as a gauntlet
+of 10 stages × 3 authored waves. The player practises positioning,
+kiting/orbwalking, dodging, and an Ezreal-flavoured kit (Q/W/E + Flash) against two
+enemy archetypes. Progression comes from clearing waves, never from elapsed time.
 
 | Layer | Choice |
 | --- | --- |
@@ -34,7 +35,7 @@ fire-and-forget decoration. No tween is ever load-bearing.
 ```mermaid
 flowchart TD
     subgraph Config["src/config (pure data)"]
-        BAL[balance.ts<br/>gameplay tuning]
+        BAL[balance.ts<br/>gameplay tuning + STAGES]
         THM[theme.ts<br/>palette + look]
     end
 
@@ -55,13 +56,12 @@ flowchart TD
     GS --> SS[SkillshotSystem<br/>Q + W projectiles]
     GS --> BS[BlinkSystem<br/>E blink + bolt, Flash]
     GS --> PS[PassiveSystem]
-    GS --> ED[EnemyDirector<br/>roster + archetype weights]
+    GS --> WD[WaveDirector<br/>stages, waves, breathers]
     GS --> EPS[EnemyProjectileSystem]
-    GS --> DM[DifficultyManager]
     GS --> SC[ScoreSystem]
     GS --> KM[KitingMetrics]
 
-    ED --> EN[Enemy base<br/>Target / Pursuer]
+    WD --> EN[Enemy base<br/>Target / Pursuer]
     AS --> PL[Player]
     AS --> AAM[AutoAttackMissile]
     BS --> AAM
@@ -71,11 +71,12 @@ flowchart TD
     CAST -.->|progress| PL
     AS -.->|windupProgress| PL
     PS -.->|attackSpeedMultiplier| AS
-    DM -.->|elapsed| AS
-    DM -.->|t / level| ED
+    WD -.->|baseAttackCooldownMs| AS
+    WD -.->|isWaveActive / fireIntensity| EPS
     GS -.->|getHudState| UIS
 
     BAL -.-> AS
+    BAL -.-> WD
     THM -.-> PL
 ```
 
@@ -89,24 +90,26 @@ object, and an event-wired HUD kept breaking across restarts).
 
 ### Config *(pure data)*
 
-- **`src/config/balance.ts`** — gameplay tuning: `ARENA`, `ROUND`, `PLAYER`,
-  `ATTACK`, `attackReach()`, `KEYBINDS`, `INDICATORS`, `DEBUG`, `SKILLSHOT_Q`,
-  `SKILLSHOT_W`, `BLINK_E`, `FLASH`, `PASSIVE`, `TARGETS`, `PURSUER`,
-  `ENEMY_SPAWN`, `ENEMY_SCALING`, `STAGE`, `ENEMY_PROJECTILES`, `DIFFICULTY`,
-  `SCORE`, `UI`. `ATTACK`, `DEBUG` and `KEYBINDS` are deliberately not `as const`
-  so they stay writable from the console.
+- **`src/config/balance.ts`** — gameplay tuning: `ARENA`, `PLAYER`, `ATTACK`,
+  `attackReach()`, `KEYBINDS`, `INDICATORS`, `DEBUG`, `SKILLSHOT_Q`, `SKILLSHOT_W`,
+  `BLINK_E`, `FLASH`, `PASSIVE`, `TARGETS`, `ENEMY_PROJECTILES`, `PURSUER`, `RUN`,
+  `STAGES`, `BANNERS`, `SCORE`, `UI`. `ATTACK`, `DEBUG` and `KEYBINDS` are deliberately
+  not `as const` so they stay writable from the console. `RUN` + `STAGES` are the one
+  place the run's structure and per-stage difficulty are tuned (§9, §10).
 - **`src/config/theme.ts`** — `THEME.{arena, player, target, pursuer, cast, mark,
   passive, projectiles, markers, ui, rangeHint, ability, menu}`. Nothing here
   affects gameplay.
 
 ### Scenes
 
-- **`GameScene.ts`** (~760 lines) — the only file that knows about everything. Owns
+- **`GameScene.ts`** (~800 lines) — the only file that knows about everything. Owns
   the player, the enemy list, every system, `state`, `result`, and the "already
   drawn" timestamps. Runs the frame (§3), implements the `CommandHandler` (§4),
-  owns W-mark detonation (§8) and the round lifecycle (§12).
-- **`UIScene.ts`** — HUD, ability bar, passive display, pause menu, end screen.
-  Holds no gameplay state; polls `getHudState()` / `getRoundResult()` every frame.
+  owns W-mark detonation (§8) and the round lifecycle (§12). Wave/stage logic lives in
+  the `WaveDirector`, not here.
+- **`UIScene.ts`** — HUD (run time, stage / wave / enemies, transition banners),
+  ability bar, passive display, pause menu, end screen. Holds no gameplay state;
+  polls `getHudState()` / `getRoundResult()` every frame.
 
 ### Entities
 
@@ -124,7 +127,7 @@ object, and an event-wired HUD kept breaking across restarts).
   `updateAi()`. Every combat system types against `Enemy`, never a concrete
   archetype.
 - **`Target.ts`** — basic dummy: red hexagon, wanders, never attacks.
-- **`Pursuer.ts`** — melee stalker with a two-state AI (§10).
+- **`Pursuer.ts`** — melee stalker with a two-state AI (§9).
 - **`AutoAttackMissile.ts`** — homing missile, spec-driven so autos (cyan) and the E
   bolt (pink) share one class. Carries a `targetSpawnId` guard.
 - **`Projectile.ts`** — straight-line projectile shared by Q, W and enemy fire.
@@ -136,15 +139,14 @@ object, and an event-wired HUD kept breaking across restarts).
 | --- | --- |
 | `GameClock.ts` | Simulated time. The reason pause is safe (§13) |
 | `InputController.ts` | Keys/mouse → `CommandHandler` calls. Owns only `attackMovePending` |
-| `AttackSystem.ts` | Attack state machine, orders, acquisition, attack-speed scaling, auto missiles |
-| `CastSystem.ts` | Q/W/E commitment window, input lockout, movement buffering |
+| `AttackSystem.ts` | Attack state machine, orders, acquisition, stage-based attack speed, auto missiles |
+| `CastSystem.ts` | Q/W/E commitment window, input lockout, order buffering |
 | `AbilityCooldowns.ts` | One `readyAt` table for `q w e flash` |
 | `SkillshotSystem.ts` | Q and W projectiles (one loop, two configs) |
 | `BlinkSystem.ts` | E blink + homing bolt, Flash |
 | `PassiveSystem.ts` | Stack count, shared expiry, attack-speed multiplier |
-| `EnemyDirector.ts` | Roster, archetype weights, HP scaling, respawn, separation |
-| `EnemyProjectileSystem.ts` | Dodge pressure |
-| `DifficultyManager.ts` | `elapsed`, ramp `t`, `level`, stage countdown |
+| `WaveDirector.ts` | Stages, waves, finite rosters, breathers, stage tuning (HP / attack speed / fire), separation |
+| `EnemyProjectileSystem.ts` | Dodge pressure — fires only during a wave, cleared when a wave is cleared |
 | `ScoreSystem.ts` | Score, damage, kills by archetype |
 | `KitingMetrics.ts` | Six raw mechanical counters |
 
@@ -174,7 +176,6 @@ if (state !== 'running' || paused) return      ← pause freezes everything belo
 dt = min(delta, 50) / 1000
 clock.advance(dt * 1000);  now = clock.now
 
-difficulty.update(dt)          elapsed += dt
 scoring.tickSurvival(dt)       +5 pts/sec
 passive.update(now)            expire stacks
 cooldowns.update(now)          refresh "now"
@@ -196,21 +197,26 @@ player.setPassiveMaxed(...)
 player.setCastVisual(...)          cast charge, read from cast.progress
 one-shot cues: cast release / attack cancel / attack release (timestamp-gated)
 
-director.update(dt, now, ctx)      enemy AI, respawns, archetype re-rolls, separation
+director.update(dt, now, ctx)      breather over → next wave/stage spawns; enemy AI, separation
 skillshot.update(dt, now, enemies) Q + W projectiles and collisions
 blink.update(dt)                   E bolts
-enemyProjectiles.update(dt, now)   spawn, fly, collide with player
+enemyProjectiles.update(dt, now)   wave cleared → clear all shots; else spawn, fly, collide
 
-end conditions → endRound(survived)
+end conditions → endRound('defeated' | 'completed')
 ```
 
 The ①②③ ordering is load-bearing: when `applyAttackVisual` ran *after*
 `player.update()`, the charge ring rendered one frame stale and visibly persisted
 into recovery.
 
+A wave is cleared the instant its last kill is registered (inside `attacks`,
+`skillshot`, `blink` or a detonation). `enemyProjectiles.update` runs after all of
+those, so hostile shots are removed before that frame's collision test.
+
 **Time sources.** `dt` (clamped seconds) drives rate-based motion. `clock.now`
-(`GameClock`, ms) drives **every** gameplay deadline. Phaser's own `time` is used
-only for tweens. `scene.time.now` appears **zero** times in gameplay code.
+(`GameClock`, ms) drives **every** gameplay deadline, including wave breathers.
+Phaser's own `time` is used only for tweens. `scene.time.now` appears **zero** times
+in gameplay code. Nothing in progression reads elapsed time.
 
 ---
 
@@ -326,21 +332,24 @@ recovery is free movement time.
 
 ### Attack speed
 
+The base cycle is a property of the **stage**, supplied by the `WaveDirector`
+through the `AttackPacing` interface. Elapsed time plays no part: a player who takes
+longer over a stage does not get faster autos for it.
+
 ```
-attackSpeedT  = clamp(elapsed / attackSpeedRampSeconds, 0, 1) ^ attackSpeedCurve
-baseCooldownMs = lerp(ATTACK.baseCooldownMs, ATTACK.minCooldownMs, attackSpeedT)
+baseCooldownMs = STAGES[stage].baseAttackCooldownMs                  (700 → 420ms)
 cooldownMs     = baseCooldownMs / passive.attackSpeedMultiplier      ← authoritative
 windupMs       = windupMsOverride ?? max(minWindupMs, cooldownMs * windupPercent)
 ```
 
-With current values (`700 → 420` over 45s, curve 1.15, windup 25%, floor 90ms):
+With current values (windup 25%, floor 90ms):
 
-| Round time | Stacks | cooldown | windup | recovery | attacks/sec |
+| Stage | Stacks | cooldown | windup | recovery | attacks/sec |
 | --- | --- | --- | --- | --- | --- |
-| 0s | 0 | 700ms | 175ms | 525ms | 1.43 |
-| 0s | 5 | 467ms | 117ms | 350ms | 2.14 |
-| 45s+ | 0 | 420ms | 105ms | 315ms | 2.38 |
-| 45s+ | 5 | 280ms | 90ms (floor) | 190ms | 3.57 |
+| 1 | 0 | 700ms | 175ms | 525ms | 1.43 |
+| 1 | 5 | 467ms | 117ms | 350ms | 2.14 |
+| 10 | 0 | 420ms | 105ms | 315ms | 2.38 |
+| 10 | 5 | 280ms | 90ms (floor) | 190ms | 3.57 |
 
 ### Chasing
 
@@ -351,7 +360,7 @@ only shapes the approach to a target that is actively moving away.
 
 ### Four durations that are not the same thing
 
-| Term | @ round start | What it is |
+| Term | @ Stage 1 | What it is |
 | --- | --- | --- |
 | Windup | 175ms | Rooted, cancellable, no damage |
 | Release | instantaneous | The commitment point |
@@ -454,8 +463,8 @@ their damage → onTargetDamaged → isMarked? → detonateMark()
 clearMark + 45 damage + violet burst   (no extra stack)
 ```
 
-Because respawn **replaces** the enemy object outright, a fresh enemy can never
-inherit a predecessor's mark.
+Because every wave spawns brand-new enemy objects, an enemy can never inherit a
+mark from an earlier wave.
 
 ### E — blink + homing bolt
 
@@ -508,18 +517,43 @@ One **shared** buff, not per-stack timers: every qualifying hit adds a stack (to
 cap) and refreshes the whole 6s window; when it lapses, all stacks go together.
 Stacking events: Q hit, W mark landing, E bolt hit. **Not**: W detonation, Flash,
 autos. All three call one helper, `GameScene.grantPassiveStack()`, which also fires
-the player's pulse — so the visual cannot fire without a real stack.
+the player's pulse — so the visual cannot fire without a real stack. The multiplier
+applies on top of whatever base cycle the current stage sets.
 
 ---
 
-## 9. Enemies and the director
+## 9. Enemies and the wave director
 
-### `EnemyDirector`
+### `WaveDirector`
 
-Owns the roster as fixed **slots** (`TARGETS.count` = 4), each `{ enemy, respawnAt }`.
-When a kill is registered, `onEnemyKilled()` sets `respawnAt = now + respawnDelayMs`;
-when that elapses the old enemy is **destroyed** and a freshly rolled archetype spawns
-in its place. That is how composition evolves rather than switching abruptly.
+Owns stage/wave progression and the roster of the wave being fought. There are no
+respawns and no refilling slots:
+
+```
+spawnWave() ─► fight ─► last enemy killed ─► intermission (GameClock) ─► next wave / stage ─► spawnWave()
+                               │
+                               └─ it was Stage 10 Wave 3 ─► 'complete' → the run ends
+```
+
+- **`spawnWave()`** destroys the previous, fully dead roster and spawns exactly the
+  authored `STAGES[stage].waves[wave]` roster (e.g. `{ basic: 2, pursuer: 2 }`).
+  There are no fixed spawn points: each enemy's position is rejection-sampled away
+  from the player (240px; 360px for Pursuers) and away from enemies already placed,
+  so each gets its own spot. A three-enemy wave is simply three enemies — nothing
+  ever fills a fourth.
+- **`onEnemyKilled()`** is called from the scene's damage funnel. A dead enemy stays
+  in the roster with `active=false`, so its death animation plays out. When no enemy
+  is active, the wave is cleared **on the spot**: the phase becomes `'intermission'`
+  with `intermissionEndsAt = now + RUN.interWaveDelayMs` (800), or
+  `RUN.interStageDelayMs` (1200) after a stage's last wave — or `'complete'` after
+  the final wave of the final stage.
+- **`update()`** advances once `now >= intermissionEndsAt` — the next wave, or Wave 1
+  of the next stage — then runs enemy AI and separation. The breather is a GameClock
+  deadline, so it freezes with a pause.
+
+Nothing here reads elapsed time; the only way forward is killing the wave.
+`validateStages()` runs in the constructor and throws on a stage with no waves, or a
+wave outside 1–`RUN.maxAliveEnemies` (4) enemies.
 
 ```ts
 const ARCHETYPES: Record<EnemyArchetype, ArchetypeSpec> = {
@@ -528,19 +562,32 @@ const ARCHETYPES: Record<EnemyArchetype, ArchetypeSpec> = {
 };
 ```
 
-Adding a third archetype = one entry here + one weight row in `ENEMY_SPAWN` + the new
-`Enemy` subclass. No system changes, because everything downstream types against
-`Enemy`.
+The director is also the single source of stage-scoped tuning for other systems:
 
-**Spawn weights** (normalised, index = level − 1):
+| Reader | Through | Value |
+| --- | --- | --- |
+| `AttackSystem` | `AttackPacing.baseAttackCooldownMs` | the stage's base auto cycle |
+| `EnemyProjectileSystem` | `EnemyFirePressure.isWaveActive` / `fireIntensity` | fire on/off, 0..1 ramp position |
+| itself, at spawn | `hpMultiplier` | enemy HP = archetype base × stage multiplier |
 
-| Difficulty | 1–3 | 4 | 5 | 6 | 7 | 8+ |
+Adding a third archetype = one entry here + its key in `WaveRoster` + the new `Enemy`
+subclass + using it in `STAGES`. No other system changes, because everything
+downstream types against `Enemy`.
+
+**The stage table** (`STAGES` in balance.ts; B = basic, P = pursuer):
+
+| Stage | Wave 1 | Wave 2 | Wave 3 | HP × | Base auto | Enemy fire |
 | --- | --- | --- | --- | --- | --- | --- |
-| basic | 100% | 80% | 75% | 65% | 60% | 50% |
-| pursuer | 0% | 20% | 25% | 35% | 40% | 50% |
-
-**HP scaling**: `min(1.5, 1 + max(0, level − 3) × 0.05)` — D1–3 100%, D4 105%,
-D6 115%.
+| 1 | 3B | 3B | 4B | 1.00 | 700ms | 0 |
+| 2 | 3B | 3B+1P | 3B+1P | 1.00 | 669ms | 0.10 |
+| 3 | 3B+1P | 2B+2P | 2B+2P | 1.00 | 638ms | 0.20 |
+| 4 | 2B+1P | 2B+2P | 1B+3P | 1.05 | 607ms | 0.30 |
+| 5 | 3B+1P | 2B+2P | 1B+3P | 1.10 | 576ms | 0.40 |
+| 6 | 2B+2P | 1B+3P | 2B+2P | 1.15 | 544ms | 0.50 |
+| 7 | 1B+2P | 1B+3P | 1B+3P | 1.20 | 513ms | 0.60 |
+| 8 | 2B+2P | 1B+3P | 1B+3P | 1.25 | 482ms | 0.70 |
+| 9 | 1B+3P | 2B+2P | 1B+3P | 1.30 | 451ms | 0.85 |
+| 10 | 2B+2P | 1B+3P | 4P | 1.35 | 420ms | 1.00 |
 
 **Separation**: overlapping enemies are pushed apart with the share split by radius,
 so a Pursuer shoves a basic target rather than the reverse.
@@ -551,13 +598,15 @@ so a Pursuer shoves a basic target rather than the reverse.
 ALIVE  hp > 0, drifting/chasing, markable
   │ takeDamage(): hp -= n, hitFlash, damage number, (mark detonation upstream)
   ▼ hp == 0
-DEAD   active=false IMMEDIATELY, mark cleared, death anim 300ms, kill scored
-  ▼ respawnAt (1200ms)
-REPLACED  old object destroyed, new archetype rolled and spawned
+DEAD   active=false IMMEDIATELY, mark cleared, death anim 300ms, kill scored,
+       director told — stays in the roster, never refilled
+  ▼ the whole wave is dead and the breather has elapsed
+GONE   destroyed by spawnWave() as the next wave's roster is built
 ```
 
-`spawnId` is a generational counter captured by in-flight missiles; a bolt aimed at a
-dead enemy fizzles rather than hitting its replacement.
+`spawnId` is captured by in-flight missiles as a generational guard; a bolt aimed at
+a dead enemy fizzles (its target is inactive) rather than hitting a later wave's
+enemy.
 
 ### Pursuer AI
 
@@ -575,7 +624,7 @@ WINDUP  rooted, telegraph ring contracts, 400ms
 
 | Stat | Value |
 | --- | --- |
-| HP | 60 (basic 24 × 2.5) × difficulty multiplier |
+| HP | 60 (basic 24 × 2.5) × stage HP multiplier |
 | Move speed | 187 px/s (55% of 340) |
 | Reach | 16px + both radii ≈ 56px centre-to-centre |
 | Damage | 10 |
@@ -592,6 +641,13 @@ Spawned on a random arena edge, aimed at the player's position **at spawn**, wit
 jitter. They never re-aim, so every shot is dodgeable by moving. Fractional volley
 size rounds probabilistically. Collision is circle-vs-circle against the player.
 
+No individual enemy fires them — the volleys belong to the **wave being fought**.
+`EnemyProjectileSystem.update()` only spawns while `isWaveActive`; a wave's first
+volley comes one spawn interval after the wave starts. When a wave is cleared, the
+next update — which runs after every damage source in the frame and before the
+collision test — removes every shot in flight and stops scheduling. A cleared wave
+can therefore never damage the player during the breather.
+
 > **i-frame interaction:** the missile is killed unconditionally on overlap, but
 > `Player.takeDamage()` returns 0 within 250ms of the last hit — so during i-frames a
 > projectile is consumed with no damage and no `projectileHitsTaken` increment.
@@ -600,36 +656,29 @@ size rounds probabilistically. Collision is circle-vs-circle against the player.
 
 ## 10. Difficulty
 
-Two independent ramps.
+Difficulty is a property of the **stage**, not of the clock. There is no time ramp:
+the `STAGES` row in play sets everything that scales.
 
-**Enemy pressure** (`DifficultyManager.t`):
+| What | Column | Stage 1 → Stage 10 |
+| --- | --- | --- |
+| Wave rosters | `waves` | basic-only → Pursuer-heavy, mixed waves throughout |
+| Enemy HP | `enemyHpMultiplier` | ×1.00 for 1–3, then +0.05 per stage → ×1.35 |
+| Player base auto cycle | `baseAttackCooldownMs` | 700ms → 420ms |
+| Edge fire | `enemyFire` | 0 → 1 |
 
-```
-start = DIFFICULTY.rampStartSeconds                          = 22s
-end   = ROUND.durationSeconds * rampCompleteAtRoundFraction  = 54s
-t = 0                                            , elapsed <= 22
-t = clamp((elapsed - 22) / 32, 0, 1) ^ 1.8       , otherwise
-level = min(10, 1 + floor(t * 10))
-```
+A stage lasts exactly as long as the player takes to clear its three waves; the next
+one begins only after a Wave 3 clear plus `interStageDelayMs`. Later stages are
+harder because of what they field — never because transitions arrive faster.
 
-Every enemy-projectile parameter is `lerp(start, end, t)`:
+Every enemy-projectile parameter is `lerp(start, end, enemyFire)`:
 
-| Parameter | t=0 | t=1 |
+| Parameter | enemyFire 0 | enemyFire 1 |
 | --- | --- | --- |
 | `spawnIntervalMs` | 2600 | 700 |
 | `speed` | 250 | 520 |
 | `radius` | 10 | 16 |
 | `damage` | 8 | 16 |
 | `volleySize` | 1 | 1.5 |
-
-Because of the 1.8 exponent the HUD stays on "DIFFICULTY 1" until ~31s, and
-difficulty 4 (first Pursuers) lands at ~38.5s.
-
-**Attack speed** uses its own ramp (`AttackSystem.attackSpeedT`, 45s, curve 1.15, no
-flat opening) so the arena can stay calm while your hands speed up.
-
-**Stage countdown**: `secondsUntilNextLevel` inverts the ramp
-(`e = start + (end-start) * t^(1/curve)`) purely for the HUD.
 
 ---
 
@@ -655,8 +704,8 @@ radius, so tunnelling is possible on a badly stuttering frame.
 ## 12. Score, metrics, round flow
 
 **Score**: `1 × damage`, `100 × archetype scoreMultiplier` per kill, `5/second`
-survival (fractional carry). `projectileHitsTaken` is tracked but does not affect
-score. `killsByType` tallies per archetype.
+survival (fractional carry) for as long as the run lasts. `projectileHitsTaken` is
+tracked but does not affect score. `killsByType` tallies per archetype.
 
 **`KitingMetrics`** — four event counters (`attacksStarted`, `attacksFired`,
 `attacksCancelled`, `attacksLanded`) and two per-frame accumulators:
@@ -674,14 +723,18 @@ spawns), so `attacksFired - attacksLanded` overstates misses.
 **Round flow**
 
 ```
-Running ──(difficulty.remaining <= 0)──> Over (survived)
-Running ──(!player.isAlive)───────────> Over (defeated)
-Over ──(restartRound)──> scene.restart() → Running
+Running ──(director.isRunComplete)──> Over (completed)
+Running ──(!player.isAlive)─────────> Over (defeated)
+Over ──(restartRound)──> scene.restart() → Running at Stage 1 Wave 1
 Running <──> Paused  (setPaused; update() returns early, tweens paused)
 ```
 
-`endRound()` freezes the sim, cancels attacks/casts/pending input, and snapshots an
-immutable `RoundResult`. `UIScene.syncOverlay()` notices `getRoundResult() !== null`.
+There is no timer end: a run lasts until death or the final clear. `endRound()`
+freezes the sim, cancels attacks/casts/pending input, and snapshots an immutable
+`RoundResult` — outcome, stage and wave reached, waves cleared / total, run time,
+score, kills by type and the mechanical metrics. `UIScene.syncOverlay()` notices
+`getRoundResult() !== null`. `scene.restart()` rebuilds a fresh `WaveDirector`, so a
+restarted run starts from Stage 1 Wave 1 with nothing carried over.
 
 ---
 
@@ -689,7 +742,8 @@ immutable `RoundResult`. `UIScene.syncOverlay()` notices `getRoundResult() !== n
 
 The hazard: every deadline is an absolute timestamp. If "now" came from the wall
 clock, pausing would let real time run on and every deadline would fire at once on
-resume — windups completing instantly, cooldowns wiped, a volley of projectiles.
+resume — windups completing instantly, cooldowns wiped, a breather skipped, a volley
+of projectiles.
 
 So gameplay reads time from `GameClock`, which only advances on frames the simulation
 runs. `setPaused(true)` makes `update()` return before `clock.advance()` and calls
@@ -700,10 +754,10 @@ Input is gated separately: `InputController` checks `acceptsGameplayInput()` bef
 any pointer event or gameplay key, which is what stops a click on a menu button from
 also issuing a move order underneath. Escape is handled above that gate.
 
-Verified frozen while paused: round timer, difficulty, player movement, attack
-windup, cast progress (held at 0.50 across 2.5 real seconds), all four ability
-cooldowns, W mark duration, Q/W/E bolts and enemy projectiles, Pursuer movement and
-swing, respawn timers, passive duration.
+Verified frozen while paused: run clock, player movement, attack windup, cast
+progress (held at 0.50 across 2.5 real seconds), all four ability cooldowns, W mark
+duration, Q/W/E bolts and enemy projectiles, Pursuer movement and swing, passive
+duration, and a wave breather's remaining time.
 
 ---
 
@@ -721,7 +775,9 @@ authoritative.
 One-shot effects (release burst, cancel tag, cast release flash) are driven by
 polling the owning system's timestamp (`lastReleaseAt`, `lastCancelAt`,
 `lastResolveAt`) against a "last shown" value — not by callbacks. If an effect fails
-to play, nothing about the mechanic changes.
+to play, nothing about the mechanic changes. The stage / wave banners work the same
+way: `UIScene` compares the polled `stage` / `wave` / `wavePhase` with what it last
+saw.
 
 **Cast animation compression.** The charge visuals use
 `t = pow(progress, THEME.cast.anticipationCurve)` (0.55), which front-loads the
@@ -741,9 +797,6 @@ leads or lags the mechanic.
 | Variable | Value | Effect of increasing |
 | --- | --- | --- |
 | `range` | 260 | Attack from further; ring grows to match |
-| `baseCooldownMs` / `minCooldownMs` | 700 / 420 | Slower attack speed at start / cap |
-| `attackSpeedRampSeconds` / `attackSpeedCurve` | 45 / 1.15 | Slower growth / back-loaded |
-| `attackSpeedScaling` | `true` | `false` pins at base |
 | `windupPercent` / `minWindupMs` | 0.25 / 90 | Longer root, harder kiting |
 | `windupMsOverride` | `null` | Fixes windup, breaks proportional scaling |
 | `damage` | 12 | Faster kills |
@@ -753,6 +806,8 @@ leads or lags the mechanic.
 | `attackMoveChasesAcquiredTarget` | `false` | `true` makes A/T drag you around |
 | `rangeFromPlayerEdge` | `false` | `true` = edge-to-edge (+14px effective) |
 | `projectileSpeed` / `projectileRadius` | 1150 / 6 | Damage lands sooner |
+
+The base attack cycle is per stage: `STAGES[n].baseAttackCooldownMs`.
 
 Visual-only: `windupLeanPx` 9, `windupScale` 1.18, `releaseKickPx/Ms` 8/120,
 `chargeRingStartPad/EndPad` 20/3, `releaseRingRadius/Ms` 30/180.
@@ -768,28 +823,33 @@ Visual-only: `windupLeanPx` 9, `windupScale` 1.18, `releaseKickPx/Ms` 8/120,
 
 `PASSIVE`: `maxStacks` 5, `attackSpeedPerStack` 0.10, `durationMs` 6000.
 
+### The run
+
+`RUN`: `maxAliveEnemies` 4, `interWaveDelayMs` 800, `interStageDelayMs` 1200.
+
+`STAGES`: one row per stage — `enemyHpMultiplier`, `baseAttackCooldownMs`,
+`enemyFire`, and `waves` (each a `WaveRoster` such as `{ basic: 2, pursuer: 2 }`).
+Values in §9.
+
+`BANNERS`: `stageMs` 1500, `waveMs` 900.
+
 ### Enemies
 
-`TARGETS`: count 4, radius 18, maxHp 24, respawn 1200ms, deathAnim 300ms,
-hitFeedback 130ms, drift 45 px/s every 1800ms, minSpawnDistance 240, edgeMargin 60.
+`TARGETS`: radius 18, maxHp 24, deathAnim 300ms, hitFeedback 130ms, drift 45 px/s
+every 1800ms, minSpawnDistance 240, edgeMargin 60.
 
 `PURSUER`: `baseHpMultiplier` 2.5, radius 26, `moveSpeedFraction` 0.55,
 `attackRange` 16, `attackDamage` 10, `windupMs` 400, `attackCooldownMs` 1200,
 `scoreMultiplier` 2.25.
 
-`ENEMY_SCALING`: `hpRampStartDifficulty` 4, `hpPerDifficulty` 0.05,
-`maxHpMultiplier` 1.5. `STAGE`: `countdownSeconds` 3, `bannerMs` 1500.
-
-`ENEMY_PROJECTILES` ramps: interval 2600→700, speed 250→520, radius 10→16,
-damage 8→16, volley 1→1.5, `aimJitterDegrees` 3, `cullMargin` 80.
-
-`DIFFICULTY`: `rampStartSeconds` 22, `rampCompleteAtRoundFraction` 0.9,
-`rampCurve` 1.8, `levels` 10.
+`ENEMY_PROJECTILES` ramps (position set by `STAGES[n].enemyFire`): interval
+2600→700, speed 250→520, radius 10→16, damage 8→16, volley 1→1.5,
+`aimJitterDegrees` 3, `cullMargin` 80.
 
 ### Other
 
 `PLAYER`: radius 14, maxHp 100, moveSpeed 340, arriveEpsilon 3,
-hitInvulnerabilityMs 250. `ROUND.durationSeconds` 60.
+hitInvulnerabilityMs 250.
 `SCORE`: 1/damage, 100/kill (× archetype), 5/second.
 `DEBUG`: `attackRangeDisplay` `'contextual'`, `showAttackState`,
 `showCancelFeedback`, `showTargetMarker`, `showDamageNumbers` — all overlay only, the
@@ -805,18 +865,18 @@ action already work.
 movement        step = moveSpeed * dt;  position += normalize(dest - pos) * step
 attack reach    reach = ATTACK.range + enemy.radius + (rangeFromPlayerEdge ? player.radius : 0)
                 inRange ⟺ (dx² + dy²) <= reach²
-attack speed    t   = clamp(elapsed / 45, 0, 1) ^ 1.15
-                cd  = lerp(700, 420, t) / (1 + stacks * 0.10)
+attack speed    cd  = STAGES[stage].baseAttackCooldownMs / (1 + stacks * 0.10)
                 wind= max(90, cd * 0.25)
 cast progress   1 - (endsAt - now) / durationMs          (animation uses pow(·, 0.55))
 cooldown refund readyAt[id] = max(now, readyAt[id] - 750)   for q, w, e
-difficulty      t = elapsed <= 22 ? 0 : clamp((elapsed-22)/32, 0, 1) ^ 1.8
-enemy hp        hp = archetypeBaseHp * min(1.5, 1 + max(0, level-3) * 0.05)
+enemy fire      param = lerp(start, end, STAGES[stage].enemyFire)
+enemy hp        hp = round(archetypeBaseHp * STAGES[stage].enemyHpMultiplier)
+wave clear      no enemy active → intermissionEndsAt = now + (last wave of stage ? 1200 : 800)
 blink dest      d = cursor - player; dest = |d| > range ? player + normalize(d)*range : cursor
                 dest = clamp(dest, arena padding + player radius)
 straight shot   vx,vy = cos/sin(angle) * speed;  dies when travelled >= maxRange
 homing shot     arrives when speed*dt >= |target - pos| - target.radius
-score           Σ damage + Σ (100 × scoreMultiplier) + floor-accumulated(5 × elapsed)
+score           Σ damage + Σ (100 × scoreMultiplier) + floor-accumulated(5 × run time)
 ```
 
 ---
@@ -849,10 +909,21 @@ immediately after the blink.
 `grantPassiveStack()` → `cooldowns.reduce(750, ['q','w','e'])` → the HUD's three kit
 slots all jump down on the next frame; Flash is untouched.
 
+**Wave clear.** the last living enemy takes lethal damage (auto, Q, E bolt or
+detonation) → `onTargetDamaged` → `director.onEnemyKilled` → no enemy active → phase
+`intermission`, `intermissionEndsAt = now + 800` (1200 after Wave 3) → later that same
+frame `enemyProjectiles.update` sees `!isWaveActive` → every hostile shot removed,
+nothing scheduled → the HUD polls `wavePhase` → "WAVE CLEAR" / "STAGE CLEAR" → at the
+deadline `director.update` → `advance()` → `spawnWave()` destroys the dead roster and
+spawns the next authored one → the HUD sees the new wave or stage → "WAVE N" /
+"STAGE N" banner → the first volley follows one spawn interval later. After Stage 10
+Wave 3 the phase becomes `complete` instead, and the frame's end check calls
+`endRound('completed')`.
+
 **Player hit.** Spawn on a random edge → aimed at the player's position at spawn ±3° →
 straight line → overlap with the player → missile killed unconditionally →
 `Player.takeDamage(amount, now)` → 0 within i-frames, else HP drops, camera shake, red
-rim flash → at 0 HP the next frame ends the round.
+rim flash → at 0 HP the next frame ends the run (`defeated`).
 
 ---
 
@@ -861,7 +932,7 @@ rim flash → at 0 HP the next frame ends the round.
 | Mechanic | League | Here |
 | --- | --- | --- |
 | Cancel refund | Strict rules | Total refund; cancel-spam is free (and damage-free) |
-| Attack speed | Stat with a cap | Pure function of round time × passive stacks |
+| Attack speed | Stat with a cap | Per-stage base cycle × passive stacks |
 | Auto projectiles | Dodgeable by some abilities | Perfect homing; only target death stops them |
 | Target acquisition | Acquisition range > attack range, priority rules | Only in-range enemies; nearest-to-cursor or nearest-to-player |
 | Attack-move | Sticks to and chases the acquired target | Drops it when it leaves range (configurable) |
@@ -871,7 +942,7 @@ rim flash → at 0 HP the next frame ends the round.
 | Q | Ezreal: ~0.25s cast, on-hit effects, cooldown refund on hit | 165ms cast, no on-hit, refunds Q/W/E |
 | W | Targets specific unit types, damages on mark application | Marks any `Enemy`, damage is entirely on detonation |
 | E | Blink + bolt, on-hit effects | Blink + bolt, no on-hit |
-| Flash | Multi-minute cooldown | 20s, so it appears in a 60s round |
+| Flash | Multi-minute cooldown | 20s, so it comes up repeatedly during a run |
 | Casting | Spell queueing, buffered casts | Hard ability lockout; move, attack-move and attack orders are buffered |
 | i-frames | Not a League concept | 250ms after any hit |
 
@@ -894,7 +965,7 @@ cancelling uncommitted ones, and cast windows committing their aim at keypress.
    `SKILLSHOT_W.stopsOnFirstHit` are documented but unread — the generalised
    `SkillshotSystem` kills the missile unconditionally on contact. Setting either
    `false` does not produce a piercing shot.
-3. **`GameScene` is ~760 lines** and has become the ability orchestrator by accident:
+3. **`GameScene` is ~800 lines** and has become the ability orchestrator by accident:
    arena drawing, command handling, hit testing, ping effects, cast routing,
    detonation, passive granting, round lifecycle and the HUD snapshot all live there.
 4. **In-flight projectiles freeze on round end.** `update()` returns early when the
@@ -912,12 +983,11 @@ cancelling uncommitted ones, and cast windows committing their aim at keypress.
    Pursuer at radius 26, the ring is exact for basic targets and conservative for
    Pursuers; the per-target reticle is the accurate cue.
 9. **`TARGETS` config is doing double duty** — `hitFeedbackMs`, `deathAnimMs`,
-   `deathShards`, `respawnDelayMs` are read by *all* enemies from a block named for
-   the basic target.
+   `deathShards` are read by *all* enemies from a block named for the basic target.
 10. **`attacksFired` counts releases with no missile** (target died mid-windup).
 11. **i-frames are global**, so a Pursuer swing and a projectile landing together
     means one is silently eaten.
-12. **`HudState` is ~30 fields** — one grab-bag for every HUD region.
+12. **`HudState` is ~35 fields** — one grab-bag for every HUD region.
 13. **Magic numbers remain in visual code** despite `theme.ts`: the 0.22 hit-squash,
     1.6 ghost-bar drain rate, 10px click grace, 0.35 rotation smoothing, reticle arc
     count and 1400 spin divisor.
@@ -944,14 +1014,17 @@ loop, per-ability config + on-hit effect. Add a config block, a `SPECS` entry, a
 `AbilityId`, a keybind, a `CommandHandler` method and an `AbilityBar` slot. Cast
 windows come free via `beginCastOrResolve`.
 
-**More enemies.** One `Enemy` subclass + one `ARCHETYPES` entry + one weight row.
-Nothing else changes.
+**More enemies.** One `Enemy` subclass + one `ARCHETYPES` entry in `WaveDirector` +
+its key in `WaveRoster` + using it in `STAGES`. Nothing else changes.
+
+**More stages or waves.** Edit `STAGES`: add rows, or add/remove entries in a stage's
+`waves`. `validateStages()` rejects empty stages and over-cap waves at startup.
 
 **Configurable keybinds.** Already 90% there: `KEYBINDS` is the only source,
 `InputController` the only reader, every action takes an array.
 
 **Drill types / persistence.** `RoundResult` is a flat serialisable snapshot built in
-one place; `DifficultyManager` and `ScoreSystem` are independent enough to swap per
+one place; the stage table and `ScoreSystem` are independent enough to swap per
 drill.
 
 ---

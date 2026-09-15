@@ -1,10 +1,12 @@
 import Phaser from 'phaser';
-import { ARENA, DEBUG, ROUND, STAGE } from '../../config/balance';
+import { ARENA, BANNERS, DEBUG } from '../../config/balance';
 import { THEME } from '../../config/theme';
 import { AbilityBar } from '../ui/AbilityBar';
 import { PassiveDisplay } from '../ui/PassiveDisplay';
 import { PauseMenu } from '../ui/PauseMenu';
 import type { GameScene } from './GameScene';
+
+type Hud = ReturnType<GameScene['getHudState']>;
 
 /**
  * HUD + end screen. Runs as a parallel scene on top of GameScene and polls it
@@ -15,7 +17,7 @@ export class UIScene extends Phaser.Scene {
 
   private timeText!: Phaser.GameObjects.Text;
   private scoreText!: Phaser.GameObjects.Text;
-  private levelText!: Phaser.GameObjects.Text;
+  private progressText!: Phaser.GameObjects.Text;
   private modeText!: Phaser.GameObjects.Text;
   private debugText!: Phaser.GameObjects.Text;
   private stateText!: Phaser.GameObjects.Text;
@@ -26,10 +28,13 @@ export class UIScene extends Phaser.Scene {
   private passiveDisplay!: PassiveDisplay;
   private pauseMenu!: PauseMenu;
   private stageText!: Phaser.GameObjects.Text;
-  /** Last difficulty level the banner was shown for. Round-scoped: see beginRound(). */
+  /** Last stage / wave the transition banner reacted to. Round-scoped: see beginRound(). */
   private lastStage = 1;
-  /** Round-elapsed ms until which the "STAGE N" banner stays up. Round-scoped. */
-  private stageBannerUntil = 0;
+  private lastWave = 1;
+  /** The transition banner in effect, and the run-time ms it stays up until. Round-scoped. */
+  private bannerText = '';
+  private bannerIsStage = false;
+  private bannerUntil = 0;
   /** The GameScene round (HudState.round) this HUD last polled. */
   private observedRound = 0;
   private hintText!: Phaser.GameObjects.Text;
@@ -59,13 +64,13 @@ export class UIScene extends Phaser.Scene {
     // field frame stay visible underneath them.
     const M = 56;
 
-    // ---- top-left: the round readout, on its own plate -------------------
+    // ---- top-left: run time + score, on its own plate --------------------
     this.panel(M, 40, 320, 50);
     this.timeText = label(M + 16, 51, 24, THEME.ui.text);
     this.scoreText = label(M + 146, 55, 18, THEME.ui.accent);
 
-    // ---- top-centre: difficulty ------------------------------------------
-    this.levelText = label(ARENA.width / 2, 52, 14, THEME.ui.faint).setOrigin(0.5, 0);
+    // ---- top-centre: stage / wave progress -------------------------------
+    this.progressText = label(ARENA.width / 2, 52, 15, THEME.ui.text).setOrigin(0.5, 0);
 
     // ---- top-right: live mechanics panel ---------------------------------
     const dbgX = ARENA.width - M - 244;
@@ -117,7 +122,7 @@ export class UIScene extends Phaser.Scene {
     const slotTop = ARENA.height - THEME.ability.bottomMargin - THEME.ability.slotSize;
     this.passiveDisplay = new PassiveDisplay(this, 5, slotTop - 30);
 
-    // Stage countdown / banner, centred above the play area.
+    // Stage / wave transition banner, centred above the play area.
     this.stageText = label(ARENA.width / 2, 96, 20, THEME.ui.warn)
       .setOrigin(0.5, 0)
       .setVisible(false);
@@ -205,12 +210,12 @@ export class UIScene extends Phaser.Scene {
     title.setName('title');
 
     this.resultText = this.add
-      .text(ARENA.width / 2, 340, '', {
+      .text(ARENA.width / 2, 352, '', {
         fontFamily: THEME.ui.fontFamily,
         fontSize: '17px',
         color: THEME.ui.text,
         align: 'left',
-        lineSpacing: 10,
+        lineSpacing: 8,
       })
       .setOrigin(0.5);
 
@@ -242,21 +247,23 @@ export class UIScene extends Phaser.Scene {
    * round-scoped HUD state is re-initialised here from the new round's own
    * snapshot — the first round goes through this exact path too.
    */
-  private beginRound(hud: ReturnType<GameScene['getHudState']>): void {
+  private beginRound(hud: Hud): void {
     this.observedRound = hud.round;
-    this.lastStage = hud.difficultyLevel;
-    this.stageBannerUntil = 0;
+    this.lastStage = hud.stage;
+    this.lastWave = hud.wave;
+    this.bannerText = '';
+    this.bannerIsStage = false;
+    this.bannerUntil = 0;
   }
 
   override update(): void {
     const hud = this.game_.getHudState();
     if (hud.round !== this.observedRound) this.beginRound(hud);
 
-    this.timeText.setText(hud.timeRemaining.toFixed(1));
-    this.timeText.setColor(hud.timeRemaining <= 10 ? THEME.ui.warn : THEME.ui.text);
+    this.timeText.setText(formatRunTime(hud.runTime));
     this.scoreText.setText(`SCORE  ${hud.score}`);
-    this.levelText.setText(
-      `DIFFICULTY ${hud.difficultyLevel}      ${hud.elapsed.toFixed(0)}s ELAPSED`,
+    this.progressText.setText(
+      `STAGE ${hud.stage} / ${hud.stageCount}      WAVE ${hud.wave} / ${hud.wavesInStage}      ENEMIES ${hud.enemiesRemaining}`,
     );
 
     const hpPct = Phaser.Math.Clamp(hud.hp / hud.maxHp, 0, 1);
@@ -311,32 +318,42 @@ export class UIScene extends Phaser.Scene {
   }
 
   /**
-   * Counts the last few seconds down to the next difficulty step, then flashes
-   * the new stage. Reads elapsed round time from the HUD snapshot, so it
-   * freezes with a pause like everything else.
+   * Stage / wave transition feedback, derived purely from the polled snapshot:
+   *   a new stage begins → big "STAGE N" for BANNERS.stageMs
+   *   a later wave begins → smaller "WAVE N" for BANNERS.waveMs
+   *   breather after a clear → "WAVE CLEAR" / "STAGE CLEAR" until the next spawn
+   * Timed on run time from the HUD snapshot, so it freezes with a pause.
    */
-  private updateStageBanner(hud: ReturnType<GameScene['getHudState']>): void {
-    // A stage just started: show the banner for a moment.
-    if (hud.difficultyLevel !== this.lastStage) {
-      this.lastStage = hud.difficultyLevel;
-      this.stageBannerUntil = hud.elapsed * 1000 + STAGE.bannerMs;
+  private updateStageBanner(hud: Hud): void {
+    const nowMs = hud.runTime * 1000;
+
+    if (hud.stage !== this.lastStage) {
+      this.lastStage = hud.stage;
+      this.lastWave = hud.wave;
+      this.bannerText = `STAGE ${hud.stage}`;
+      this.bannerIsStage = true;
+      this.bannerUntil = nowMs + BANNERS.stageMs;
+    } else if (hud.wave !== this.lastWave) {
+      this.lastWave = hud.wave;
+      this.bannerText = `WAVE ${hud.wave}`;
+      this.bannerIsStage = false;
+      this.bannerUntil = nowMs + BANNERS.waveMs;
     }
 
-    const nowMs = hud.elapsed * 1000;
-    if (nowMs < this.stageBannerUntil) {
+    if (nowMs < this.bannerUntil) {
       this.stageText
         .setVisible(true)
-        .setText(`STAGE ${hud.difficultyLevel}`)
-        .setColor(THEME.ui.accent)
-        .setFontSize(24);
+        .setText(this.bannerText)
+        .setColor(this.bannerIsStage ? THEME.ui.accent : THEME.ui.text)
+        .setFontSize(this.bannerIsStage ? 26 : 18);
       return;
     }
 
-    if (hud.nextStage !== null && hud.secondsUntilNextStage <= STAGE.countdownSeconds) {
+    if (hud.wavePhase === 'intermission') {
       this.stageText
         .setVisible(true)
-        .setText(`STAGE ${hud.nextStage} IN ${Math.ceil(hud.secondsUntilNextStage)}`)
-        .setColor(THEME.ui.warn)
+        .setText(hud.nextTransition === 'stage' ? 'STAGE CLEAR' : 'WAVE CLEAR')
+        .setColor(THEME.ui.good)
         .setFontSize(18);
       return;
     }
@@ -353,17 +370,24 @@ export class UIScene extends Phaser.Scene {
     this.overlay.setVisible(shouldShow);
     if (!result) return;
 
+    const completed = result.outcome === 'completed';
     const accuracy = result.qFired > 0 ? Math.round((result.qHit / result.qFired) * 100) : 0;
     const title = this.overlay.getByName('title') as Phaser.GameObjects.Text;
     title
-      .setText(result.survived ? 'ROUND COMPLETE' : 'DEFEATED')
-      .setColor(result.survived ? THEME.ui.accent : THEME.ui.danger);
+      .setText(completed ? 'RUN COMPLETE' : 'DEFEATED')
+      .setColor(completed ? THEME.ui.accent : THEME.ui.danger);
 
     const row = (label: string, value: string) => `${label.padEnd(24, ' ')}${value}`;
     const secs = (ms: number) => `${(ms / 1000).toFixed(1)}s`;
 
     this.resultText.setText(
       [
+        row(
+          'STAGE REACHED',
+          `${result.stageReached} / ${result.stageCount}   (wave ${result.waveReached} / ${result.wavesInStage})`,
+        ),
+        row('WAVES CLEARED', `${result.wavesCleared} / ${result.wavesTotal}`),
+        row('RUN TIME', formatRunTime(result.runTimeSeconds)),
         row('SCORE', `${result.score}`),
         row(
           'KILLS',
@@ -372,7 +396,6 @@ export class UIScene extends Phaser.Scene {
         row('DAMAGE DEALT', `${result.damageDealt}`),
         row('PROJECTILES HIT BY', `${result.projectileHitsTaken}`),
         row('Q ACCURACY', `${result.qHit}/${result.qFired}  (${accuracy}%)`),
-        row('SURVIVED', `${result.timeSurvived.toFixed(1)}s / ${ROUND.durationSeconds}s`),
         '',
         '--- MECHANICS (raw, not scored yet) ---',
         row('AUTOS STARTED', `${result.attacksStarted}`),
@@ -383,4 +406,12 @@ export class UIScene extends Phaser.Scene {
       ].join('\n'),
     );
   }
+}
+
+/** 65.34 → "1:05.3". Run time is a statistic, not a countdown. */
+export function formatRunTime(seconds: number): string {
+  const tenths = Math.floor(Math.max(0, seconds) * 10);
+  const minutes = Math.floor(tenths / 600);
+  const rest = (tenths - minutes * 600) / 10;
+  return `${minutes}:${rest < 10 ? '0' : ''}${rest.toFixed(1)}`;
 }

@@ -18,10 +18,6 @@ export const ARENA = {
   borderColor: 0x2c3644,
 } as const;
 
-export const ROUND = {
-  durationSeconds: 60,
-} as const;
-
 export const PLAYER = {
   radius: 14,
   color: 0x4ea1ff,
@@ -63,30 +59,9 @@ export const ATTACK = {
    */
   range: 260,
 
-  // --- attack speed, and how it ramps with difficulty -----------------------
-  /**
-   * Attack cycle at the START of the round (windup included).
-   * 700ms == 1.43 attacks/sec.
-   */
-  baseCooldownMs: 700,
-  /**
-   * Attack cycle once the attack-speed ramp is complete.
-   * 420ms == 2.38 attacks/sec. The floor: cooldown never goes below this.
-   */
-  minCooldownMs: 420,
-  /**
-   * Seconds of round time over which the cooldown slides from base to min.
-   * Independent of the enemy-projectile ramp, so you can have a calm opening
-   * with attack speed already climbing (or vice versa).
-   */
-  attackSpeedRampSeconds: 45,
-  /**
-   * Shape of that slide. 1 = linear, >1 = stays slow early then speeds up late,
-   * <1 = quick early gains.
-   */
-  attackSpeedCurve: 1.15,
-  /** Set false to pin attack speed at baseCooldownMs for A/B testing. */
-  attackSpeedScaling: true,
+  // --- attack speed ---------------------------------------------------------
+  // The base attack cycle (windup + recovery, before passive stacks) is set per
+  // stage in STAGES[n].baseAttackCooldownMs: 700ms at Stage 1 → 420ms at Stage 10.
   /**
    * Fraction of the cycle spent rooted in windup before release.
    * League's "attack cast time" as a percentage — THE knob for orbwalk feel.
@@ -276,7 +251,7 @@ export const SKILLSHOT_Q = {
   hitCooldownReductionMs: 750,
   /**
    * Commitment window before the bolt leaves, anchored to the auto-attack
-   * windup (ATTACK.baseCooldownMs * windupPercent = 175ms at round start) so
+   * windup (Stage 1's 700ms cycle × windupPercent = 175ms) so
    * weaving Q between autos feels like the same rhythm. Set 0 for instant.
    */
   castTimeMs: 165,
@@ -376,7 +351,6 @@ export const PASSIVE = {
 } as const;
 
 export const TARGETS = {
-  count: 4,
   radius: 18,
   /**
    * Sized against ATTACK.damage so a target dies in a known number of autos:
@@ -385,8 +359,6 @@ export const TARGETS = {
    */
   maxHp: 24,
   color: 0xff6b6b,
-  /** Delay before a killed target comes back somewhere else. */
-  respawnDelayMs: 1200,
   /** Death animation length (visual only — the kill registers immediately). */
   deathAnimMs: 300,
   /** Shards thrown out on death. 0 disables the burst. */
@@ -410,8 +382,8 @@ export const TARGETS = {
 /**
  * Enemy projectiles: fired from the arena edge at wherever the player was when
  * the shot was created. They never home — every one of them is dodgeable.
- * Each field ramps linearly from `start` to `end` across the round; see
- * DifficultyManager.
+ * They fire only while a wave is being fought. Each field is interpolated from
+ * `start` to `end` by the current stage's `enemyFire` (see STAGES).
  */
 export const ENEMY_PROJECTILES = {
   color: 0xffd166,
@@ -461,55 +433,87 @@ export const PURSUER = {
   hpBarOffsetY: 20,
 } as const;
 
-/**
- * Which archetypes spawn at each difficulty level, as relative weights.
- * Index 0 == difficulty 1. Weights are normalised, so they need not sum to 1.
- * Adding an archetype means adding one row here plus a factory entry.
- */
-export const ENEMY_SPAWN = {
-  weights: {
-    basic:   [1, 1, 1, 0.8, 0.75, 0.65, 0.6, 0.5, 0.5, 0.5],
-    pursuer: [0, 0, 0, 0.2, 0.25, 0.35, 0.4, 0.5, 0.5, 0.5],
-  } as Record<string, number[]>,
+// ============================================================================
+// THE RUN — stages and waves. Every progression knob lives in RUN and STAGES.
+// ============================================================================
+//
+// A run fights STAGES in order. Each stage is a list of waves; each wave is a
+// finite, authored roster. Killed enemies never respawn: the next wave spawns
+// only after every enemy of the current one is dead and the breather elapses,
+// and clearing a stage's last wave moves to the next stage. Clearing the last
+// wave of the last stage completes the run; dying ends it. Elapsed time never
+// advances anything — progression is kills alone (see WaveDirector).
+
+export const RUN = {
+  /** Most enemies a wave may field. Every roster in STAGES is validated against this. */
+  maxAliveEnemies: 4,
+  /** Breather after clearing a wave, before the next wave of the same stage spawns. */
+  interWaveDelayMs: 800,
+  /** Longer breather after a stage's last wave, before the next stage begins. */
+  interStageDelayMs: 1200,
 } as const;
+
+/** How many of each archetype a wave spawns. Omitted archetypes spawn none. */
+export interface WaveRoster {
+  basic?: number;
+  pursuer?: number;
+}
+
+export interface StageDefinition {
+  /** Enemy max HP = archetype base HP × this (basic 24, pursuer 60). */
+  enemyHpMultiplier: number;
+  /**
+   * The player's base auto cycle (windup + recovery) during this stage, before
+   * passive stacks. Higher stage → faster autos; time spent never changes it.
+   */
+  baseAttackCooldownMs: number;
+  /**
+   * Edge-projectile pressure: 0..1 along the ENEMY_PROJECTILES start → end
+   * ramps (spawn interval, speed, size, damage, volley size).
+   */
+  enemyFire: number;
+  /** The stage's waves, fought in order. Add or remove entries freely. */
+  waves: WaveRoster[];
+}
 
 /**
- * Modest HP growth so later stages bite without turning enemies into sponges.
- * D1-3 = 100%, then +5% per level: D4 105%, D5 110%, ...
+ * The stage table. A provisional first balance pass:
+ *   - enemyHpMultiplier: 100% for stages 1-3, then +5% per stage (135% at 10) —
+ *     the same curve the old time-based difficulty levels used.
+ *   - baseAttackCooldownMs: 700ms → 420ms in even steps, the old ramp's endpoints.
+ *   - enemyFire: from the calm opening (0) to full strength (1).
+ *   - waves: Pursuers arrive in Stage 2; later stages lean on them while keeping
+ *     mixed waves, with a single all-Pursuer wave as the finale.
  */
-export const ENEMY_SCALING = {
-  hpRampStartDifficulty: 4,
-  hpPerDifficulty: 0.05,
-  maxHpMultiplier: 1.5,
-} as const;
+export const STAGES: StageDefinition[] = [
+  /* 1 */ { enemyHpMultiplier: 1.0, baseAttackCooldownMs: 700, enemyFire: 0,
+    waves: [{ basic: 3 }, { basic: 3 }, { basic: 4 }] },
+  /* 2 */ { enemyHpMultiplier: 1.0, baseAttackCooldownMs: 669, enemyFire: 0.1,
+    waves: [{ basic: 3 }, { basic: 3, pursuer: 1 }, { basic: 3, pursuer: 1 }] },
+  /* 3 */ { enemyHpMultiplier: 1.0, baseAttackCooldownMs: 638, enemyFire: 0.2,
+    waves: [{ basic: 3, pursuer: 1 }, { basic: 2, pursuer: 2 }, { basic: 2, pursuer: 2 }] },
+  /* 4 */ { enemyHpMultiplier: 1.05, baseAttackCooldownMs: 607, enemyFire: 0.3,
+    waves: [{ basic: 2, pursuer: 1 }, { basic: 2, pursuer: 2 }, { basic: 1, pursuer: 3 }] },
+  /* 5 */ { enemyHpMultiplier: 1.1, baseAttackCooldownMs: 576, enemyFire: 0.4,
+    waves: [{ basic: 3, pursuer: 1 }, { basic: 2, pursuer: 2 }, { basic: 1, pursuer: 3 }] },
+  /* 6 */ { enemyHpMultiplier: 1.15, baseAttackCooldownMs: 544, enemyFire: 0.5,
+    waves: [{ basic: 2, pursuer: 2 }, { basic: 1, pursuer: 3 }, { basic: 2, pursuer: 2 }] },
+  /* 7 */ { enemyHpMultiplier: 1.2, baseAttackCooldownMs: 513, enemyFire: 0.6,
+    waves: [{ basic: 1, pursuer: 2 }, { basic: 1, pursuer: 3 }, { basic: 1, pursuer: 3 }] },
+  /* 8 */ { enemyHpMultiplier: 1.25, baseAttackCooldownMs: 482, enemyFire: 0.7,
+    waves: [{ basic: 2, pursuer: 2 }, { basic: 1, pursuer: 3 }, { basic: 1, pursuer: 3 }] },
+  /* 9 */ { enemyHpMultiplier: 1.3, baseAttackCooldownMs: 451, enemyFire: 0.85,
+    waves: [{ basic: 1, pursuer: 3 }, { basic: 2, pursuer: 2 }, { basic: 1, pursuer: 3 }] },
+  /* 10 */ { enemyHpMultiplier: 1.35, baseAttackCooldownMs: 420, enemyFire: 1,
+    waves: [{ basic: 2, pursuer: 2 }, { basic: 1, pursuer: 3 }, { pursuer: 4 }] },
+];
 
-/** The between-stage countdown / banner. Presentation only. */
-export const STAGE = {
-  /** Start counting down this long before the next difficulty level lands. */
-  countdownSeconds: 3,
-  /** How long the "STAGE N" banner stays up after it changes. */
-  bannerMs: 1500,
-} as const;
-
-export const DIFFICULTY = {
-  /**
-   * Nothing scales for this long: the opening stays sparse so you can work on
-   * attack timing and kiting before the arena gets busy.
-   */
-  rampStartSeconds: 22,
-  /**
-   * The ramp reaches full strength at this fraction of the round, so the last
-   * stretch is a flat-out max-intensity test instead of a curve that only peaks
-   * at the buzzer.
-   */
-  rampCompleteAtRoundFraction: 0.9,
-  /**
-   * Shape of the ramp between those two points. >1 keeps the early ramp gentle
-   * and back-loads the pressure; 1 is linear.
-   */
-  rampCurve: 1.8,
-  /** Displayed difficulty tiers (purely cosmetic, drives the HUD readout). */
-  levels: 10,
+/** Stage / wave transition feedback. Presentation only. */
+export const BANNERS = {
+  /** How long the big "STAGE N" banner stays up when a stage begins. */
+  stageMs: 1500,
+  /** How long the smaller "WAVE N" banner stays up when a later wave begins. */
+  waveMs: 900,
 } as const;
 
 export const SCORE = {

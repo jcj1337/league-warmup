@@ -4,8 +4,15 @@ import { AutoAttackMissile } from '../entities/AutoAttackMissile';
 import type { Player } from '../entities/Player';
 import type { Enemy } from '../entities/Enemy';
 import type { KitingMetrics } from './KitingMetrics';
-import type { DifficultyManager } from './DifficultyManager';
 import type { PassiveSystem } from './PassiveSystem';
+
+/**
+ * Where the base auto cycle comes from. The WaveDirector supplies the current
+ * stage's value, so attack speed scales with stage progress — never with time.
+ */
+export interface AttackPacing {
+  readonly baseAttackCooldownMs: number;
+}
 
 /**
  * idle     — no attack in progress; may start one the moment a target is in range
@@ -43,9 +50,10 @@ interface AttackMoveOrder {
  *   [ WINDUP (rooted) ][ ---- RECOVERY (free to move) ---- ]
  *   ^ attack starts    ^ damage fires        ^ next attack available
  *
- * windup + recovery == the CURRENT cooldown, which shortens as the round goes
- * on (see attackSpeedT). The cooldown starts when the WINDUP starts, so firing
- * does not extend the cycle — that is what makes recovery the orbwalk window.
+ * windup + recovery == the CURRENT cooldown: the stage's base cycle divided by
+ * the passive multiplier (see cooldownMs). The cooldown starts when the WINDUP
+ * starts, so firing does not extend the cycle — that is what makes recovery the
+ * orbwalk window.
  *
  * Movement ownership, which is what keeps orbwalking honest:
  *   - While an order is active (attack target or attack move), this system
@@ -92,7 +100,7 @@ export class AttackSystem {
     private readonly scene: Phaser.Scene,
     private readonly player: Player,
     private readonly metrics: KitingMetrics,
-    private readonly difficulty: DifficultyManager,
+    private readonly pacing: AttackPacing,
     private readonly passive: PassiveSystem,
     private readonly callbacks: AttackCallbacks,
   ) {
@@ -110,28 +118,14 @@ export class AttackSystem {
     return Math.min(1, Math.max(0, 1 - remaining / this.windupMs));
   }
 
-  // ------------------------------------------------- attack speed scaling
+  // ------------------------------------------------------------ attack speed
 
   /**
-   * 0 -> 1 across ATTACK.attackSpeedRampSeconds of round time, shaped by
-   * attackSpeedCurve. Its own ramp, deliberately separate from the enemy
-   * projectile ramp, so the arena can stay calm while your attack speed climbs.
-   */
-  get attackSpeedT(): number {
-    if (!ATTACK.attackSpeedScaling) return 0;
-    const linear = Phaser.Math.Clamp(
-      this.difficulty.elapsed / Math.max(1, ATTACK.attackSpeedRampSeconds),
-      0,
-      1,
-    );
-    return Math.pow(linear, ATTACK.attackSpeedCurve);
-  }
-
-/**
-   * The cooldown the difficulty ramp alone would give, before any buffs.
+   * The base auto cycle before any buffs: the current stage's value from
+   * STAGES, supplied by the WaveDirector. Elapsed time has no influence on it.
    */
   get baseCooldownMs(): number {
-    return Phaser.Math.Linear(ATTACK.baseCooldownMs, ATTACK.minCooldownMs, this.attackSpeedT);
+    return this.pacing.baseAttackCooldownMs;
   }
 
   /**

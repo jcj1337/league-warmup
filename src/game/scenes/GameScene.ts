@@ -1,17 +1,16 @@
 import Phaser from 'phaser';
-import { ARENA, ATTACK, BLINK_E, DEBUG, INDICATORS, PLAYER, ROUND, SKILLSHOT_Q, SKILLSHOT_W } from '../../config/balance';
+import { ARENA, ATTACK, BLINK_E, DEBUG, INDICATORS, PLAYER, SKILLSHOT_Q, SKILLSHOT_W } from '../../config/balance';
 import { THEME } from '../../config/theme';
 import { Player } from '../entities/Player';
 import type { Enemy } from '../entities/Enemy';
 import { AttackSystem } from '../systems/AttackSystem';
 import { SkillshotSystem } from '../systems/SkillshotSystem';
 import { EnemyProjectileSystem } from '../systems/EnemyProjectileSystem';
-import { DifficultyManager } from '../systems/DifficultyManager';
 import { ScoreSystem } from '../systems/ScoreSystem';
 import { KitingMetrics } from '../systems/KitingMetrics';
 import { GameClock } from '../systems/GameClock';
 import { PassiveSystem } from '../systems/PassiveSystem';
-import { EnemyDirector } from '../systems/EnemyDirector';
+import { WaveDirector, type WavePhase } from '../systems/WaveDirector';
 import { AbilityCooldowns } from '../systems/AbilityCooldowns';
 import { BlinkSystem } from '../systems/BlinkSystem';
 import { CastSystem, type CastAbility, type CastPayload } from '../systems/CastSystem';
@@ -20,14 +19,23 @@ import { InputController, type CommandHandler } from '../systems/InputController
 export type RoundState = 'running' | 'over';
 
 export interface RoundResult {
+  /** How the run ended: the player died, or the final stage's last wave was cleared. */
+  outcome: 'completed' | 'defeated';
+  /** The stage and wave in play when the run ended (the one just cleared, on completion). */
+  stageReached: number;
+  stageCount: number;
+  waveReached: number;
+  wavesInStage: number;
+  wavesCleared: number;
+  wavesTotal: number;
+  /** Total run time on the GameClock, in seconds. */
+  runTimeSeconds: number;
   score: number;
   damageDealt: number;
   targetsKilled: number;
   projectileHitsTaken: number;
   qFired: number;
   qHit: number;
-  survived: boolean;
-  timeSurvived: number;
   /** Mechanical counters for the kiting drill — see KitingMetrics. */
   attacksStarted: number;
   attacksFired: number;
@@ -46,7 +54,8 @@ export interface HudState {
    * round, so the persistent UIScene can tell a restart from a continuing round.
    */
   round: number;
-  timeRemaining: number;
+  /** Seconds of run time on the GameClock. A statistic, not a countdown. */
+  runTime: number;
   score: number;
   hp: number;
   maxHp: number;
@@ -57,7 +66,7 @@ export interface HudState {
   castProgress: number;
   attackMovePending: boolean;
   attackState: string;
-  /** Live attack cycle, so the attack-speed ramp is visible while playing. */
+  /** Live attack cycle, so stage attack speed and passive stacks are visible while playing. */
   attacksPerSecond: number;
   attackCooldownMs: number;
   /** Live kiting metrics for the debug panel. */
@@ -67,11 +76,15 @@ export interface HudState {
   attacksLanded: number;
   idleInRangeMs: number;
   wastedRecoveryMs: number;
-  difficultyLevel: number;
-  elapsed: number;
-  /** Countdown to the next stage; Infinity at max level. */
-  secondsUntilNextStage: number;
-  nextStage: number | null;
+  /** Stage / wave progress, straight from the WaveDirector. */
+  stage: number;
+  stageCount: number;
+  wave: number;
+  wavesInStage: number;
+  enemiesRemaining: number;
+  wavePhase: WavePhase;
+  /** During a breather, what comes next; null while fighting or once complete. */
+  nextTransition: 'wave' | 'stage' | null;
   /** Q passive. */
   passiveStacks: number;
   passiveMaxStacks: number;
@@ -80,9 +93,9 @@ export interface HudState {
 
 export class GameScene extends Phaser.Scene {
   private player!: Player;
-  /** The live enemy roster. Owned by EnemyDirector; cached each frame. */
+  /** The current wave's roster. Owned by the WaveDirector; cached each frame. */
   private enemies: Enemy[] = [];
-  private director!: EnemyDirector;
+  private director!: WaveDirector;
   private passive!: PassiveSystem;
   private cooldowns!: AbilityCooldowns;
   private blink!: BlinkSystem;
@@ -93,7 +106,6 @@ export class GameScene extends Phaser.Scene {
   private attacks!: AttackSystem;
   private skillshot!: SkillshotSystem;
   private enemyProjectiles!: EnemyProjectileSystem;
-  private difficulty!: DifficultyManager;
   private scoring!: ScoreSystem;
   private metrics!: KitingMetrics;
   private inputs!: InputController;
@@ -143,7 +155,6 @@ export class GameScene extends Phaser.Scene {
 
     this.player = new Player(this, ARENA.width / 2, ARENA.height / 2);
 
-    this.difficulty = new DifficultyManager();
     this.scoring = new ScoreSystem();
 
     this.metrics = new KitingMetrics();
@@ -151,7 +162,15 @@ export class GameScene extends Phaser.Scene {
     this.cooldowns = new AbilityCooldowns();
     this.lastCastShownAt = -Infinity;
 
-    this.attacks = new AttackSystem(this, this.player, this.metrics, this.difficulty, this.passive, {
+    // The run itself: stage/wave progression and the current wave's enemies.
+    // Built before the systems that read stage tuning from it.
+    this.director = new WaveDirector(this, this.clock, () => ({
+      x: this.player.x,
+      y: this.player.y,
+    }));
+    this.enemies = this.director.enemies;
+
+    this.attacks = new AttackSystem(this, this.player, this.metrics, this.director, this.passive, {
       onDamage: (target, damage, killed) => this.onTargetDamaged(target, damage, killed),
     });
 
@@ -178,21 +197,15 @@ export class GameScene extends Phaser.Scene {
       onBeforeBlink: () => this.attacks.onMoveOrder(),
     });
 
-    this.enemyProjectiles = new EnemyProjectileSystem(this, this.player, this.difficulty, {
+    this.enemyProjectiles = new EnemyProjectileSystem(this, this.player, this.director, {
       onPlayerHit: (damage) => this.onPlayerHit(damage),
     });
 
-    // Cast windows for W and E. The timer here is authoritative; the player's
+    // Cast windows for Q, W and E. The timer here is authoritative; the player's
     // charge animation only reads its progress.
     this.cast = new CastSystem(this.player, {
       onResolve: (ability, payload) => this.resolveCast(ability, payload),
     });
-
-    this.director = new EnemyDirector(this, this.clock, this.difficulty, () => ({
-      x: this.player.x,
-      y: this.player.y,
-    }));
-    this.enemies = this.director.enemies;
 
     this.inputs = new InputController(this, this.commandHandler());
   }
@@ -384,7 +397,7 @@ export class GameScene extends Phaser.Scene {
    *
    * Nothing is rescheduled on resume: `update()` simply stops running, so the
    * GameClock stops advancing and every stored deadline (windup, cooldowns,
-   * respawns, spawn ticks) keeps exactly the same remaining time it had.
+   * wave breathers, spawn ticks) keeps exactly the same remaining time it had.
    * Phaser tweens are decoration only, but they run on wall time, so they are
    * paused alongside to stop pings and damage numbers finishing behind the menu.
    */
@@ -443,7 +456,6 @@ export class GameScene extends Phaser.Scene {
     this.clock.advance(dt * 1000);
     const now = this.clock.now;
 
-    this.difficulty.update(dt);
     this.scoring.tickSurvival(dt);
     this.passive.update(now);
     this.cooldowns.update(now);
@@ -508,7 +520,7 @@ export class GameScene extends Phaser.Scene {
       this.player.playReleaseBurst(this);
     }
 
-    // The director owns the roster: AI, respawns, archetype re-rolls, spacing.
+    // The director owns the run: breather → next wave/stage, enemy AI, spacing.
     this.director.update(dt, now, {
       player: { x: this.player.x, y: this.player.y, radius: this.player.radius },
       damagePlayer: (amount) => this.onPlayerHit(amount),
@@ -519,10 +531,12 @@ export class GameScene extends Phaser.Scene {
     this.blink.update(dt);
     this.enemyProjectiles.update(dt, now);
 
+    // The run ends on death, or once the final stage's last wave is cleared.
+    // There is no timer end.
     if (!this.player.isAlive) {
-      this.endRound(false);
-    } else if (this.difficulty.remaining <= 0) {
-      this.endRound(true);
+      this.endRound('defeated');
+    } else if (this.director.isRunComplete) {
+      this.endRound('completed');
     }
   }
 
@@ -626,7 +640,7 @@ export class GameScene extends Phaser.Scene {
     });
   }
 
-  private endRound(survived: boolean): void {
+  private endRound(outcome: RoundResult['outcome']): void {
     this.state = 'over';
     this.attacks.cancel();
     this.cast.cancel();
@@ -635,14 +649,20 @@ export class GameScene extends Phaser.Scene {
     this.player.stop();
 
     this.result = {
+      outcome,
+      stageReached: this.director.stage,
+      stageCount: this.director.stageCount,
+      waveReached: this.director.wave,
+      wavesInStage: this.director.wavesInStage,
+      wavesCleared: this.director.wavesCleared,
+      wavesTotal: this.director.wavesTotal,
+      runTimeSeconds: this.clock.now / 1000,
       score: Math.round(this.scoring.score),
       damageDealt: Math.round(this.scoring.damageDealt),
       targetsKilled: this.scoring.targetsKilled,
       projectileHitsTaken: this.scoring.projectileHitsTaken,
       qFired: this.skillshot.shotsFired,
       qHit: this.skillshot.shotsHit,
-      survived,
-      timeSurvived: Math.min(ROUND.durationSeconds, this.difficulty.elapsed),
       attacksStarted: this.metrics.attacksStarted,
       attacksFired: this.metrics.attacksFired,
       attacksCancelled: this.metrics.attacksCancelled,
@@ -736,7 +756,7 @@ export class GameScene extends Phaser.Scene {
   getHudState(): HudState {
     return {
       round: this.roundId,
-      timeRemaining: this.difficulty ? this.difficulty.remaining : ROUND.durationSeconds,
+      runTime: this.clock ? this.clock.now / 1000 : 0,
       score: this.scoring ? Math.round(this.scoring.score) : 0,
       hp: this.player ? this.player.hp : PLAYER.maxHp,
       maxHp: PLAYER.maxHp,
@@ -758,12 +778,13 @@ export class GameScene extends Phaser.Scene {
       attacksLanded: this.metrics ? this.metrics.attacksLanded : 0,
       idleInRangeMs: this.metrics ? this.metrics.idleInRangeMs : 0,
       wastedRecoveryMs: this.metrics ? this.metrics.wastedRecoveryMs : 0,
-      difficultyLevel: this.difficulty ? this.difficulty.level : 1,
-      elapsed: this.difficulty ? this.difficulty.elapsed : 0,
-      secondsUntilNextStage: this.difficulty
-        ? this.difficulty.secondsUntilNextLevel
-        : Number.POSITIVE_INFINITY,
-      nextStage: this.difficulty ? this.difficulty.nextLevel : null,
+      stage: this.director ? this.director.stage : 1,
+      stageCount: this.director ? this.director.stageCount : 0,
+      wave: this.director ? this.director.wave : 1,
+      wavesInStage: this.director ? this.director.wavesInStage : 0,
+      enemiesRemaining: this.director ? this.director.enemiesRemaining : 0,
+      wavePhase: this.director ? this.director.phase : 'wave',
+      nextTransition: this.director ? this.director.nextTransition : null,
       passiveStacks: this.passive ? this.passive.stackCount : 0,
       passiveMaxStacks: this.passive ? this.passive.maxStacks : 0,
       passiveFraction: this.passive ? this.passive.remainingFraction : 0,

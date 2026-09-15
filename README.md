@@ -1,9 +1,9 @@
 # Warmup
 
-A browser-based mechanical warm-up trainer for League-style ADC play. One 60-second
-round in a fixed arena, built to drill four things at once: click-to-move
-positioning, kiting/orbwalking, dodging non-homing projectiles, and aiming an
-Ezreal-flavoured ability kit.
+A browser-based mechanical warm-up trainer for League-style ADC play. A run is a
+gauntlet of 10 stages, each made of 3 authored waves of enemies, built to drill four
+things at once: click-to-move positioning, kiting/orbwalking, dodging non-homing
+projectiles, and aiming an Ezreal-flavoured ability kit.
 
 Gray-box by design: every visual is procedural Phaser geometry. No art, no audio,
 no backend, no accounts.
@@ -43,22 +43,54 @@ report). Without Edge, run `npx playwright install chromium` and set `PW_CHANNEL
 Keys live in `KEYBINDS` in [balance.ts](src/config/balance.ts); `InputController` is
 the only thing that reads them.
 
-## The round
+## The run
 
-60 seconds. Four enemies are alive at any time; killing one starts a respawn timer
-and its replacement's archetype is re-rolled against the current difficulty. The
-round ends on the timer (survived) or at 0 HP (defeated), then the end screen shows
-score, kills by type, Q accuracy and the raw mechanical metrics. `R` restarts.
+A run fights **10 stages of 3 waves** in a fixed arena. Each wave spawns a finite,
+authored group of up to four enemies, each in its own spot. Killed enemies stay dead —
+nothing respawns mid-wave, and a three-enemy wave really does leave the fourth spot
+empty. When the last enemy of a wave dies, the arena clears (hostile shots still in the
+air fizzle), a short breather runs — **800ms** between waves, **1200ms** between
+stages — and the next wave spawns. Clearing Wave 3 moves you to Wave 1 of the next
+stage. You stay in control during the breather.
 
-Two independent difficulty ramps run during the round:
+Progression comes only from clearing enemies: elapsed time never advances a wave or a
+stage. A strong player reaches the hard encounters sooner; a struggling player keeps
+practising the easier ones for longer.
 
-- **Enemy pressure** — flat for the first 22s, then curves up to full strength at
-  54s. Drives projectile spawn rate, speed, size, damage and volley size, plus
-  enemy HP and which archetypes spawn.
-- **Your attack speed** — climbs from the first second toward its cap at 45s.
+The run ends when you **die**, or when you clear **Stage 10 Wave 3** (run complete).
+The end screen shows the outcome, the stage and wave reached, waves cleared, run time,
+score, kills by type, Q accuracy and the raw mechanical metrics. `R` restarts at
+Stage 1 Wave 1.
 
-A **stage countdown** ("STAGE 4 IN 3…") appears before each difficulty step, then a
-brief "STAGE N" banner.
+Later stages are harder, not faster. Each stage row sets:
+
+- **Wave rosters** — Stage 1 is basic targets only; Pursuers join in Stage 2 and take a
+  growing share of later waves, with mixed waves throughout.
+- **Enemy HP** — 100% for Stages 1–3, then +5% per stage (135% at Stage 10).
+- **Enemy fire** — edge projectiles go from the calm opening to full strength at Stage 10.
+- **Your base attack speed** — the auto cycle shortens from 700ms (Stage 1) to 420ms
+  (Stage 10). Time spent in a stage never speeds it up.
+
+| Stage | Wave 1 | Wave 2 | Wave 3 | Enemy HP | Base auto cycle |
+| --- | --- | --- | --- | --- | --- |
+| 1 | 3 basic | 3 basic | 4 basic | 100% | 700ms |
+| 2 | 3 basic | 3 basic + 1 pursuer | 3 basic + 1 pursuer | 100% | 669ms |
+| 3 | 3 basic + 1 pursuer | 2 basic + 2 pursuers | 2 basic + 2 pursuers | 100% | 638ms |
+| 4 | 2 basic + 1 pursuer | 2 basic + 2 pursuers | 1 basic + 3 pursuers | 105% | 607ms |
+| 5 | 3 basic + 1 pursuer | 2 basic + 2 pursuers | 1 basic + 3 pursuers | 110% | 576ms |
+| 6 | 2 basic + 2 pursuers | 1 basic + 3 pursuers | 2 basic + 2 pursuers | 115% | 544ms |
+| 7 | 1 basic + 2 pursuers | 1 basic + 3 pursuers | 1 basic + 3 pursuers | 120% | 513ms |
+| 8 | 2 basic + 2 pursuers | 1 basic + 3 pursuers | 1 basic + 3 pursuers | 125% | 482ms |
+| 9 | 1 basic + 3 pursuers | 2 basic + 2 pursuers | 1 basic + 3 pursuers | 130% | 451ms |
+| 10 | 2 basic + 2 pursuers | 1 basic + 3 pursuers | 4 pursuers | 135% | 420ms |
+
+All of it is tuned in one place: `RUN` (enemy cap, breathers) and `STAGES` (per-stage
+waves, HP, attack speed, enemy fire) in [balance.ts](src/config/balance.ts). Add or
+remove waves in a stage by editing its `waves` list.
+
+The HUD shows `STAGE 4 / 10   WAVE 2 / 3   ENEMIES 2` along the top and the run time on
+the left. A large "STAGE N" banner marks each new stage, a smaller "WAVE N" each later
+wave, and "WAVE CLEAR" / "STAGE CLEAR" fills the breather.
 
 ## The kit
 
@@ -70,15 +102,17 @@ brief "STAGE N" banner.
 | E | 210ms | 8000ms | 364 blink / 455 bolt acquisition | 1050 px/s bolt | 38 |
 | F | instant | 20000ms | 325 | — | — |
 
-\* the auto windup and cooldown shrink as attack speed ramps and as the passive stacks.
+\* the auto cooldown is set by the current stage (700ms at Stage 1, 420ms at Stage 10);
+the windup is a quarter of it, and both shrink further as the passive stacks.
 
 **Cast windows.** Q/W/E commit for a short window anchored to the auto windup
 (auto 175 ≈ Q 165 < W 185 < E 210). The aim (Q/W) or destination (E) is frozen at
 keypress, so moving the mouse mid-cast cannot re-aim the spell. The player is rooted
 for the window and other ability inputs are ignored. Move, attack-move and attack orders
 (right- or left-clicking an enemy) are **buffered** — the latest one wins — and replay the
-instant the cast resolves, so no auto starts mid-cast. `S` discards a buffered order. Cooldowns start at cast
-*start*, so the window never extends them. Flash stays instant, deliberately.
+instant the cast resolves, so no auto starts mid-cast. `S` discards a buffered order.
+Cooldowns start at cast *start*, so the window never extends them. Flash stays instant,
+deliberately.
 
 **Passive.** Any landed ability hit — Q, the W mark landing, or the E bolt — grants a
 stack (max 5, +10% attack speed each) and refreshes a shared 6s timer. All stacks
@@ -86,7 +120,7 @@ expire together. A W *detonation* grants none (the stack came when the mark land
 and Flash never does.
 
 ```
-cooldownMs = rampCooldown / (1 + stacks * 0.10)
+cooldownMs = stageBaseCooldown / (1 + stacks * 0.10)
 ```
 
 **Cooldown refund.** A landed Q takes 750ms off the *remaining* cooldown of Q, W and
@@ -127,16 +161,15 @@ Orbwalk loop: `T` (or `A` + click) → auto fires → right-click away → repea
 | Basic target | compact red hexagon | 24 (2 autos) | drifts slowly, never attacks |
 | Pursuer | large orange arrowhead | 60 (2.5×) | walks you down at 55% of your speed, melee swing with a 400ms telegraph |
 
-Pursuers start appearing at difficulty 4 (~38s in) and grow to a 50% share by
-difficulty 8. Enemy HP scales +5% per difficulty level after D3, capped at ×1.5.
-A Pursuer's swing only lands if you are still in reach when it resolves — walking or
-blinking out during the telegraph makes it miss.
+HP is multiplied by the current stage's enemy HP value. Pursuers first appear in
+Stage 2 Wave 2. A Pursuer's swing only lands if you are still in reach when it
+resolves — walking or blinking out during the telegraph makes it miss.
 
 ## Pause & settings
 
 `Esc` opens a centred pause menu. The whole simulation freezes: movement, attack
-timers, cast windows, cooldowns, mark durations, projectiles, respawns, difficulty
-and the round clock. Nothing fast-forwards on resume.
+timers, cast windows, cooldowns, mark durations, projectiles, wave breathers and the run
+clock. Nothing fast-forwards on resume.
 
 The menu has Resume, Restart Round, and three settings that write straight into the
 `DEBUG` config: **Attack Range Indicator** (contextual / always / off), **Damage
@@ -169,14 +202,14 @@ briefly after `T`.
 
 ## Where things live
 
-- `src/config/balance.ts` — gameplay tuning: ranges, timings, damage, spawn rates, keybinds, debug flags.
+- `src/config/balance.ts` — gameplay tuning: the run (`RUN`, `STAGES`), ranges, timings, damage, keybinds, debug flags.
 - `src/config/theme.ts` — **the look**: palette, unit/projectile/arena/HUD/cast styling.
 - `src/game/scenes/GameScene.ts` — arena, input wiring, per-frame orchestration, round lifecycle.
 - `src/game/scenes/UIScene.ts` — HUD, ability bar, pause menu, end screen (polls GameScene).
 - `src/game/entities/` — `Player`, `Enemy` (abstract base), `Target`, `Pursuer`, `Projectile`, `AutoAttackMissile`.
 - `src/game/systems/` — `GameClock`, `InputController`, `AttackSystem`, `CastSystem`,
   `AbilityCooldowns`, `SkillshotSystem` (Q+W), `BlinkSystem` (E+Flash), `PassiveSystem`,
-  `EnemyDirector`, `EnemyProjectileSystem`, `DifficultyManager`, `ScoreSystem`, `KitingMetrics`.
+  `WaveDirector` (stages, waves, breathers), `EnemyProjectileSystem`, `ScoreSystem`, `KitingMetrics`.
 - `src/game/ui/` — `AbilityBar`, `PassiveDisplay`, `PauseMenu`.
 
 See [TECHNICAL_REPORT.md](TECHNICAL_REPORT.md) for how the systems actually work.
