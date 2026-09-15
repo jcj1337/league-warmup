@@ -7,8 +7,6 @@ test('waves: stage/wave progression, variable waves per stage, finite rosters, b
   const cfg = await page.evaluate(() => ({
     run: window.__balance.RUN,
     stages: window.__balance.STAGES,
-    basicHp: window.__balance.TARGETS.maxHp,
-    pursuerHp: window.__balance.TARGETS.maxHp * window.__balance.PURSUER.baseHpMultiplier,
   }));
   // Every count below comes from the stage table — nothing assumes a fixed number of waves.
   const waveCounts: number[] = cfg.stages.map((s) => s.waves.length);
@@ -87,8 +85,8 @@ test('waves: stage/wave progression, variable waves per stage, finite rosters, b
   }, [stage, wave]);
 
   /**
-   * Kill living enemies through the real kill path — Enemy.takeDamage() and then
-   * the scene's damage funnel, which scores the kill and reports it to the
+   * Kill living enemies through the real kill path — Enemy.takeHit() and then
+   * the scene's hit funnel, which scores the kill and reports it to the
    * director, exactly as an auto, Q or E bolt does. Optionally put a couple of
    * hostile volleys in the air first. `count` limits how many die.
    */
@@ -100,8 +98,7 @@ test('waves: stage/wave progression, variable waves per stage, finite rosters, b
     let killed = 0;
     for (const e of g.director.enemies) {
       if (!e.active || killed >= count) continue;
-      const damage = e.hp;
-      g.onTargetDamaged(e, damage, e.takeDamage(damage));
+      while (e.active) g.onTargetHit(e, e.takeHit());
       killed++;
     }
     const hud = g.getHudState();
@@ -354,7 +351,7 @@ test('waves: stage/wave progression, variable waves per stage, finite rosters, b
     }
     return out;
   });
-  const hpOf = (type, s) => Math.round((type === 'basic' ? cfg.basicHp : cfg.pursuerHp) * cfg.stages[s].enemyHpMultiplier);
+  const pipsOf = (type, s) => cfg.stages[s].enemyPips[type];
   const badRoster = table.find((t) => !matches(t.roster, cfg.stages[t.s].waves[t.w]) || t.stage !== t.s + 1 || t.wave !== t.w + 1 || t.phase !== 'wave');
   table.length === wavesTotal && !badRoster
     ? pass(`all ${table.length} authored waves spawn exactly their rosters`)
@@ -370,17 +367,17 @@ test('waves: stage/wave progression, variable waves per stage, finite rosters, b
   !overlapping
     ? pass('every enemy in every wave spawns in its own spot')
     : fail(`overlapping spawn in stage ${overlapping?.s + 1} wave ${overlapping?.w + 1}`);
-  const badHp = table.find((t) => t.roster.some((e) => e.maxHp !== hpOf(e.type, t.s)));
-  !badHp
-    ? pass('enemy HP = archetype base × the stage HP multiplier in every wave')
-    : fail(`HP mismatch: ${JSON.stringify(badHp)}`);
-  const mults = cfg.stages.map((s) => s.enemyHpMultiplier);
+  const badPips = table.find((t) => t.roster.some((e) => e.maxHp !== pipsOf(e.type, t.s)));
+  !badPips
+    ? pass("every enemy in every wave spawns with its stage's enemyPips")
+    : fail(`pip mismatch: ${JSON.stringify(badPips)}`);
+  const pips = cfg.stages.map((s) => s.enemyPips.basic);
   const cds = cfg.stages.map((s) => s.baseAttackCooldownMs);
-  mults.every((m, i) => i === 0 || m >= mults[i - 1]) && mults[mults.length - 1] > mults[0]
+  pips.every((p, i) => i === 0 || p >= pips[i - 1]) && pips[pips.length - 1] > pips[0]
     && cds.every((c, i) => i === 0 || c < cds[i - 1])
     && table.every((t) => t.baseCd === cds[t.s])
-    ? pass(`later stages: tougher enemies (×${mults[0]} → ×${mults[mults.length - 1]}) and faster base autos (${cds[0]} → ${cds[cds.length - 1]}ms)`)
-    : fail(`stage scaling: hp ${JSON.stringify(mults)}, base autos ${JSON.stringify(cds)}`);
+    ? pass(`later stages: tougher enemies (basic ${pips[0]} → ${pips[pips.length - 1]} pips) and faster base autos (${cds[0]} → ${cds[cds.length - 1]}ms)`)
+    : fail(`stage scaling: basic pips ${JSON.stringify(pips)}, base autos ${JSON.stringify(cds)}`);
 
   // === 8. Clearing the final stage's last wave completes the run ==============
   section("8. Clearing the final stage's last wave completes the run");

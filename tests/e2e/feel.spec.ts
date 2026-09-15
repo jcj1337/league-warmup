@@ -10,17 +10,18 @@ test('feel: windup animation timing, release/impact, cancel, kill feedback + no 
     s.enemyProjectiles.nextSpawnAt = Number.POSITIVE_INFINITY;
     s.player.hp = 100;
   });
-  const place = (spots) => page.evaluate((spots) => {
+  /** `pips` overrides the spawned health so a target survives the hits a section needs. */
+  const place = (spots, pips?: number) => page.evaluate(({ spots, pips }) => {
     const s = window.__warmup.scene.getScene('GameScene');
     s.player.x = 640; s.player.y = 360; s.player.stop();
     s.attacks.cancel(); s.attacks.state = 'idle'; s.attacks.clearMissiles();
     s.enemies.forEach((t, i) => {
       if (i < spots.length) {
-        t.x = spots[i].x; t.y = spots[i].y; t.hp = t.maxHp; t.active = true; t.__tag = i + 1;
+        t.x = spots[i].x; t.y = spots[i].y; t.hp = pips ?? t.maxHp; t.active = true; t.__tag = i + 1;
       } else { t.active = false; t.respawnAt = Number.POSITIVE_INFINITY; }
       t.wanderX = t.x; t.wanderY = t.y; t.nextWanderAt = Number.POSITIVE_INFINITY;
     });
-  }, spots);
+  }, { spots, pips });
 
   const G = () => page.evaluate(() => {
     const s = window.__warmup.scene.getScene('GameScene');
@@ -49,19 +50,17 @@ test('feel: windup animation timing, release/impact, cancel, kill feedback + no 
   const cfg = await page.evaluate(() => ({
     windupMs: window.__warmup.scene.getScene('GameScene').attacks.windupMs,
     projSpeed: window.__balance.ATTACK.projectileSpeed,
-    dmg: window.__balance.ATTACK.damage,
-    targetHp: window.__balance.TARGETS.maxHp,
+    stage1Pips: window.__balance.STAGES[0].enemyPips.basic,
     spawnStart: window.__balance.ENEMY_PROJECTILES.spawnIntervalMs.start,
   }));
-  const autosToKill = Math.ceil(cfg.targetHp / cfg.dmg);
-  autosToKill >= 2 && autosToKill <= 3
-    ? pass(`target dies in ${autosToKill} autos (${cfg.targetHp} hp / ${cfg.dmg} dmg)`)
-    : fail(`target takes ${autosToKill} autos (want 2-3)`);
+  cfg.stage1Pips === 1
+    ? pass('Stage 1 basic targets have 1 pip — one auto kills')
+    : fail(`Stage 1 basic pips ${cfg.stage1Pips}`);
 
   // === 1. Windup animation tracks the real windup timing ======================
   section('1. Windup animation tracks the real windup timing');
   await calm();
-  await place([{ x: 800, y: 360 }]);
+  await place([{ x: 800, y: 360 }], 99);
   await page.waitForTimeout(50);
   await rclick(800, 360);
 
@@ -75,8 +74,9 @@ test('feel: windup animation timing, release/impact, cancel, kill feedback + no 
         t: performance.now() - t0,
         state: s.attacks.state,
         prog: s.attacks.windupProgress,
-        lean: Math.hypot(s.player.body.x - s.player.x, s.player.body.y - s.player.y),
-        scale: s.player.body.scaleX,
+        // Visual-only offset of the sprite from the authoritative position.
+        lean: Math.hypot(s.player.view.offsetX, s.player.view.offsetY),
+        pose: s.player.view.pose,
         missiles: s.attacks.missilesInFlight,
       });
       if (performance.now() - t0 < 900) requestAnimationFrame(tick); else res(out);
@@ -104,10 +104,10 @@ test('feel: windup animation timing, release/impact, cancel, kill feedback + no 
   const early = windupFrames.slice(0, 2);
   const late = windupFrames.slice(-2);
   const leanGrows = late.length && early.length && late[0].lean > early[0].lean + 2;
-  const scaleGrows = late.length && late[0].scale > 1.05;
-  leanGrows && scaleGrows
-    ? pass(`player leans + stretches through the windup (lean ${early[0].lean.toFixed(1)} -> ${late[0].lean.toFixed(1)}px, scale -> ${late[0].scale.toFixed(2)})`)
-    : fail(`windup animation flat: lean ${early[0]?.lean} -> ${late[0]?.lean}, scale ${late[0]?.scale}`);
+  const windupPose = windupFrames.length > 0 && windupFrames.every((f) => f.pose === 'windup');
+  leanGrows && windupPose
+    ? pass(`player leans into the windup in its windup pose (lean ${early[0].lean.toFixed(1)} -> ${late[0].lean.toFixed(1)}px)`)
+    : fail(`windup animation flat: lean ${early[0]?.lean} -> ${late[0]?.lean}, poses ${JSON.stringify([...new Set(windupFrames.map((f) => f.pose))])}`);
 
   const progressTracks = windupFrames.every((f, i, arr) => i === 0 || f.prog >= arr[i - 1].prog - 0.02);
   progressTracks ? pass('windup progress advances monotonically with real time')
@@ -124,7 +124,7 @@ test('feel: windup animation timing, release/impact, cancel, kill feedback + no 
   // === 3. Move immediately after release; missile still lands =================
   section('3. Move immediately after release; missile still lands');
   await calm();
-  await place([{ x: 880, y: 360 }]);
+  await place([{ x: 880, y: 360 }], 2);
   await page.waitForTimeout(50);
   await rclick(880, 360);
   // Wait for the missile to exist (release), then instantly kite away.
@@ -137,12 +137,13 @@ test('feel: windup animation timing, release/impact, cancel, kill feedback + no 
   afterMove.missiles >= 1 ? pass('missile survives an immediate move order') : fail('missile vanished on move');
   settled.px < atRelease.px - 60 ? pass('player moved away while the missile flew') : fail('player did not move after release');
   settled.landed > atRelease.landed ? pass(`missile landed while moving (landed ${settled.landed})`) : fail('missile never landed');
-  (await tagged(1)).hp < cfg.targetHp ? pass('target took damage from the in-flight missile') : fail('no damage from missile');
+  const afterAuto = (await tagged(1)).hp;
+  afterAuto === 1 ? pass('the in-flight auto removed exactly 1 pip (2 -> 1)') : fail(`auto left ${afterAuto} pips (expected 1)`);
 
-  // === 4. Cancelled auto: no missile, no damage, metric increments ============
-  section('4. Cancelled auto: no missile, no damage, metric increments');
+  // === 4. Cancelled auto: no missile, no pip lost, metric increments ==========
+  section('4. Cancelled auto: no missile, no pip lost, metric increments');
   await calm();
-  await place([{ x: 800, y: 360 }]);
+  await place([{ x: 800, y: 360 }], 2);
   await page.waitForTimeout(50);
   const beforeCancel = await G();
   await rclick(800, 360);
@@ -151,7 +152,7 @@ test('feel: windup animation timing, release/impact, cancel, kill feedback + no 
   await page.waitForTimeout(400);
   const afterCancel = await G();
   afterCancel.missiles === 0 ? pass('cancelled windup spawns no missile') : fail(`missiles after cancel: ${afterCancel.missiles}`);
-  (await tagged(1)).hp === cfg.targetHp ? pass('cancelled windup deals no damage') : fail('damage dealt after cancel');
+  (await tagged(1)).hp === 2 ? pass('cancelled windup removes no pip') : fail('pip lost after cancel');
   afterCancel.cancelled > beforeCancel.cancelled ? pass(`cancel metric incremented (${afterCancel.cancelled})`) : fail('cancel metric flat');
   afterCancel.windupProgress === 0 ? pass('windup visual resets on cancel') : fail('windup progress stuck after cancel');
 
@@ -170,18 +171,18 @@ test('feel: windup animation timing, release/impact, cancel, kill feedback + no 
     return s.enemies.find((t) => t.__tag === 1)?.active === false;
   }, null, { timeout: 6000 });
   const dead = await tagged(1);
-  !dead.active ? pass(`target died to autos (${cfg.targetHp}/${cfg.dmg} = ${autosToKill} hits)`) : fail(`target still alive, hp ${dead.hp}`);
+  !dead.active ? pass(`target died to autos (${cfg.stage1Pips} pip = ${cfg.stage1Pips} hit)`) : fail(`target still alive, ${dead.hp} pips`);
   (await G()).score > scoreBefore ? pass('kill awarded score') : fail('no score for the kill');
 
   // Death animation.
-  await page.waitForTimeout(60);
+  await page.waitForTimeout(120);
   const midDeath = await page.evaluate(() => {
     const s = window.__warmup.scene.getScene('GameScene');
     const t = s.enemies.find((t) => t.__tag === 1);
-    return { visible: t.body.visible, alpha: t.body.alpha, scale: t.body.scaleX };
+    return { visible: t.view.sprite.visible, alpha: t.view.sprite.alpha, scale: t.view.sprite.scaleX, dying: t.view.dying };
   });
-  midDeath.visible && midDeath.alpha < 1 && midDeath.scale < 1
-    ? pass(`death animates (alpha ${midDeath.alpha.toFixed(2)}, scale ${midDeath.scale.toFixed(2)})`)
+  midDeath.visible && midDeath.dying && midDeath.alpha < 1
+    ? pass(`death pops and fades (alpha ${midDeath.alpha.toFixed(2)}, scale ${midDeath.scale.toFixed(2)})`)
     : warn(`death anim sample: ${JSON.stringify(midDeath)} (may have finished)`);
 
   // Waves are finite: a kill is never refilled while the wave is still being

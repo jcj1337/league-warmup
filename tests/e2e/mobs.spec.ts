@@ -1,7 +1,7 @@
 import { test } from '@playwright/test';
 import { startSuite } from './support/harness';
 
-test('mobs: passive stacks, Q cooldown refund, Pursuer AI, stage HP scaling + composition, pause', async ({ page }, testInfo) => {
+test('mobs: passive stacks, Q cooldown refund, Pursuer AI, stage pips + segmented bars, composition, pause', async ({ page }, testInfo) => {
   const { pass, fail, section, finish } = await startSuite(page, testInfo, 400);
 
   const G = () => page.evaluate(() => {
@@ -17,7 +17,6 @@ test('mobs: passive stacks, Q cooldown refund, Pursuer AI, stage HP scaling + co
       qCd: g.skillshot.cooldownRemainingMs,
       qFired: g.skillshot.shotsFired, qHit: g.skillshot.shotsHit,
       stage: hud.stage,
-      hpMult: g.director.hpMultiplier,
       enemies: g.director.enemies.map((e) => ({ type: e.archetype, hp: e.hp, maxHp: e.maxHp, x: e.x, y: e.y, active: e.active, r: e.radius })),
       px: g.player.x, py: g.player.y, playerHp: g.player.hp,
       paused: g.isPaused,
@@ -52,9 +51,18 @@ test('mobs: passive stacks, Q cooldown refund, Pursuer AI, stage HP scaling + co
     qRefund: window.__balance.SKILLSHOT_Q.hitCooldownReductionMs,
     passive: window.__balance.PASSIVE,
     pursuer: window.__balance.PURSUER,
-    basicHp: window.__balance.TARGETS.maxHp,
     playerSpeed: window.__balance.PLAYER.moveSpeed,
     stages: window.__balance.STAGES,
+    obsolete: {
+      targetsMaxHp: 'maxHp' in window.__balance.TARGETS,
+      pursuerHpMult: 'baseHpMultiplier' in window.__balance.PURSUER,
+      autoDamage: 'damage' in window.__balance.ATTACK,
+      qDamage: 'damage' in window.__balance.SKILLSHOT_Q,
+      wDetonation: 'detonationDamage' in window.__balance.SKILLSHOT_W,
+      eDamage: 'damage' in window.__balance.BLINK_E,
+      pointsPerDamage: 'pointsPerDamage' in window.__balance.SCORE,
+      stageHpMult: window.__balance.STAGES.some((s) => 'enemyHpMultiplier' in s),
+    },
   }));
 
   // === Config sanity =========================================================
@@ -199,10 +207,10 @@ test('mobs: passive stacks, Q cooldown refund, Pursuer AI, stage HP scaling + co
   section('PART D/E: Pursuer');
   const spawned = await placeOne('pursuer', 1100, 360);
   spawned.type === 'pursuer' ? pass('pursuer archetype spawns') : fail(`spawned ${spawned.type}`);
-  const expectedHp = Math.round(cfg.basicHp * cfg.pursuer.baseHpMultiplier * (await G()).hpMult);
-  spawned.maxHp === expectedHp
-    ? pass(`pursuer HP ${spawned.maxHp} = basic ${cfg.basicHp} x ${cfg.pursuer.baseHpMultiplier} (x${(await G()).hpMult} stage scaling)`)
-    : fail(`pursuer HP ${spawned.maxHp}, expected ${expectedHp}`);
+  const stagePips = cfg.stages[(await G()).stage - 1].enemyPips;
+  spawned.maxHp === stagePips.pursuer
+    ? pass(`pursuer spawns with ${spawned.maxHp} pips (Stage ${(await G()).stage} table)`)
+    : fail(`pursuer pips ${spawned.maxHp}, expected ${stagePips.pursuer}`);
   spawned.r > 18 ? pass(`pursuer is visually larger (r${spawned.r} vs basic r18)`) : fail(`pursuer radius ${spawned.r}`);
 
   // It chases.
@@ -250,7 +258,7 @@ test('mobs: passive stacks, Q cooldown refund, Pursuer AI, stage HP scaling + co
     const e = g.director.enemies[0];
     const t0 = performance.now();
     const tick = () => {
-      if (e.state === 'windup' && e.windupRing.visible) res(true);
+      if (e.state === 'windup' && e.view.telegraph.visible) res(true);
       else if (performance.now() - t0 > 2500) res(false);
       else requestAnimationFrame(tick);
     };
@@ -266,7 +274,7 @@ test('mobs: passive stacks, Q cooldown refund, Pursuer AI, stage HP scaling + co
   const before = (await G()).enemies[0].hp;
   await page.mouse.click(800, 360, { button: 'right' });   // right-click a pursuer
   await page.waitForTimeout(1400);
-  (await G()).enemies[0].hp < before ? pass('right-click auto-attacks the pursuer') : fail('autos did not damage the pursuer');
+  (await G()).enemies[0].hp < before ? pass('right-click auto-attacks the pursuer') : fail('autos did not hit the pursuer');
 
   // T attack-move onto it.
   const beforeT = (await G()).enemies[0].hp;
@@ -275,7 +283,7 @@ test('mobs: passive stacks, Q cooldown refund, Pursuer AI, stage HP scaling + co
   await page.waitForTimeout(1400);
   (await G()).enemies[0].hp < beforeT ? pass('T attack-move engages the pursuer') : fail('T did not engage the pursuer');
 
-  // Q it -> damage AND a passive stack.
+  // Q it -> a pip AND a passive stack.
   await page.evaluate(() => {
     const g = window.__warmup.scene.getScene('GameScene');
     g.cooldowns.reduce(999999, ['q']); g.passive.reset();
@@ -287,7 +295,7 @@ test('mobs: passive stacks, Q cooldown refund, Pursuer AI, stage HP scaling + co
   await page.keyboard.press('q');
   await page.waitForTimeout(800);
   const afterQ = await G();
-  afterQ.enemies[0].hp < beforeQ ? pass('Q damages the pursuer') : fail('Q did not damage the pursuer');
+  afterQ.enemies[0].hp < beforeQ ? pass('Q hits the pursuer') : fail('Q did not hit the pursuer');
   afterQ.stacks === 1 ? pass('Q hitting a pursuer grants a passive stack') : fail(`stacks after pursuer Q: ${afterQ.stacks}`);
 
   // Kill it and check the score multiplier.
@@ -297,8 +305,7 @@ test('mobs: passive stacks, Q cooldown refund, Pursuer AI, stage HP scaling + co
     const e = g.director.enemies[0];
     const mult = e.scoreMultiplier;
     e.hp = 1;
-    e.takeDamage(1);
-    g.onTargetDamaged ? null : null;
+    e.takeHit();
     return { before, mult, killsByType: { ...g.scoring.killsByType } };
   });
   await page.waitForTimeout(80);
@@ -310,31 +317,68 @@ test('mobs: passive stacks, Q cooldown refund, Pursuer AI, stage HP scaling + co
     ? pass(`pursuer kill is worth ${scoreCheck.mult}x a basic kill`)
     : fail(`pursuer score multiplier ${scoreCheck.mult}`);
 
-  // === Stage-based enemy HP scaling ==========================================
-  section('Stage-based enemy HP scaling');
+  // === Stage-based enemy pips ================================================
+  section('Stage-based enemy pips');
   // Spawn one of each archetype on every stage and compare with the table.
-  const hpTable = await page.evaluate(() => {
+  const pipTable = await page.evaluate(() => {
     const d = window.__warmup.scene.getScene('GameScene').director;
     const out = [];
     for (let s = 0; s < window.__balance.STAGES.length; s++) {
       d.stageIndex = s;
       const b = d.spawnEnemy('basic');
       const p = d.spawnEnemy('pursuer');
-      out.push({ stage: s + 1, mult: d.hpMultiplier, basic: b.maxHp, pursuer: p.maxHp });
+      out.push({ stage: s + 1, basic: b.maxHp, pursuer: p.maxHp, basicHp: b.hp, pursuerHp: p.hp });
       b.destroy(); p.destroy();
     }
     d.stageIndex = 0;
     return out;
   });
-  const pursuerBase = cfg.basicHp * cfg.pursuer.baseHpMultiplier;
-  hpTable.every((r) => r.mult === cfg.stages[r.stage - 1].enemyHpMultiplier
-    && r.basic === Math.round(cfg.basicHp * r.mult) && r.pursuer === Math.round(pursuerBase * r.mult))
-    ? pass(`HP = archetype base x stage multiplier on all ${hpTable.length} stages (basic ${hpTable.map((r) => r.basic).join('/')})`)
-    : fail(`HP table: ${JSON.stringify(hpTable)}`);
-  hpTable.slice(0, 3).every((r) => r.mult === 1) && hpTable.every((r, i) => i === 0 || r.mult >= hpTable[i - 1].mult)
-    && hpTable[hpTable.length - 1].mult > 1
-    ? pass(`Stages 1-3 at 100% HP, never decreasing, x${hpTable[hpTable.length - 1].mult} by Stage ${hpTable.length}`)
-    : fail(`HP multipliers: ${hpTable.map((r) => r.mult).join(', ')}`);
+  const wantBasic = [1, 1, 1, 2, 2, 2, 3, 3, 3, 3];
+  pipTable.map((r) => r.basic).join('/') === wantBasic.join('/')
+    ? pass(`basic pips by stage: ${pipTable.map((r) => r.basic).join('/')} (1 for 1-3, 2 for 4-6, 3 from Stage 7)`)
+    : fail(`basic pips by stage: ${pipTable.map((r) => r.basic).join('/')}, want ${wantBasic.join('/')}`);
+  pipTable.every((r) => r.pursuer === r.basic + 1)
+    ? pass(`Pursuer = Basic + 1 on every stage (${pipTable.map((r) => r.pursuer).join('/')})`)
+    : fail(`pursuer pips: ${JSON.stringify(pipTable)}`);
+  pipTable.every((r) => r.basic === cfg.stages[r.stage - 1].enemyPips.basic
+    && r.pursuer === cfg.stages[r.stage - 1].enemyPips.pursuer && r.basicHp === r.basic && r.pursuerHp === r.pursuer)
+    ? pass('spawned pips come straight from STAGES[n].enemyPips, and enemies spawn full')
+    : fail(`table vs spawn mismatch: ${JSON.stringify(pipTable)}`);
+  Object.values(cfg.obsolete).every((present) => !present)
+    ? pass('obsolete damage/HP config removed (damage values, HP multipliers, pointsPerDamage)')
+    : fail(`obsolete config still present: ${JSON.stringify(cfg.obsolete)}`);
+
+  // === Segmented health bars =================================================
+  section('Segmented health bars');
+  const bar = () => page.evaluate(() => {
+    const e = window.__warmup.scene.getScene('GameScene').director.enemies[0];
+    return { pips: e.hp, max: e.maxHp, segments: e.view.hpBar.segments, filled: e.view.hpBar.filled, visible: e.view.hpBar.visible };
+  });
+  await page.evaluate(() => { window.__warmup.scene.getScene('GameScene').director.stageIndex = 6; });
+  await placeOne('basic', 1000, 200);
+  await page.waitForTimeout(80);
+  const full = await bar();
+  full.max === 3 && full.segments === 3 && full.filled === 3 && full.visible
+    ? pass('Stage 7 basic shows 3 segments, all filled [#][#][#]')
+    : fail(`full bar: ${JSON.stringify(full)}`);
+  // One hit through the scene's real hit funnel.
+  await page.evaluate(() => {
+    const g = window.__warmup.scene.getScene('GameScene');
+    const e = g.director.enemies[0];
+    g.onTargetHit(e, e.takeHit());
+  });
+  await page.waitForTimeout(80);
+  const hit = await bar();
+  hit.pips === 2 && hit.segments === 3 && hit.filled === 2
+    ? pass('after one hit: 3 segments, 2 filled [#][#][ ]')
+    : fail(`bar after one hit: ${JSON.stringify(hit)}`);
+  await placeOne('pursuer', 1000, 200);
+  await page.waitForTimeout(80);
+  const pBar = await bar();
+  pBar.segments === 4 && pBar.filled === 4
+    ? pass('Stage 7 pursuer shows 4 segments')
+    : fail(`pursuer bar: ${JSON.stringify(pBar)}`);
+  await page.evaluate(() => { window.__warmup.scene.getScene('GameScene').director.stageIndex = 0; });
 
   // === Stage composition =====================================================
   section('Stage composition');

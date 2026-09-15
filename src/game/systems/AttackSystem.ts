@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { ATTACK, attackReach, DEBUG } from '../../config/balance';
+import { THEME } from '../../config/theme';
 import { AutoAttackMissile } from '../entities/AutoAttackMissile';
 import type { Player } from '../entities/Player';
 import type { Enemy } from '../entities/Enemy';
@@ -29,8 +30,8 @@ export type AttackState = 'idle' | 'windup' | 'recovery';
 export type TargetSource = 'direct' | 'attack-move';
 
 interface AttackCallbacks {
-  /** Called the instant damage is committed (end of windup). */
-  onDamage: (target: Enemy, damage: number, killed: boolean) => void;
+  /** An auto missile connected and removed one pip. */
+  onHit: (target: Enemy, killed: boolean) => void;
 }
 
 interface AttackMoveOrder {
@@ -60,9 +61,6 @@ interface AttackMoveOrder {
  *     drives the player's movement.
  *   - A plain move order or Stop clears the order and hands movement back —
  *     see `onMoveOrder()` / `onStop()`.
- *
- * To make autos projectile-based later, spawn a Projectile in `fireAttack()`
- * instead of calling target.takeDamage() directly. Nothing else changes.
  */
 export class AttackSystem {
   public state: AttackState = 'idle';
@@ -104,7 +102,7 @@ export class AttackSystem {
     private readonly passive: PassiveSystem,
     private readonly callbacks: AttackCallbacks,
   ) {
-    this.targetMarker = scene.add.graphics().setDepth(7).setVisible(false);
+    this.targetMarker = scene.add.graphics().setDepth(THEME.depth.reticle).setVisible(false);
   }
 
   /**
@@ -426,7 +424,7 @@ export class AttackSystem {
     if (!target || !target.active) return;
 
     // The auto is committed HERE: a missile leaves the player and the cooldown
-    // is already running. Damage lands when the missile arrives, but nothing
+    // is already running. The hit lands when the missile arrives, but nothing
     // about the attack cycle waits for it.
     this.missiles.push(
       new AutoAttackMissile(
@@ -435,18 +433,17 @@ export class AttackSystem {
         this.player.y,
         target,
         target.spawnId,
-        ATTACK.damage,
-        (hitTarget, damage) => this.onMissileHit(hitTarget, damage),
+        (hitTarget) => this.onMissileHit(hitTarget),
       ),
     );
   }
 
-  /** Damage resolution, at the moment the missile visibly connects. */
-  private onMissileHit(target: Enemy, damage: number): void {
+  /** Hit resolution, at the moment the missile visibly connects: one pip. */
+  private onMissileHit(target: Enemy): void {
     if (!target.active) return;
-    const killed = target.takeDamage(damage);
+    const killed = target.takeHit();
     this.metrics.onAttackLanded();
-    this.callbacks.onDamage(target, damage, killed);
+    this.callbacks.onHit(target, killed);
   }
 
   private updateMissiles(deltaSeconds: number): void {
@@ -470,21 +467,26 @@ export class AttackSystem {
 
   private updateVisuals(target: Enemy, inRange: boolean): void {
     if (DEBUG.showTargetMarker) {
-      // Four rotating brackets: reads as "locked on" without drawing a solid
-      // ring that competes with the enemy's own outline.
+      // Four pixel corner brackets that breathe inward: reads as "locked on"
+      // without covering the enemy sprite.
       // Green = attackable now. Amber = acquired but still out of range.
-      const color = inRange ? 0x62d26f : 0xffd166;
-      const r = target.radius + 8;
-      const spin = (this.now / 1400) % (Math.PI * 2);
-      const arc = Math.PI / 7;
+      const color = inRange ? THEME.markers.targetInRange : THEME.markers.targetOutOfRange;
+      const pulse = Math.round((Math.sin(this.now * 0.012) + 1) * 1.5);
+      const r = Math.round(target.radius + 10 - pulse);
+      const len = 9;
+      const th = 3;
+      const x = Math.round(target.x);
+      const y = Math.round(target.y);
 
-      this.targetMarker.clear().setVisible(true);
-      this.targetMarker.lineStyle(2, color, 0.85);
-      for (let i = 0; i < 4; i++) {
-        const mid = spin + (Math.PI / 2) * i;
-        this.targetMarker.beginPath();
-        this.targetMarker.arc(target.x, target.y, r, mid - arc, mid + arc);
-        this.targetMarker.strokePath();
+      const g = this.targetMarker.clear().setVisible(true);
+      g.fillStyle(color, 0.95);
+      for (const sx of [-1, 1]) {
+        for (const sy of [-1, 1]) {
+          const cx = x + sx * r;
+          const cy = y + sy * r;
+          g.fillRect(sx < 0 ? cx : cx - len, sy < 0 ? cy : cy - th, len, th);
+          g.fillRect(sx < 0 ? cx : cx - th, sy < 0 ? cy : cy - len, th, len);
+        }
       }
     }
     this.targetInRange = inRange;

@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
-import { ARENA, ATTACK, BLINK_E, DEBUG, INDICATORS, PLAYER, SKILLSHOT_Q, SKILLSHOT_W } from '../../config/balance';
+import { ARENA, ATTACK, BLINK_E, DEBUG, PLAYER, SKILLSHOT_Q, SKILLSHOT_W } from '../../config/balance';
 import { THEME } from '../../config/theme';
+import { ensureArt } from '../art/textures';
 import { Player } from '../entities/Player';
 import type { Enemy } from '../entities/Enemy';
 import { AttackSystem } from '../systems/AttackSystem';
@@ -8,6 +9,7 @@ import { SkillshotSystem } from '../systems/SkillshotSystem';
 import { EnemyProjectileSystem } from '../systems/EnemyProjectileSystem';
 import { ScoreSystem } from '../systems/ScoreSystem';
 import { KitingMetrics } from '../systems/KitingMetrics';
+import { ApmTracker } from '../systems/ApmTracker';
 import { GameClock } from '../systems/GameClock';
 import { PassiveSystem } from '../systems/PassiveSystem';
 import { WaveDirector, type WavePhase } from '../systems/WaveDirector';
@@ -15,6 +17,8 @@ import { AbilityCooldowns } from '../systems/AbilityCooldowns';
 import { BlinkSystem } from '../systems/BlinkSystem';
 import { CastSystem, type CastAbility, type CastPayload } from '../systems/CastSystem';
 import { InputController, type CommandHandler } from '../systems/InputController';
+import { Battlefield } from '../view/Battlefield';
+import { Fx } from '../view/Fx';
 
 export type RoundState = 'running' | 'over';
 
@@ -31,7 +35,10 @@ export interface RoundResult {
   /** Total run time on the GameClock, in seconds. */
   runTimeSeconds: number;
   score: number;
-  damageDealt: number;
+  /** Pip-removing hits landed by autos, Q and the E bolt. */
+  hitsLanded: number;
+  /** W marks detonated for their extra pip. */
+  markProcs: number;
   targetsKilled: number;
   projectileHitsTaken: number;
   qFired: number;
@@ -65,17 +72,8 @@ export interface HudState {
   castingAbility: string | null;
   castProgress: number;
   attackMovePending: boolean;
-  attackState: string;
-  /** Live attack cycle, so stage attack speed and passive stacks are visible while playing. */
-  attacksPerSecond: number;
-  attackCooldownMs: number;
-  /** Live kiting metrics for the debug panel. */
-  missilesInFlight: number;
-  attacksFired: number;
-  attacksCancelled: number;
-  attacksLanded: number;
-  idleInRangeMs: number;
-  wastedRecoveryMs: number;
+  /** Gameplay actions per minute over a rolling window. Informational only. */
+  apm: number;
   /** Stage / wave progress, straight from the WaveDirector. */
   stage: number;
   stageCount: number;
@@ -108,7 +106,12 @@ export class GameScene extends Phaser.Scene {
   private enemyProjectiles!: EnemyProjectileSystem;
   private scoring!: ScoreSystem;
   private metrics!: KitingMetrics;
+  private apm!: ApmTracker;
   private inputs!: InputController;
+
+  /** Presentation only: the painted field and the pooled combat effects. */
+  battlefield!: Battlefield;
+  private fx!: Fx;
 
   /**
    * Simulated time. Every gameplay deadline is measured against this, never
@@ -151,13 +154,17 @@ export class GameScene extends Phaser.Scene {
     this.paused = false;
     this.clock = new GameClock();
 
-    this.drawArena();
+    // Art first: textures are generated once per game, then reused on restart.
+    ensureArt(this);
+    this.battlefield = new Battlefield(this);
+    this.fx = new Fx(this);
 
     this.player = new Player(this, ARENA.width / 2, ARENA.height / 2);
 
     this.scoring = new ScoreSystem();
 
     this.metrics = new KitingMetrics();
+    this.apm = new ApmTracker(this.clock.now);
     this.passive = new PassiveSystem();
     this.cooldowns = new AbilityCooldowns();
     this.lastCastShownAt = -Infinity;
@@ -171,26 +178,26 @@ export class GameScene extends Phaser.Scene {
     this.enemies = this.director.enemies;
 
     this.attacks = new AttackSystem(this, this.player, this.metrics, this.director, this.passive, {
-      onDamage: (target, damage, killed) => this.onTargetDamaged(target, damage, killed),
+      onHit: (target, killed) => this.onTargetHit(target, killed),
     });
 
     this.skillshot = new SkillshotSystem(this, this.player, this.cooldowns, {
-      onQHit: (target, damage, killed) => {
-        this.onTargetDamaged(target, damage, killed);
+      onQHit: (target, killed) => {
+        this.onTargetHit(target, killed);
         this.grantPassiveStack();
         // A landed Q refunds the basic ability cooldowns — never Flash.
         this.cooldowns.reduce(SKILLSHOT_Q.hitCooldownReductionMs, ['q', 'w', 'e']);
       },
       onWHit: (target) => {
-        // W deals no damage: it marks, and the mark grants the stack.
+        // W removes no pips: it marks, and the mark grants the stack.
         target.applyMark(this.clock.now);
         this.grantPassiveStack();
       },
     });
 
     this.blink = new BlinkSystem(this, this.player, this.cooldowns, {
-      onBoltHit: (target, damage, killed) => {
-        this.onTargetDamaged(target, damage, killed);
+      onBoltHit: (target, killed) => {
+        this.onTargetHit(target, killed);
         this.grantPassiveStack();
       },
       // A blink cancels an uncommitted auto, exactly like a move order.
@@ -223,7 +230,7 @@ export class GameScene extends Phaser.Scene {
         // Mid-cast the order is buffered, not dropped: the ping shows instantly
         // so the input feels received, and the move starts the moment the cast
         // resolves. See CastSystem.bufferCommand().
-        this.ping(x, y, INDICATORS.moveColor, 'move');
+        this.ping(x, y, 'move');
         if (this.cast.isCasting) {
           this.cast.bufferCommand(() => {
             this.attacks.onMoveOrder();
@@ -248,7 +255,7 @@ export class GameScene extends Phaser.Scene {
 
       commandAttackMove: (x, y, opts) => {
         if (this.cast.isCasting) {
-          this.ping(x, y, INDICATORS.attackMoveColor, 'attack-move');
+          this.ping(x, y, 'attack-move');
           this.cast.bufferCommand(() => this.attacks.commandAttackMove(x, y));
           if (opts?.showRangeHint) this.rangeHintUntil = this.clock.now + THEME.rangeHint.holdMs;
           return;
@@ -257,7 +264,7 @@ export class GameScene extends Phaser.Scene {
         // and is only set by the instant (T) path, which has no targeting mode
         // to keep the ring up for it.
         this.attacks.commandAttackMove(x, y);
-        this.ping(x, y, INDICATORS.attackMoveColor, 'attack-move');
+        this.ping(x, y, 'attack-move');
         if (opts?.showRangeHint) {
           this.rangeHintUntil = this.clock.now + THEME.rangeHint.holdMs;
         }
@@ -304,6 +311,7 @@ export class GameScene extends Phaser.Scene {
       },
 
       targetAt: (x, y) => this.targetAt(x, y),
+      recordAction: () => this.apm.record(this.clock.now),
       isRoundRunning: () => this.state === 'running',
       acceptsGameplayInput: () => this.state === 'running' && !this.paused,
       isPaused: () => this.paused,
@@ -351,43 +359,12 @@ export class GameScene extends Phaser.Scene {
   }
 
   /**
-   * Short-lived click marker so issued commands are readable while testing.
-   * Move orders collapse inward; attack-move markers expand outward and carry a
-   * center dot, so the two are distinguishable at a glance.
+   * Short-lived click marker so issued commands are readable. Move orders
+   * collapse inward; attack-move crosshairs bloom outward, so the two are
+   * distinguishable at a glance.
    */
-  private ping(x: number, y: number, color: number, kind: 'move' | 'attack-move'): void {
-    const ring = this.add
-      .circle(x, y, INDICATORS.pingRadius, 0x000000, 0)
-      .setStrokeStyle(2, color, 0.95)
-      .setDepth(5);
-
-    const parts: Phaser.GameObjects.GameObject[] = [ring];
-
-    if (kind === 'attack-move') {
-      // Attack move: a crosshair that blooms outward, unmistakably different
-      // from the move pip that collapses inward.
-      ring.setScale(0.5);
-      const cross = this.add.graphics().setDepth(5);
-      cross.lineStyle(2, color, 0.95);
-      const s = 9;
-      cross.lineBetween(x - s, y, x - 3, y);
-      cross.lineBetween(x + 3, y, x + s, y);
-      cross.lineBetween(x, y - s, x, y - 3);
-      cross.lineBetween(x, y + 3, x, y + s);
-      parts.push(cross);
-    } else {
-      // Move: a small solid pip at the destination.
-      parts.push(this.add.circle(x, y, 2.5, color, 0.9).setDepth(5));
-    }
-
-    this.tweens.add({
-      targets: parts,
-      scale: kind === 'move' ? 0.35 : 1.25,
-      alpha: 0,
-      duration: INDICATORS.pingDurationMs,
-      ease: 'Quad.easeOut',
-      onComplete: () => parts.forEach((p) => p.destroy()),
-    });
+  private ping(x: number, y: number, kind: 'move' | 'attack-move'): void {
+    this.fx.ping(x, y, kind);
   }
 
   // ---------------------------------------------------------------- pause
@@ -398,8 +375,8 @@ export class GameScene extends Phaser.Scene {
    * Nothing is rescheduled on resume: `update()` simply stops running, so the
    * GameClock stops advancing and every stored deadline (windup, cooldowns,
    * wave breathers, spawn ticks) keeps exactly the same remaining time it had.
-   * Phaser tweens are decoration only, but they run on wall time, so they are
-   * paused alongside to stop pings and damage numbers finishing behind the menu.
+   * Effects advance inside update() too, so they freeze with it; Phaser tweens
+   * run on wall time and are paused alongside.
    */
   setPaused(paused: boolean): void {
     if (this.state !== 'running' || this.paused === paused) return;
@@ -482,15 +459,6 @@ export class GameScene extends Phaser.Scene {
       this.rangeRingVisibility(now),
     );
 
-    // 3. ...and only now does the player move and redraw.
-    this.player.update(dt);
-
-    this.metrics.update(dt, {
-      attackState: this.attacks.state,
-      enemyInRange: this.attacks.hasTargetInRange(this.enemies),
-      playerMoving: this.player.isMoving,
-    });
-
     // Persistent emphasis while the passive is fully stacked.
     this.player.setPassiveMaxed(this.passive.isMaxStacked);
 
@@ -502,22 +470,32 @@ export class GameScene extends Phaser.Scene {
       aim ? aim.x : null,
       aim ? aim.y : null,
     );
+
+    // 3. ...and only now does the player move and redraw.
+    this.player.update(dt);
+
+    this.metrics.update(dt, {
+      attackState: this.attacks.state,
+      enemyInRange: this.attacks.hasTargetInRange(this.enemies),
+      playerMoving: this.player.isMoving,
+    });
+
     if (this.cast.lastResolveAt > this.lastCastShownAt) {
       this.lastCastShownAt = this.cast.lastResolveAt;
-      this.player.playCastRelease(this, this.cast.lastResolvedAbility);
+      this.player.playCastRelease(this.cast.lastResolvedAbility);
     }
 
     // Cancel tag: fires once per cancel, driven off the system's timestamp.
     if (this.attacks.lastCancelAt > this.lastCancelShownAt) {
       this.lastCancelShownAt = this.attacks.lastCancelAt;
-      this.player.showCancelTag(this);
+      this.player.showCancelTag();
     }
 
     // Release burst: likewise fired once per release from the system's timestamp,
     // so the "auto is committed" cue can never drift from the state machine.
     if (this.attacks.lastReleaseAt > this.lastReleaseShownAt) {
       this.lastReleaseShownAt = this.attacks.lastReleaseAt;
-      this.player.playReleaseBurst(this);
+      this.player.playReleaseBurst();
     }
 
     // The director owns the run: breather → next wave/stage, enemy AI, spacing.
@@ -531,6 +509,9 @@ export class GameScene extends Phaser.Scene {
     this.blink.update(dt);
     this.enemyProjectiles.update(dt, now);
 
+    // Decoration last: it reads what this frame decided and changes nothing.
+    this.fx.update(dt);
+
     // The run ends on death, or once the final stage's last wave is cleared.
     // There is no timer end.
     if (!this.player.isAlive) {
@@ -543,13 +524,14 @@ export class GameScene extends Phaser.Scene {
   // ---------------------------------------------------------------- events
 
   /**
-   * Every DAMAGING hit funnels through here: autos, Q and the E bolt.
+   * Every pip-removing hit funnels through here, AFTER the entity has already
+   * lost its one pip: autos, Q and the E bolt.
    *
    * W's mark detonates from this one place, which is why W itself does not call
-   * it — the mark application deals no damage, so it cannot detonate itself.
+   * it — the mark application removes no pip, so it cannot detonate itself.
    */
-  private onTargetDamaged(target: Enemy, damage: number, killed: boolean): void {
-    this.scoring.addDamage(damage);
+  private onTargetHit(target: Enemy, killed: boolean): void {
+    this.scoring.addHit();
 
     if (killed) {
       // Score and kill tallies are per archetype, so a Pursuer is worth more.
@@ -562,52 +544,22 @@ export class GameScene extends Phaser.Scene {
   }
 
   /**
-   * Cash in a W mark. Deliberately does NOT route back through
-   * onTargetDamaged() — that would recurse, and a detonation must never grant a
-   * second passive stack (the stack was already given when the mark landed).
+   * Cash in a W mark: one extra pip on top of the triggering hit's own.
+   * Deliberately does NOT route back through onTargetHit() — that would recurse,
+   * and a detonation must never grant a second passive stack (the stack was
+   * already given when the mark landed).
    */
   private detonateMark(target: Enemy): void {
     target.clearMark();
 
-    const damage = SKILLSHOT_W.detonationDamage;
-    const killed = target.takeDamage(damage);
-    this.scoring.addDamage(damage);
+    const killed = target.takeHit();
+    this.scoring.addMarkProc();
     if (killed) {
       this.scoring.addKill(target.archetype, target.scoreMultiplier);
       this.director.onEnemyKilled(target, this.clock.now);
     }
 
-    this.playDetonation(target.x, target.y);
-  }
-
-  /** Violet burst where a mark pops. */
-  private playDetonation(x: number, y: number): void {
-    const ring = this.add
-      .circle(x, y, 8, 0x000000, 0)
-      .setStrokeStyle(4, THEME.mark.color, 0.95)
-      .setDepth(15);
-    this.tweens.add({
-      targets: ring,
-      radius: 46,
-      alpha: 0,
-      duration: 260,
-      ease: 'Quad.easeOut',
-      onComplete: () => ring.destroy(),
-    });
-
-    for (let i = 0; i < 6; i++) {
-      const a = (Math.PI * 2 * i) / 6 + Math.random() * 0.3;
-      const shard = this.add.circle(x, y, 3, THEME.mark.accent, 0.95).setDepth(15);
-      this.tweens.add({
-        targets: shard,
-        x: x + Math.cos(a) * 34,
-        y: y + Math.sin(a) * 34,
-        alpha: 0,
-        duration: 280,
-        ease: 'Quad.easeOut',
-        onComplete: () => shard.destroy(),
-      });
-    }
+    this.fx.detonation(target.x, target.y);
   }
 
   /**
@@ -617,7 +569,7 @@ export class GameScene extends Phaser.Scene {
    */
   private grantPassiveStack(): void {
     this.passive.addStack();
-    this.player.playPassivePulse(this, this.passive.isMaxStacked);
+    this.player.playPassivePulse(this.passive.isMaxStacked);
   }
 
   private onPlayerHit(damage: number): void {
@@ -630,8 +582,8 @@ export class GameScene extends Phaser.Scene {
     // Red rim flash: hits register even when your eyes are on the enemy.
     const rim = this.add
       .rectangle(ARENA.width / 2, ARENA.height / 2, ARENA.width - 8, ARENA.height - 8, 0x000000, 0)
-      .setStrokeStyle(8, 0xff6b6b, 0.55)
-      .setDepth(60);
+      .setStrokeStyle(8, THEME.ui.hitRim, 0.55)
+      .setDepth(THEME.depth.screen);
     this.tweens.add({
       targets: rim,
       alpha: 0,
@@ -658,7 +610,8 @@ export class GameScene extends Phaser.Scene {
       wavesTotal: this.director.wavesTotal,
       runTimeSeconds: this.clock.now / 1000,
       score: Math.round(this.scoring.score),
-      damageDealt: Math.round(this.scoring.damageDealt),
+      hitsLanded: this.scoring.hitsLanded,
+      markProcs: this.scoring.markProcs,
       targetsKilled: this.scoring.targetsKilled,
       projectileHitsTaken: this.scoring.projectileHitsTaken,
       qFired: this.skillshot.shotsFired,
@@ -671,83 +624,6 @@ export class GameScene extends Phaser.Scene {
       wastedRecoveryMs: Math.round(this.metrics.wastedRecoveryMs),
       killsByType: { ...this.scoring.killsByType },
     };
-  }
-
-  // ---------------------------------------------------------------- helpers
-
-  private drawArena(): void {
-    const A = THEME.arena;
-    this.cameras.main.setBackgroundColor(A.voidColor);
-
-    const pad = ARENA.padding;
-    const left = pad;
-    const top = pad;
-    const w = ARENA.width - pad * 2;
-    const h = ARENA.height - pad * 2;
-    const right = left + w;
-    const bottom = top + h;
-
-    const g = this.add.graphics().setDepth(0);
-
-    // Floor slab, with a slightly lighter wash toward the middle for depth.
-    g.fillStyle(A.floorColor, 1);
-    g.fillRect(left, top, w, h);
-    g.fillStyle(A.floorCenterColor, 0.5);
-    g.fillEllipse(ARENA.width / 2, ARENA.height / 2, w * 0.92, h * 1.05);
-
-    // Fine grid.
-    g.lineStyle(1, A.gridColor, 0.55);
-    for (let x = left; x <= right; x += A.gridSize) g.lineBetween(x, top, x, bottom);
-    for (let y = top; y <= bottom; y += A.gridSize) g.lineBetween(left, y, right, y);
-
-    // Major grid every Nth cell — gives the field a sense of scale.
-    const major = A.gridSize * A.majorEvery;
-    g.lineStyle(1, A.gridMajorColor, 0.9);
-    for (let x = left; x <= right; x += major) g.lineBetween(x, top, x, bottom);
-    for (let y = top; y <= bottom; y += major) g.lineBetween(left, y, right, y);
-
-    // Centre mark: a calibration ring + crosshair ticks.
-    const cx = ARENA.width / 2;
-    const cy = ARENA.height / 2;
-    g.lineStyle(1, A.gridMajorColor, 0.9);
-    g.strokeCircle(cx, cy, 74);
-    g.lineStyle(1, A.borderColor, 0.5);
-    g.lineBetween(cx - 14, cy, cx + 14, cy);
-    g.lineBetween(cx, cy - 14, cx, cy + 14);
-
-    // Edge vignette: bands of increasing darkness hugging the border.
-    const vig = this.add.graphics().setDepth(3);
-    const bands = 14;
-    for (let i = 0; i < bands; i++) {
-      const t = i / bands;
-      const inset = A.vignetteBand * t;
-      vig.lineStyle(
-        A.vignetteBand / bands + 1,
-        A.vignetteColor,
-        A.vignetteAlpha * Math.pow(1 - t, 2.2),
-      );
-      vig.strokeRect(left + inset, top + inset, w - inset * 2, h - inset * 2);
-    }
-
-    // Border frame: thin outer line, brighter inner line, corner brackets.
-    const frame = this.add.graphics().setDepth(4);
-    frame.lineStyle(1, A.borderColor, 0.55);
-    frame.strokeRect(left - 4, top - 4, w + 8, h + 8);
-    frame.lineStyle(2, A.borderColor, 0.9);
-    frame.strokeRect(left, top, w, h);
-
-    const b = A.bracketLength;
-    frame.lineStyle(3, A.borderGlowColor, 0.75);
-    const corners: Array<[number, number, number, number]> = [
-      [left, top, 1, 1],
-      [right, top, -1, 1],
-      [left, bottom, 1, -1],
-      [right, bottom, -1, -1],
-    ];
-    for (const [x, y, sx, sy] of corners) {
-      frame.lineBetween(x, y, x + b * sx, y);
-      frame.lineBetween(x, y, x, y + b * sy);
-    }
   }
 
   // ---------------------------------------------------------------- HUD API
@@ -769,15 +645,7 @@ export class GameScene extends Phaser.Scene {
         flash: this.abilityCooldown('flash'),
       },
       attackMovePending: this.inputs ? this.inputs.attackMovePending : false,
-      attackState: this.attacks ? this.attacks.state : 'idle',
-      attacksPerSecond: this.attacks ? this.attacks.attacksPerSecond : 0,
-      attackCooldownMs: this.attacks ? this.attacks.cooldownMs : 0,
-      missilesInFlight: this.attacks ? this.attacks.missilesInFlight : 0,
-      attacksFired: this.metrics ? this.metrics.attacksFired : 0,
-      attacksCancelled: this.metrics ? this.metrics.attacksCancelled : 0,
-      attacksLanded: this.metrics ? this.metrics.attacksLanded : 0,
-      idleInRangeMs: this.metrics ? this.metrics.idleInRangeMs : 0,
-      wastedRecoveryMs: this.metrics ? this.metrics.wastedRecoveryMs : 0,
+      apm: this.apm && this.clock ? this.apm.valueAt(this.clock.now) : 0,
       stage: this.director ? this.director.stage : 1,
       stageCount: this.director ? this.director.stageCount : 0,
       wave: this.director ? this.director.wave : 1,

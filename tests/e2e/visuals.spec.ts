@@ -1,7 +1,7 @@
 import { test } from '@playwright/test';
 import { startSuite } from './support/harness';
 
-test('visuals: no tether line, command markers, composed units, distinct projectiles, arena + HUD layers', async ({ page }, testInfo) => {
+test('visuals: pixel-art setup, no tether line, command markers, sprite units + y-sort, distinct projectiles, battlefield + HUD layers', async ({ page }, testInfo) => {
   const { pass, fail, section, finish } = await startSuite(page, testInfo, 400);
 
   const setup = () => page.evaluate(() => {
@@ -12,11 +12,21 @@ test('visuals: no tether line, command markers, composed units, distinct project
     g.attacks.cancel(); g.attacks.state = 'idle'; g.attacks.clearMissiles();
     g.enemies.forEach((t, i) => {
       const spots = [{ x: 760, y: 380 }, { x: 980, y: 520 }, { x: 330, y: 200 }, { x: 1060, y: 200 }];
-      t.x = spots[i].x; t.y = spots[i].y; t.hp = t.maxHp; t.ghostHp = t.maxHp; t.active = true; t.__tag = i + 1;
+      t.x = spots[i].x; t.y = spots[i].y; t.hp = t.maxHp; t.active = true; t.__tag = i + 1;
       t.wanderX = t.x; t.wanderY = t.y; t.nextWanderAt = Number.POSITIVE_INFINITY;
     });
   });
   await setup();
+
+  // === 0. Pixel-art rendering ================================================
+  section('0. Pixel-art rendering');
+  const render = await page.evaluate(() => {
+    const cfg = window.__warmup.config;
+    return { pixelArt: cfg.pixelArt, antialias: cfg.antialias, roundPixels: cfg.roundPixels, scale: window.__theme.art.scale };
+  });
+  render.pixelArt && !render.antialias && render.roundPixels
+    ? pass('game renders in pixel-art mode (nearest-neighbour, no antialias, whole-pixel sprites)')
+    : fail(`render config: ${JSON.stringify(render)}`);
 
   // === 1. No tether / web-sling line ==========================================
   section('1. No tether / web-sling line');
@@ -39,41 +49,32 @@ test('visuals: no tether line, command markers, composed units, distinct project
   });
   const tethers = tether.filter((l) => l.len > 40 && l.startDist < 30);
   tethers.length === 0
-    ? pass(`no line anchored to the player (${tether.length} short trail segments only)`)
+    ? pass(`no line anchored to the player (${tether.length} line objects in the scene)`)
     : fail(`tether-like line found: ${JSON.stringify(tethers)}`);
 
   // The player no longer owns a "facing" line object at all.
   const hasFacing = await page.evaluate(() => 'facing' in window.__warmup.scene.getScene('GameScene').player);
   !hasFacing ? pass('Player.facing line object removed entirely') : fail('Player still has a facing line');
 
-  // === 2. Command feedback survives without it ================================
-  section('2. Command feedback survives without it');
+  // === 2. Command feedback ===================================================
+  section('2. Command feedback');
   await setup();
-  const markers = await page.evaluate(async () => {
+  const pingNear = (key, x, y) => page.evaluate(({ key, x, y }) => {
     const g = window.__warmup.scene.getScene('GameScene');
-    const before = g.children.list.length;
-    g.commandHandler // not directly callable; drive via input instead
-    return before;
-  });
+    return g.children.list.some((o) => o.visible && o.texture?.key === key && Math.hypot(o.x - x, o.y - y) < 20);
+  }, { key, x, y });
   await page.mouse.click(300, 300, { button: 'right' });
   await page.waitForTimeout(60);
-  const movePing = await page.evaluate(() => {
-    const g = window.__warmup.scene.getScene('GameScene');
-    // A transient ring near the click point = the move marker.
-    return g.children.list.some((o) => o.type === 'Arc' && Math.hypot(o.x - 300, o.y - 300) < 20 && o.visible);
-  });
-  movePing ? pass('right-click ground still shows a ground marker') : fail('no move marker');
+  (await pingNear('fx_ping_move', 300, 300))
+    ? pass('right-click ground shows a move ping at the click')
+    : fail('no move marker');
 
   await page.keyboard.press('a');
   await page.mouse.click(700, 250, { button: 'left' });
   await page.waitForTimeout(60);
-  const amPing = await page.evaluate(() => {
-    const g = window.__warmup.scene.getScene('GameScene');
-    const arcs = g.children.list.filter((o) => o.type === 'Arc' && Math.hypot(o.x - 700, o.y - 250) < 24 && o.visible);
-    const gfx = g.children.list.filter((o) => o.type === 'Graphics' && o.visible).length;
-    return { arcs: arcs.length, gfx };
-  });
-  amPing.arcs > 0 ? pass('attack-move shows its own distinct marker') : fail('no attack-move marker');
+  (await pingNear('fx_ping_attack', 700, 250))
+    ? pass('attack-move shows its own distinct crosshair ping')
+    : fail('no attack-move marker');
 
   // Target lock indicator on the current attack target.
   await setup();
@@ -85,39 +86,62 @@ test('visuals: no tether line, command markers, composed units, distinct project
   });
   lock.visible ? pass(`current target carries a lock indicator (${lock.type})`) : fail('no target lock indicator');
 
-  // === 3. Units are composed shapes, not plain circles ========================
-  section('3. Units are composed shapes, not plain circles');
-  const shapes = await page.evaluate(() => {
+  // === 3. Units are pixel sprites, drawn over the gameplay position ==========
+  section('3. Units are pixel sprites, drawn over the gameplay position');
+  await setup();
+  await page.waitForTimeout(80);
+  const units = await page.evaluate(() => {
     const g = window.__warmup.scene.getScene('GameScene');
     const p = g.player;
     const t = g.enemies[0];
-    return {
-      playerType: p.body.type,
-      playerParts: p.body.list ? p.body.list.map((o) => o.type) : [],
-      playerRotates: typeof p.body.rotation === 'number',
-      targetType: t.body.type,
-      targetParts: t.body.list ? t.body.list.map((o) => o.type) : [],
-      playerShadow: !!p.shadow?.visible,
-      targetShadow: !!t.shadow?.visible,
+    const pursuer = g.director.spawnEnemy('pursuer');
+    pursuer.x = 900; pursuer.y = 300;
+    pursuer.update(0.016, g.clock.now, { player: { x: p.x, y: p.y, radius: p.radius }, damagePlayer: () => {} });
+    const out = {
+      player: { type: p.view.sprite.type, key: p.view.sprite.texture.key, scale: p.view.sprite.scaleX, dx: p.view.sprite.x - p.x, dy: p.view.sprite.y - p.y },
+      basic: { type: t.view.sprite.type, key: t.view.sprite.texture.key, scale: t.view.sprite.scaleX, w: t.view.sprite.width },
+      pursuer: { key: pursuer.view.sprite.texture.key, w: pursuer.view.sprite.width, telegraph: 'telegraph' in pursuer.view },
+      shadows: !!p.view.shadow.visible && !!t.view.shadow.visible,
+      bars: t.view.hpBar !== undefined && p.view.hpBar !== undefined,
+      art: window.__theme.art.scale,
     };
+    pursuer.destroy();
+    return out;
   });
-  shapes.playerType === 'Container' && shapes.playerParts.includes('Polygon')
-    ? pass(`player is a composed unit (${shapes.playerParts.join('+')})`)
-    : fail(`player body: ${shapes.playerType} ${shapes.playerParts}`);
-  shapes.targetType === 'Container' && shapes.targetParts.filter((t) => t === 'Polygon').length >= 2
-    ? pass(`enemies are composed units (${shapes.targetParts.join('+')})`)
-    : fail(`target body: ${shapes.targetType} ${shapes.targetParts}`);
-  shapes.playerShadow && shapes.targetShadow ? pass('player and enemies both cast shadows') : fail('missing shadows');
+  units.player.type === 'Image' && /^player_/.test(units.player.key) && units.player.scale === units.art
+    ? pass(`player is a pixel sprite (${units.player.key} at ${units.player.scale}x)`)
+    : fail(`player sprite: ${JSON.stringify(units.player)}`);
+  Math.abs(units.player.dx) <= 1 && Math.abs(units.player.dy) <= 1
+    ? pass('player sprite is drawn on the authoritative gameplay position when not attacking')
+    : fail(`player sprite offset from gameplay position: ${units.player.dx}, ${units.player.dy}`);
+  units.basic.type === 'Image' && /^basic_/.test(units.basic.key) && units.basic.scale >= units.art
+    && /^pursuer_/.test(units.pursuer.key) && units.pursuer.telegraph && units.pursuer.w > units.basic.w
+    ? pass(`basic (${units.basic.key}) and Pursuer (${units.pursuer.key}, larger, with telegraph) use their own sprites`)
+    : fail(`enemy sprites: ${JSON.stringify({ basic: units.basic, pursuer: units.pursuer })}`);
+  units.shadows && units.bars ? pass('player and enemies have shadows and health bars') : fail('missing shadows / bars');
 
-  // Player rotates to face its target instead of drawing a line to it.
+  // Y-sort: a unit lower on screen draws in front of one higher up.
+  const sort = await page.evaluate(() => {
+    const g = window.__warmup.scene.getScene('GameScene');
+    const [a, , c] = g.enemies; // y 380 and y 200
+    return { lowY: a.y, lowDepth: a.view.sprite.depth, highY: c.y, highDepth: c.view.sprite.depth };
+  });
+  sort.lowY > sort.highY && sort.lowDepth > sort.highDepth
+    ? pass(`units are y-sorted (y ${sort.lowY} depth ${sort.lowDepth.toFixed(4)} > y ${sort.highY} depth ${sort.highDepth.toFixed(4)})`)
+    : fail(`y-sort: ${JSON.stringify(sort)}`);
+
+  // The player turns to face its target instead of drawing a line to it.
   await setup();
-  const rot0 = await page.evaluate(() => window.__warmup.scene.getScene('GameScene').player.body.rotation);
+  await page.evaluate(() => { window.__warmup.scene.getScene('GameScene').player.view.facing = 1; });
   await page.mouse.click(330, 200, { button: 'right' }); // enemy up-left
   await page.waitForTimeout(500);
-  const rot1 = await page.evaluate(() => window.__warmup.scene.getScene('GameScene').player.body.rotation);
-  Math.abs(rot1 - rot0) > 0.15
-    ? pass(`player hull rotates to face its target (${rot0.toFixed(2)} -> ${rot1.toFixed(2)} rad)`)
-    : fail(`hull did not rotate (${rot0} -> ${rot1})`);
+  const facing = await page.evaluate(() => {
+    const v = window.__warmup.scene.getScene('GameScene').player.view;
+    return { facing: v.facing, flipX: v.sprite.flipX };
+  });
+  facing.facing === -1 && facing.flipX
+    ? pass('player sprite turns to face a target to its left')
+    : fail(`player did not turn toward its target: ${JSON.stringify(facing)}`);
 
   // === 4. Projectiles are distinct ============================================
   section('4. Projectiles are distinct');
@@ -126,21 +150,20 @@ test('visuals: no tether line, command markers, composed units, distinct project
   await page.waitForFunction(() => window.__warmup.scene.getScene('GameScene').attacks.missilesInFlight > 0, null, { timeout: 3000 });
   const autoShape = await page.evaluate(() => {
     const m = window.__warmup.scene.getScene('GameScene').attacks.missiles[0];
-    return { body: m.body.type, hasCore: !!m.core, hasTrail: !!m.trail, rot: m.body.rotation };
+    return { key: m.view.textureKey, rotates: m.view.art.rotate, trail: !!m.view.art.trail };
   });
-  autoShape.body === 'Polygon' && autoShape.hasCore && autoShape.hasTrail
-    ? pass('auto-attack bolt is an oriented polygon with core + trail')
+  autoShape.key === 'proj_auto' && autoShape.rotates && autoShape.trail
+    ? pass('auto-attack bolt is an oriented pixel bolt with a trail')
     : fail(`auto bolt: ${JSON.stringify(autoShape)}`);
 
   await page.evaluate(() => {
     const g = window.__warmup.scene.getScene('GameScene');
     g.enemyProjectiles.nextSpawnAt = 0;
     g.enemyProjectiles.spawnVolley();
-    g.skillshot.fireAtForTest ??= null;
   });
+  await page.mouse.move(980, 520);
   await page.keyboard.press('q');
-  await page.mouse.click(980, 520, { button: 'left' });
-  // Q has a cast window now — wait for the bolt to actually spawn.
+  // Q has a cast window — wait for the bolt to actually spawn.
   await page.waitForFunction(
     () => window.__warmup.scene.getScene('GameScene').skillshot.missiles.length > 0,
     null,
@@ -151,27 +174,56 @@ test('visuals: no tether line, command markers, composed units, distinct project
     const q = g.skillshot.missiles[0]?.projectile;
     const e = g.enemyProjectiles.missiles[0];
     return {
-      q: q ? { r: q.radius, color: q.body.fillColor, core: !!q.core } : null,
-      e: e ? { r: e.radius, color: e.body.fillColor, heavy: e.heavy } : null,
+      q: q ? { r: q.radius, key: q.view.textureKey } : null,
+      e: e ? { r: e.radius, key: e.view.textureKey, team: e.team, scale: e.view.sprite.scaleX } : null,
       auto: window.__balance.ATTACK.projectileRadius,
     };
   });
-  kinds.q && kinds.e && kinds.q.color !== kinds.e.color && kinds.e.r > kinds.auto
-    ? pass(`three distinct projectile kinds (auto r${kinds.auto} cyan, Q r${kinds.q.r} green, enemy r${Math.round(kinds.e.r)} amber+rim)`)
+  kinds.q && kinds.e && kinds.q.key === 'proj_q' && /^proj_hostile/.test(kinds.e.key) && kinds.e.team === 'enemy' && kinds.e.r > kinds.auto
+    ? pass(`three distinct projectile kinds (auto ${autoShape.key}, Q ${kinds.q.key}, hostile ${kinds.e.key} r${Math.round(kinds.e.r)})`)
     : fail(`projectile kinds: ${JSON.stringify(kinds)}`);
 
-  // === 5. Arena + UI are built, and gameplay still reads ======================
-  section('5. Arena + UI are built, and gameplay still reads');
+  // W is its own orb, not a recoloured Q.
+  await page.evaluate(() => {
+    const g = window.__warmup.scene.getScene('GameScene');
+    g.cast.cancel(); g.cooldowns.reset();
+  });
+  await page.keyboard.press('w');
+  await page.waitForFunction(
+    () => window.__warmup.scene.getScene('GameScene').skillshot.missiles.some((m) => m.kind === 'w'),
+    null,
+    { timeout: 3000 },
+  ).catch(() => {});
+  const wKey = await page.evaluate(() => {
+    const m = window.__warmup.scene.getScene('GameScene').skillshot.missiles.find((x) => x.kind === 'w');
+    return m ? { key: m.projectile.view.textureKey, rotates: m.projectile.view.art.rotate } : null;
+  });
+  wKey && wKey.key === 'proj_w' && !wKey.rotates
+    ? pass('W fires its own violet orb sprite')
+    : fail(`W projectile: ${JSON.stringify(wKey)}`);
+
+  // === 5. Battlefield + UI are built, and gameplay still reads ================
+  section('5. Battlefield + UI are built, and gameplay still reads');
   const scene = await page.evaluate(() => {
     const g = window.__warmup.scene.getScene('GameScene');
     const ui = window.__warmup.scene.getScene('UIScene');
+    const bf = g.battlefield;
     return {
-      arenaGraphics: g.children.list.filter((o) => o.type === 'Graphics').length,
+      ground: bf?.ground?.texture?.key ?? null,
+      groundScale: bf?.ground?.scaleX,
+      props: bf ? bf.props.length : 0,
+      propsBelowUnits: bf ? bf.props.every((p) => p.depth < g.player.view.sprite.depth && p.depth < g.enemies[0].view.sprite.depth) : false,
       uiPanels: ui.children.list.filter((o) => o.type === 'Graphics').length,
-      uiTexts: ui.children.list.filter((o) => o.type === 'Text').length,
+      art: window.__theme.art.scale,
     };
   });
-  scene.arenaGraphics >= 3 ? pass(`arena drawn in ${scene.arenaGraphics} graphics layers (floor/grid, vignette, frame)`) : fail('arena layers missing');
+  scene.ground === 'battlefield_ground' && scene.groundScale === scene.art
+    ? pass(`battlefield ground painted at ${scene.art}x pixel scale`)
+    : fail(`battlefield ground: ${JSON.stringify(scene)}`);
+  // Decoration must stay sparse so it never competes with combat cues.
+  scene.props > 0 && scene.props <= 10 && scene.propsBelowUnits
+    ? pass(`${scene.props} decorative props (sparse), all drawn beneath every combatant`)
+    : fail(`props: ${scene.props}, below units: ${scene.propsBelowUnits}`);
   scene.uiPanels >= 3 ? pass(`HUD grouped onto ${scene.uiPanels} panels`) : fail('HUD panels missing');
 
   await finish();

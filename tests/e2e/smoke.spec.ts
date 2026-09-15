@@ -71,7 +71,7 @@ test('smoke: movement, attack, Q, enemy fire, context menu, run end + restart, d
   sawWindup ? pass('attack windup roots the player') : fail('windup never observed');
   await page.waitForTimeout(900);
   const after = await state();
-  after.hud.score > beforeScore ? pass(`basic attack dealt damage (score ${beforeScore} -> ${after.hud.score})`) : fail('basic attack dealt no damage');
+  after.hud.score > beforeScore ? pass(`basic attack landed (score ${beforeScore} -> ${after.hud.score})`) : fail('basic attack did not land');
   !after.player.rooted ? pass('player free to move after windup') : fail('player still rooted after windup');
 
   // --- 3. Q skillshot (quick-cast) --------------------------------------------
@@ -147,7 +147,7 @@ test('smoke: movement, attack, Q, enemy fire, context menu, run end + restart, d
   // --- 6. run end + restart ----------------------------------------------------
   section('6. run end + restart');
   // End the run the way it ends for real: jump to the final wave and clear it
-  // through the scene's damage funnel.
+  // through the scene's hit funnel.
   await page.evaluate(() => {
     const g = window.__warmup.scene.getScene('GameScene');
     const d = g.director;
@@ -155,8 +155,7 @@ test('smoke: movement, attack, Q, enemy fire, context menu, run end + restart, d
     d.waveIndex = d.stageDefinition.waves.length - 1;
     d.spawnWave();
     for (const e of d.enemies) {
-      const damage = e.hp;
-      g.onTargetDamaged(e, damage, e.takeDamage(damage));
+      while (e.active) g.onTargetHit(e, e.takeHit());
     }
   });
   await page.waitForFunction(() => window.__warmup.scene.getScene('GameScene').getRoundResult() !== null, null, { timeout: 3000 }).catch(() => {});

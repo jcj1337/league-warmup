@@ -1,7 +1,6 @@
 import Phaser from 'phaser';
 import {
   ARENA,
-  PURSUER,
   RUN,
   STAGES,
   TARGETS,
@@ -17,26 +16,22 @@ import type { EnemyFirePressure } from './EnemyProjectileSystem';
 
 /**
  * How an archetype is built. Adding a third enemy means adding one entry here,
- * its count key in `WaveRoster`, and using it in STAGES — every system
- * downstream only knows about `Enemy`.
+ * its count key in `WaveRoster` and `EnemyPips`, and using it in STAGES —
+ * every system downstream only knows about `Enemy`.
  */
 interface ArchetypeSpec {
-  /** Base HP before the stage's HP multiplier. */
-  baseHp(): number;
-  create(scene: Phaser.Scene, clock: GameClock, x: number, y: number, hp: number): Enemy;
+  create(scene: Phaser.Scene, clock: GameClock, x: number, y: number, pips: number): Enemy;
   /** Keep this much clear space from the player when spawning. */
   minSpawnDistance: number;
 }
 
 const ARCHETYPES: Record<EnemyArchetype, ArchetypeSpec> = {
   basic: {
-    baseHp: () => TARGETS.maxHp,
-    create: (scene, clock, x, y, hp) => new Target(scene, clock, x, y, hp),
+    create: (scene, clock, x, y, pips) => new Target(scene, clock, x, y, pips),
     minSpawnDistance: TARGETS.minSpawnDistanceFromPlayer,
   },
   pursuer: {
-    baseHp: () => TARGETS.maxHp * PURSUER.baseHpMultiplier,
-    create: (scene, clock, x, y, hp) => new Pursuer(scene, clock, x, y, hp),
+    create: (scene, clock, x, y, pips) => new Pursuer(scene, clock, x, y, pips),
     // Pursuers walk you down, so they get a wider berth on spawn.
     minSpawnDistance: TARGETS.minSpawnDistanceFromPlayer + 120,
   },
@@ -59,6 +54,12 @@ function validateStages(): void {
   if (STAGES.length === 0) throw new Error('STAGES must define at least one stage');
   STAGES.forEach((stage, s) => {
     if (stage.waves.length === 0) throw new Error(`STAGES[${s}] defines no waves`);
+    for (const id of Object.keys(ARCHETYPES) as EnemyArchetype[]) {
+      const pips = stage.enemyPips[id];
+      if (!Number.isInteger(pips) || pips < 1) {
+        throw new Error(`STAGES[${s}].enemyPips.${id} is ${pips}; pips must be a whole number >= 1`);
+      }
+    }
     stage.waves.forEach((wave, w) => {
       const count = expandRoster(wave).length;
       if (count < 1 || count > RUN.maxAliveEnemies) {
@@ -85,7 +86,7 @@ function validateStages(): void {
  * advances anything: progression is kills alone.
  *
  * It is also the one source of stage-scoped tuning for other systems — enemy
- * HP here, the player's base auto cycle (AttackPacing) and enemy fire
+ * health pips here, the player's base auto cycle (AttackPacing) and enemy fire
  * (EnemyFirePressure) — all read from the current stage's STAGES row.
  */
 export class WaveDirector implements AttackPacing, EnemyFirePressure {
@@ -173,9 +174,9 @@ export class WaveDirector implements AttackPacing, EnemyFirePressure {
     return STAGES[this.stageIndex];
   }
 
-  /** Enemy HP multiplier for the current stage. */
-  get hpMultiplier(): number {
-    return this.stageDefinition.enemyHpMultiplier;
+  /** Health pips an archetype spawns with on the current stage. */
+  pipsFor(archetype: EnemyArchetype): number {
+    return this.stageDefinition.enemyPips[archetype];
   }
 
   /** AttackPacing: the player's base auto cycle for the current stage. */
@@ -250,9 +251,8 @@ export class WaveDirector implements AttackPacing, EnemyFirePressure {
 
   private spawnEnemy(archetype: EnemyArchetype): Enemy {
     const spec = ARCHETYPES[archetype];
-    const hp = Math.round(spec.baseHp() * this.hpMultiplier);
     const spot = this.findSpawnSpot(spec.minSpawnDistance);
-    return spec.create(this.scene, this.clock, spot.x, spot.y, hp);
+    return spec.create(this.scene, this.clock, spot.x, spot.y, this.pipsFor(archetype));
   }
 
   /** Rejection sampling: away from the player, and not on top of another enemy. */

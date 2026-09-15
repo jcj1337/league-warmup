@@ -1,12 +1,18 @@
 import Phaser from 'phaser';
-import { ARENA, BANNERS, DEBUG } from '../../config/balance';
+import { ARENA, DEBUG } from '../../config/balance';
 import { THEME } from '../../config/theme';
+import { pixelText, setPixelScale } from '../art/font';
+import { ensureArt } from '../art/textures';
 import { AbilityBar } from '../ui/AbilityBar';
 import { PassiveDisplay } from '../ui/PassiveDisplay';
 import { PauseMenu } from '../ui/PauseMenu';
+import { PixelBar } from '../view/PixelBar';
+import { pixelPanel } from '../view/pixelDraw';
 import type { GameScene } from './GameScene';
 
 type Hud = ReturnType<GameScene['getHudState']>;
+
+const HP_BAR_WIDTH = 200;
 
 /**
  * HUD + end screen. Runs as a parallel scene on top of GameScene and polls it
@@ -15,19 +21,17 @@ type Hud = ReturnType<GameScene['getHudState']>;
 export class UIScene extends Phaser.Scene {
   private game_!: GameScene;
 
-  private timeText!: Phaser.GameObjects.Text;
-  private scoreText!: Phaser.GameObjects.Text;
-  private progressText!: Phaser.GameObjects.Text;
-  private modeText!: Phaser.GameObjects.Text;
-  private debugText!: Phaser.GameObjects.Text;
-  private stateText!: Phaser.GameObjects.Text;
-  /** The whole top-right debug group, toggled together from the pause menu. */
-  private debugPanel!: Phaser.GameObjects.Graphics;
+  private timeText!: Phaser.GameObjects.BitmapText;
+  private scoreText!: Phaser.GameObjects.BitmapText;
+  private progressText!: Phaser.GameObjects.BitmapText;
+  private modeText!: Phaser.GameObjects.BitmapText;
+  /** Top-right "APM  180" readout. */
+  private apmText!: Phaser.GameObjects.BitmapText;
 
   private abilityBar!: AbilityBar;
   private passiveDisplay!: PassiveDisplay;
   private pauseMenu!: PauseMenu;
-  private stageText!: Phaser.GameObjects.Text;
+  private stageText!: Phaser.GameObjects.BitmapText;
   /** Last stage / wave the transition banner reacted to. Round-scoped: see beginRound(). */
   private lastStage = 1;
   private lastWave = 1;
@@ -37,13 +41,13 @@ export class UIScene extends Phaser.Scene {
   private bannerUntil = 0;
   /** The GameScene round (HudState.round) this HUD last polled. */
   private observedRound = 0;
-  private hintText!: Phaser.GameObjects.Text;
 
-  private hpBar!: Phaser.GameObjects.Rectangle;
-  private hpText!: Phaser.GameObjects.Text;
+  private hpBar!: PixelBar;
+  private hpText!: Phaser.GameObjects.BitmapText;
+  private hpBand: 'high' | 'mid' | 'low' | null = null;
 
   private overlay!: Phaser.GameObjects.Container;
-  private resultText!: Phaser.GameObjects.Text;
+  private resultText!: Phaser.GameObjects.BitmapText;
   private overlayVisible = false;
 
   constructor() {
@@ -53,64 +57,44 @@ export class UIScene extends Phaser.Scene {
   }
 
   create(): void {
+    ensureArt(this);
     this.game_ = this.scene.get('GameScene') as GameScene;
 
-    const label = (x: number, y: number, size: number, color: string) =>
-      this.add
-        .text(x, y, '', { fontFamily: THEME.ui.fontFamily, fontSize: `${size}px`, color })
-        .setDepth(101);
+    const M = 40;
 
-    // Panels are inset from the arena corners so the corner brackets of the
-    // field frame stay visible underneath them.
-    const M = 56;
-
-    // ---- top-left: run time + score, on its own plate --------------------
-    this.panel(M, 40, 320, 50);
-    this.timeText = label(M + 16, 51, 24, THEME.ui.text);
-    this.scoreText = label(M + 146, 55, 18, THEME.ui.accent);
+    // ---- top-left: run time + score, on one compact plate ----------------
+    this.panel(M, 30, 300, 46);
+    this.timeText = pixelText(this, M + 14, 41, '', 3).setDepth(101);
+    this.scoreText = pixelText(this, M + 146, 45, '', 2, THEME.ui.accent).setDepth(101);
 
     // ---- top-centre: stage / wave progress -------------------------------
-    this.progressText = label(ARENA.width / 2, 52, 15, THEME.ui.text).setOrigin(0.5, 0);
+    this.panel(ARENA.width / 2 - 250, 30, 500, 34);
+    this.progressText = pixelText(this, ARENA.width / 2, 47, '', 2).setOrigin(0.5).setDepth(101);
 
-    // ---- top-right: live mechanics panel ---------------------------------
-    const dbgX = ARENA.width - M - 244;
-    this.debugPanel = this.panel(dbgX - 16, 40, 260, 140);
-    this.stateText = label(dbgX, 50, 15, THEME.ui.dim);
-    this.debugText = label(dbgX, 76, 12, THEME.ui.faint);
-    this.debugText.setLineSpacing(6);
+    // ---- top-right: APM ----------------------------------------------------
+    const apmW = 130;
+    this.panel(ARENA.width - M - apmW, 30, apmW, 34);
+    pixelText(this, ARENA.width - M - apmW + 14, 47, 'APM', 2, THEME.ui.dim).setOrigin(0, 0.5).setDepth(101);
+    this.apmText = pixelText(this, ARENA.width - M - 14, 47, '0', 2).setOrigin(1, 0.5).setDepth(101);
 
-    // ---- bottom-left: vitals + abilities ---------------------------------
-    const vitalsTop = ARENA.height - 122;
-    this.panel(M, vitalsTop, 320, 76);
+    // ---- bottom-left: vitals ----------------------------------------------
+    const vitalsTop = ARENA.height - 96;
+    this.panel(M, vitalsTop, 300, 56);
+    pixelText(this, M + 14, vitalsTop + 12, 'HP', 2, THEME.ui.dim).setDepth(101);
+    this.hpBar = new PixelBar(this, HP_BAR_WIDTH, { top: THEME.ui.hpTop, bottom: THEME.ui.hpBottom }, 102, 10, 2);
+    this.hpText = pixelText(this, M + 14 + 36, vitalsTop + 12, '', 2).setDepth(101);
 
-    const barY = vitalsTop + 52;
-    this.add
-      .rectangle(M + 16, barY, 240, 14, 0x000000, 0.55)
-      .setOrigin(0, 0.5)
-      .setStrokeStyle(1, THEME.ui.panelStroke)
+    // Pending-command banner, sat just above the ability bar where the eyes already are.
+    this.modeText = pixelText(this, ARENA.width / 2, ARENA.height - 150, '', 2, THEME.ui.danger)
+      .setOrigin(0.5, 0.5)
       .setDepth(101);
-    this.hpBar = this.add
-      .rectangle(M + 17, barY, 238, 12, 0x62d26f)
-      .setOrigin(0, 0.5)
-      .setDepth(102);
-    this.hpText = label(M + 266, barY - 8, 13, THEME.ui.dim);
 
-    label(M + 16, vitalsTop + 16, 12, THEME.ui.faint).setText('HP');
-
-    // Pending-command banner, sat just above the ability bar where the eyes
-    // already are. (Q now lives in the bottom-centre bar — there is exactly one
-    // Q cooldown display in the whole HUD.)
-    this.modeText = label(ARENA.width / 2, ARENA.height - 112, 14, THEME.ui.danger)
-      .setOrigin(0.5, 0.5);
-
-    // ---- bottom-right: controls ------------------------------------------
-    // The full control list lives in the pause menu; the HUD only points at it,
-    // which keeps the space beside the ability bar clear.
-    this.hintText = label(ARENA.width - M, ARENA.height - 44, 12, THEME.ui.faint).setOrigin(1, 0);
-    this.hintText.setText('ESC   menu & settings');
+    // ---- bottom-right: menu hint -------------------------------------------
+    pixelText(this, ARENA.width - M, ARENA.height - 36, 'ESC  MENU', 2, THEME.ui.faint)
+      .setOrigin(1, 1)
+      .setDepth(101);
 
     // ---- bottom-centre: ability bar + summoner slot ----------------------
-    // Q/W/E as the kit row (R slots in later), Flash set apart to its right.
     this.abilityBar = new AbilityBar(this, [
       { key: 'Q', icon: 'q' },
       { key: 'W', icon: 'w' },
@@ -118,26 +102,29 @@ export class UIScene extends Phaser.Scene {
       { key: 'F', icon: 'flash', summoner: true },
     ]);
 
-    // Passive pips sit just above the bar.
+    // Passive gems sit just above the bar.
     const slotTop = ARENA.height - THEME.ability.bottomMargin - THEME.ability.slotSize;
-    this.passiveDisplay = new PassiveDisplay(this, 5, slotTop - 30);
+    this.passiveDisplay = new PassiveDisplay(this, 5, slotTop - 26);
 
     // Stage / wave transition banner, centred above the play area.
-    this.stageText = label(ARENA.width / 2, 96, 20, THEME.ui.warn)
+    this.stageText = pixelText(this, ARENA.width / 2, 92, '', 4, THEME.ui.accent)
       .setOrigin(0.5, 0)
+      .setDepth(101)
       .setVisible(false);
 
     this.buildOverlay();
     this.buildPauseMenu();
   }
 
-  /** Rounded, semi-transparent plate that groups a block of HUD text. */
+  /** Pixel HUD plate that groups a block of HUD content. */
   private panel(x: number, y: number, w: number, h: number): Phaser.GameObjects.Graphics {
     const g = this.add.graphics().setDepth(100);
-    g.fillStyle(THEME.ui.panelColor, THEME.ui.panelAlpha);
-    g.fillRoundedRect(x, y, w, h, THEME.ui.panelRadius);
-    g.lineStyle(1, THEME.ui.panelStroke, 0.9);
-    g.strokeRoundedRect(x, y, w, h, THEME.ui.panelRadius);
+    pixelPanel(g, x, y, w, h, {
+      fill: THEME.ui.panel,
+      fillAlpha: THEME.ui.panelAlpha,
+      edge: THEME.ui.panelEdge,
+      highlight: THEME.ui.panelHighlight,
+    });
     return g;
   }
 
@@ -158,7 +145,7 @@ export class UIScene extends Phaser.Scene {
       },
       [
         {
-          label: 'Attack Range Indicator',
+          label: 'Range Indicator',
           read: () => DEBUG.attackRangeDisplay.toUpperCase(),
           cycle: () => {
             const order = ['contextual', 'always', 'off'] as const;
@@ -171,13 +158,6 @@ export class UIScene extends Phaser.Scene {
           read: () => (DEBUG.showDamageNumbers ? 'ON' : 'OFF'),
           cycle: () => {
             DEBUG.showDamageNumbers = !DEBUG.showDamageNumbers;
-          },
-        },
-        {
-          label: 'Debug Metrics',
-          read: () => (DEBUG.showAttackState ? 'ON' : 'OFF'),
-          cycle: () => {
-            DEBUG.showAttackState = !DEBUG.showAttackState;
           },
         },
       ],
@@ -196,48 +176,31 @@ export class UIScene extends Phaser.Scene {
   }
 
   private buildOverlay(): void {
-    const bg = this.add
-      .rectangle(0, 0, ARENA.width, ARENA.height, 0x05070b, 0.86)
-      .setOrigin(0, 0);
+    const bg = this.add.rectangle(0, 0, ARENA.width, ARENA.height, THEME.ui.scrim, 0.8).setOrigin(0, 0);
 
-    const title = this.add
-      .text(ARENA.width / 2, 110, '', {
-        fontFamily: THEME.ui.fontFamily,
-        fontSize: '42px',
-        color: THEME.ui.text,
-      })
-      .setOrigin(0.5);
+    const plate = this.add.graphics();
+    pixelPanel(plate, ARENA.width / 2 - 380, 56, 760, 616, {
+      fill: THEME.ui.panel, fillAlpha: 0.96, edge: THEME.ui.panelEdge, highlight: THEME.ui.panelHighlight, border: 3,
+    });
+
+    const title = pixelText(this, ARENA.width / 2, 110, '', 6).setOrigin(0.5);
     title.setName('title');
 
-    this.resultText = this.add
-      .text(ARENA.width / 2, 352, '', {
-        fontFamily: THEME.ui.fontFamily,
-        fontSize: '17px',
-        color: THEME.ui.text,
-        align: 'left',
-        lineSpacing: 8,
-      })
-      .setOrigin(0.5);
+    this.resultText = pixelText(this, ARENA.width / 2, 368, '', 2).setOrigin(0.5).setLineSpacing(6);
 
     const button = this.add
-      .rectangle(ARENA.width / 2, 630, 260, 52, 0x16202e)
-      .setStrokeStyle(2, 0x5fb0ff)
+      .rectangle(ARENA.width / 2, 626, 280, 48, THEME.menu.button)
+      .setStrokeStyle(3, THEME.ui.accent)
       .setInteractive({ useHandCursor: true });
 
-    const buttonText = this.add
-      .text(ARENA.width / 2, 630, 'PLAY AGAIN  [R]', {
-        fontFamily: THEME.ui.fontFamily,
-        fontSize: '19px',
-        color: THEME.ui.accent,
-      })
-      .setOrigin(0.5);
+    const buttonText = pixelText(this, ARENA.width / 2, 626, 'PLAY AGAIN  [R]', 2, THEME.ui.accent).setOrigin(0.5);
 
-    button.on('pointerover', () => button.setFillStyle(0x23354c));
-    button.on('pointerout', () => button.setFillStyle(0x16202e));
+    button.on('pointerover', () => button.setFillStyle(THEME.menu.buttonHover));
+    button.on('pointerout', () => button.setFillStyle(THEME.menu.button));
     button.on('pointerdown', () => this.game_.restartRound());
 
     this.overlay = this.add
-      .container(0, 0, [bg, title, this.resultText, button, buttonText])
+      .container(0, 0, [bg, plate, title, this.resultText, button, buttonText])
       .setDepth(200)
       .setVisible(false);
   }
@@ -261,18 +224,26 @@ export class UIScene extends Phaser.Scene {
     if (hud.round !== this.observedRound) this.beginRound(hud);
 
     this.timeText.setText(formatRunTime(hud.runTime));
-    this.scoreText.setText(`SCORE  ${hud.score}`);
+    this.scoreText.setText(`SCORE ${hud.score}`);
     this.progressText.setText(
-      `STAGE ${hud.stage} / ${hud.stageCount}      WAVE ${hud.wave} / ${hud.wavesInStage}      ENEMIES ${hud.enemiesRemaining}`,
+      `STAGE ${hud.stage} / ${hud.stageCount}    WAVE ${hud.wave} / ${hud.wavesInStage}    ENEMIES ${hud.enemiesRemaining}`,
     );
 
     const hpPct = Phaser.Math.Clamp(hud.hp / hud.maxHp, 0, 1);
-    this.hpBar.width = 238 * hpPct;
-    this.hpBar.setFillStyle(hpPct > 0.5 ? 0x62d26f : hpPct > 0.25 ? 0xffd166 : 0xff6b6b);
+    const band = hpPct > 0.5 ? 'high' : hpPct > 0.25 ? 'mid' : 'low';
+    if (band !== this.hpBand) {
+      this.hpBand = band;
+      const U = THEME.ui;
+      this.hpBar.setColors(
+        band === 'high' ? { top: U.hpTop, bottom: U.hpBottom }
+        : band === 'mid' ? { top: U.hpMidTop, bottom: U.hpMidBottom }
+        : { top: U.hpLowTop, bottom: U.hpLowBottom },
+      );
+    }
+    const vitalsTop = ARENA.height - 96;
+    this.hpBar.update(40 + 14 + HP_BAR_WIDTH / 2, vitalsTop + 34, hpPct);
     this.hpText.setText(`${Math.ceil(hud.hp)} / ${hud.maxHp}`);
 
-    // The ability bar is the single authoritative Q display. It is handed the
-    // real numbers from SkillshotSystem and derives nothing itself.
     // Every slot is handed the real numbers from AbilityCooldowns and derives
     // nothing — which is why a Q hit refunding W/E shows up instantly on all three.
     const cd = hud.abilityCooldowns;
@@ -285,29 +256,10 @@ export class UIScene extends Phaser.Scene {
     ]);
 
     this.modeText
-      .setText(hud.attackMovePending ? 'ATTACK MOVE — click a location' : '')
+      .setText(hud.attackMovePending ? 'ATTACK MOVE - CLICK A LOCATION' : '')
       .setVisible(hud.attackMovePending);
 
-    // READY / WINDUP / RECOVERY — the system's own view of the attack cycle, so
-    // you can compare what you feel against what the state machine thinks.
-    const stateLabel = hud.attackState === 'idle' ? 'READY' : hud.attackState.toUpperCase();
-    const stateColor =
-      hud.attackState === 'windup' ? THEME.ui.warn
-      : hud.attackState === 'recovery' ? THEME.ui.good
-      : THEME.ui.dim;
-
-    // One toggle hides the whole top-right group, plate included.
-    this.debugPanel.setVisible(DEBUG.showAttackState);
-    this.debugText.setVisible(DEBUG.showAttackState);
-    this.stateText.setVisible(DEBUG.showAttackState).setText(`STATE  ${stateLabel}`).setColor(stateColor);
-
-    this.debugText.setText([
-      `AS       ${hud.attacksPerSecond.toFixed(2)}/s  (${Math.round(hud.attackCooldownMs)}ms)`,
-      `AUTOS    ${hud.attacksLanded}/${hud.attacksFired}  cancel ${hud.attacksCancelled}`,
-      `MISSILES ${hud.missilesInFlight} in flight`,
-      `IDLE     ${(hud.idleInRangeMs / 1000).toFixed(1)}s in range`,
-      `STILL    ${(hud.wastedRecoveryMs / 1000).toFixed(1)}s in recovery`,
-    ].join('\n'));
+    this.apmText.setText(`${hud.apm}`);
 
     this.passiveDisplay.update(hud.passiveStacks, hud.passiveFraction);
     this.updateStageBanner(hud);
@@ -319,8 +271,8 @@ export class UIScene extends Phaser.Scene {
 
   /**
    * Stage / wave transition feedback, derived purely from the polled snapshot:
-   *   a new stage begins → big "STAGE N" for BANNERS.stageMs
-   *   a later wave begins → smaller "WAVE N" for BANNERS.waveMs
+   *   a new stage begins → big "STAGE N" for THEME.banners.stageMs
+   *   a later wave begins → smaller "WAVE N" for THEME.banners.waveMs
    *   breather after a clear → "WAVE CLEAR" / "STAGE CLEAR" until the next spawn
    * Timed on run time from the HUD snapshot, so it freezes with a pause.
    */
@@ -332,29 +284,25 @@ export class UIScene extends Phaser.Scene {
       this.lastWave = hud.wave;
       this.bannerText = `STAGE ${hud.stage}`;
       this.bannerIsStage = true;
-      this.bannerUntil = nowMs + BANNERS.stageMs;
+      this.bannerUntil = nowMs + THEME.banners.stageMs;
     } else if (hud.wave !== this.lastWave) {
       this.lastWave = hud.wave;
       this.bannerText = `WAVE ${hud.wave}`;
       this.bannerIsStage = false;
-      this.bannerUntil = nowMs + BANNERS.waveMs;
+      this.bannerUntil = nowMs + THEME.banners.waveMs;
     }
 
     if (nowMs < this.bannerUntil) {
-      this.stageText
-        .setVisible(true)
-        .setText(this.bannerText)
-        .setColor(this.bannerIsStage ? THEME.ui.accent : THEME.ui.text)
-        .setFontSize(this.bannerIsStage ? 26 : 18);
+      setPixelScale(this.stageText.setVisible(true).setText(this.bannerText), this.bannerIsStage ? 5 : 3)
+        .setTint(this.bannerIsStage ? THEME.ui.accent : THEME.ui.text);
       return;
     }
 
     if (hud.wavePhase === 'intermission') {
-      this.stageText
-        .setVisible(true)
-        .setText(hud.nextTransition === 'stage' ? 'STAGE CLEAR' : 'WAVE CLEAR')
-        .setColor(THEME.ui.good)
-        .setFontSize(18);
+      setPixelScale(
+        this.stageText.setVisible(true).setText(hud.nextTransition === 'stage' ? 'STAGE CLEAR' : 'WAVE CLEAR'),
+        3,
+      ).setTint(THEME.ui.good);
       return;
     }
 
@@ -372,10 +320,10 @@ export class UIScene extends Phaser.Scene {
 
     const completed = result.outcome === 'completed';
     const accuracy = result.qFired > 0 ? Math.round((result.qHit / result.qFired) * 100) : 0;
-    const title = this.overlay.getByName('title') as Phaser.GameObjects.Text;
+    const title = this.overlay.getByName('title') as Phaser.GameObjects.BitmapText;
     title
       .setText(completed ? 'RUN COMPLETE' : 'DEFEATED')
-      .setColor(completed ? THEME.ui.accent : THEME.ui.danger);
+      .setTint(completed ? THEME.ui.accent : THEME.ui.danger);
 
     const row = (label: string, value: string) => `${label.padEnd(24, ' ')}${value}`;
     const secs = (ms: number) => `${(ms / 1000).toFixed(1)}s`;
@@ -393,7 +341,7 @@ export class UIScene extends Phaser.Scene {
           'KILLS',
           `${result.targetsKilled}   (basic ${result.killsByType.basic ?? 0}, pursuer ${result.killsByType.pursuer ?? 0})`,
         ),
-        row('DAMAGE DEALT', `${result.damageDealt}`),
+        row('HITS LANDED', `${result.hitsLanded}   (mark procs ${result.markProcs})`),
         row('PROJECTILES HIT BY', `${result.projectileHitsTaken}`),
         row('Q ACCURACY', `${result.qHit}/${result.qFired}  (${accuracy}%)`),
         '',

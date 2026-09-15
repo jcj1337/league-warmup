@@ -1,72 +1,320 @@
 /**
  * Everything about how the game LOOKS lives here; balance.ts stays about how it
- * PLAYS. If you want to restyle the prototype, this is the only file to touch.
+ * PLAYS. Nothing in this file may change a gameplay outcome — sprite sizes,
+ * effect lengths and colours are all read-only presentation.
  *
- * Style target: minimalist top-down training simulator — dark field, cool blues
- * for you, warm reds for hostiles, amber for "dodge this", cyan for your shots.
- * Readability first: silhouettes differ by SHAPE, not just color.
+ * Style target: a top-down pixel-art slime skirmish on a dark, quiet volcanic
+ * waste. Chunky 3× pixels and dark ink outlines. The ground stays low-contrast
+ * ash so everything that matters pops: a friendly blue slime hero, a hostile
+ * slime family (red basic, horned purple Pursuer), orange-red enemy fire, and
+ * one strong colour identity per ability:
+ *   auto = sky cyan · Q = teal · W = violet/magenta · E = pink/blue · F = gold
+ *
+ * PALETTE holds the raw colours. THEME assigns them to roles. Pixel sprites
+ * (src/game/art/sprites.ts) map their characters onto PALETTE entries, so a
+ * palette change recolours the art too.
  */
 
+export const PALETTE = {
+  // ---- ink, shadow ---------------------------------------------------------
+  ink: 0x1d1a22,
+  shadow: 0x000000,
+
+  // ---- battlefield: ash waste ---------------------------------------------
+  // Deliberately low-contrast so units, projectiles and cues own the screen.
+  ashDeep: 0x272123,
+  ashDark: 0x2c2628,
+  ashBase: 0x312a2c,
+  ashLight: 0x362f30,
+  scorch: 0x282224,
+  crack: 0x161214,
+  pebble: 0x4a4140,
+  basaltDeep: 0x0e0b0d,
+  basalt: 0x171315,
+  basaltMid: 0x201b1d,
+  basaltLip: 0x4a3f3c,
+  lavaDim: 0x5a2417,
+  lavaGlow: 0xa9441f,
+  ember: 0xe07a2e,
+  rockDark: 0x2a2426,
+  rock: 0x463d3e,
+  rockLight: 0x685b59,
+  twigDark: 0x44372d,
+  twig: 0x75614f,
+  void: 0x0d0b0c,
+
+  // ---- slime family (shared) ------------------------------------------------
+  gold: 0xf2c14e,
+  fang: 0xfff4e0,
+  horn: 0xf0dcb0,
+  eyeGlow: 0xffe066,
+  eyeHot: 0xfff4c2,
+
+  // ---- player: blue slime ----------------------------------------------------
+  blueDeep: 0x1d3f96,
+  blue: 0x3e88ee,
+  blueLight: 0x82c6ff,
+  blueShine: 0xeaf7ff,
+  cheek: 0xff8db4,
+
+  // ---- basic enemy: red slime -------------------------------------------------
+  redDeep: 0x7c1a2b,
+  red: 0xd8383f,
+  redLight: 0xff7b63,
+  redShine: 0xffd8ca,
+
+  // ---- pursuer: horned purple slime -------------------------------------------
+  purpleDeep: 0x341558,
+  purpleDark: 0x57278c,
+  purple: 0x8446c8,
+  purpleLight: 0xb58af0,
+  purpleShine: 0xefe0ff,
+  eyeOrange: 0xff9a2e,
+
+  // ---- player combat colours ----------------------------------------------
+  autoDeep: 0x2f8fd8,
+  auto: 0x6fd0ff,
+  autoCore: 0xe8fbff,
+  qDeep: 0x0f9e8a,
+  q: 0x2fe3c3,
+  qCore: 0xd8fff6,
+  wDeep: 0x6b2fb3,
+  w: 0xa35cf0,
+  wHot: 0xe070e8,
+  wCore: 0xfbe3ff,
+  eDeep: 0xc2307e,
+  e: 0xff5fae,
+  eBlue: 0x7ab8ff,
+  eCore: 0xfff0fa,
+  flash: 0xffe98a,
+  flashCore: 0xfffbe6,
+  passive: 0x7cf3c0,
+
+  // ---- hostile -------------------------------------------------------------
+  fireDark: 0x5a1a0e,
+  fire: 0xe2482b,
+  fireOrange: 0xff8a2a,
+  fireCore: 0xffe38a,
+  warning: 0xff5a3c,
+
+  // ---- health --------------------------------------------------------------
+  hpGreen: 0x68d24e,
+  hpGreenDark: 0x3a9a32,
+  hpRed: 0xe0413a,
+  hpRedDark: 0xa4262a,
+  hpAmber: 0xf2b84b,
+  hpAmberDark: 0xb47e24,
+  hpGhost: 0xf2e6d0,
+
+  // ---- interface -----------------------------------------------------------
+  white: 0xffffff,
+  cream: 0xf4ead5,
+  creamDim: 0xbdb19a,
+  creamFaint: 0x8a806f,
+  panel: 0x1d1a22,
+  panelEdge: 0x4d4552,
+  panelHighlight: 0x6f6574,
+  panelHover: 0x2e2a36,
+  danger: 0xff6b57,
+  good: 0x7fdc6a,
+} as const;
+
+const P = PALETTE;
+
+/** '#rrggbb' for the few APIs (Phaser Text styles) that want CSS strings. */
+export function css(color: number): string {
+  return `#${color.toString(16).padStart(6, '0')}`;
+}
+
 export const THEME = {
-  // ---------------------------------------------------------------- arena
-  arena: {
-    /** Outside the play field. */
-    voidColor: 0x0a0d12,
-    /** The field itself, plus a slightly lighter center for depth. */
-    floorColor: 0x141a23,
-    floorCenterColor: 0x1a2230,
-    /** Fine grid, then a brighter line every `majorEvery` cells. */
-    gridColor: 0x1e2836,
-    gridMajorColor: 0x2a3a4e,
-    gridSize: 40,
-    majorEvery: 4,
-    /** Border frame + corner brackets. */
-    borderColor: 0x33506e,
-    borderGlowColor: 0x4ea1ff,
-    bracketLength: 54,
-    /** Faint edge shading that pulls the eye to the middle of the field. */
-    vignetteColor: 0x05070b,
-    vignetteAlpha: 0.55,
-    vignetteBand: 140,
+  /** Every sprite is authored at 1 art pixel = this many world pixels. */
+  art: {
+    scale: 3,
+  },
+
+  /**
+   * Draw order. Units and props are y-sorted INSIDE their band
+   * (see actorDepth / propDepth), so lower-on-screen draws in front.
+   * Props sit in a band below every combatant, so decoration never hides one.
+   */
+  depth: {
+    ground: 0,
+    ping: 2,
+    shadow: 3,
+    props: 5,
+    /** Ground-level overlays (range ring, telegraphs, mark rings): above props, below units. */
+    groundFx: 8,
+    actors: 10,
+    projectiles: 20,
+    hostileProjectiles: 21,
+    fx: 22,
+    mark: 23,
+    bars: 24,
+    reticle: 25,
+    text: 26,
+    screen: 60,
+  },
+
+  // ---------------------------------------------------------------- world
+  battlefield: {
+    /** Fixed seed: the decoration is identical every run and never touches gameplay RNG. */
+    seed: 0x5eed1e,
+    void: P.void,
+    /** Ash tones, darkest first. Close in value on purpose: texture, not pattern. */
+    ashTones: [P.ashDeep, P.ashDark, P.ashBase, P.ashLight],
+    scorch: P.scorch,
+    crack: P.crack,
+    pebble: P.pebble,
+    lavaDim: P.lavaDim,
+    lavaGlow: P.lavaGlow,
+    /** Darker burnt patches. */
+    scorchPatches: 4,
+    /** Hairline ground cracks; a fraction of them carry a dim ember seam. */
+    cracks: 9,
+    emberCrackChance: 0.45,
+    /** Chance per art pixel of a pebble / a lone dim ember speck. */
+    pebbleDensity: 0.004,
+    emberDensity: 0.0001,
+    /** Art pixels around the centre kept free of cracks and specks. */
+    clearCenterArt: 45,
+    /** Basalt band drawn in the non-playable padding around the arena. */
+    border: { deep: P.basaltDeep, dark: P.basalt, mid: P.basaltMid, lip: P.basaltLip, ember: P.lavaDim },
+    props: {
+      /** How many of each prop to try to place (rejection-sampled, so a few may be skipped). */
+      counts: { rockLarge: 2, rockSmall: 3, deadShrub: 2, emberRock: 1 } as Record<string, number>,
+      /** Keep this clear around the player's start. */
+      clearCenterRadius: 220,
+      minSpacing: 190,
+      /** Props stay out of the HUD strips at the top and bottom. */
+      hudTop: 110,
+      hudBottom: 600,
+    },
   },
 
   // --------------------------------------------------------------- player
   player: {
-    core: 0x4ea1ff,
-    coreBright: 0xbfe0ff,
-    outline: 0xdff0ff,
-    ringColor: 0x6fb6ff,
-    shadowAlpha: 0.32,
-    /** Slow breathing of the outer ring while idle. */
-    idlePulseAmp: 0.06,
-    idlePulseSpeed: 0.0022,
+    /** Sprite origin (fraction of height) — puts the body centre on the gameplay position. */
+    originY: 0.57,
+    shadowOffsetY: 17,
+    /** Distance from the body centre to where shots / casts visibly leave the slime. */
+    muzzleDistance: 20,
+    castEmitDistance: 10,
+    /** Idle breathing and the hop cycle while moving. */
+    idleFrameMs: 480,
+    walkFrameMs: 140,
+    hitFlashMs: 130,
+    hpBarWidth: 32,
+    hpBarOffsetY: 24,
+    /** Attack animation. Visual only; read from the real attack state. */
+    attack: {
+      windupLeanPx: 6,
+      releaseKickPx: 6,
+      releaseKickMs: 120,
+      releasePoseMs: 110,
+      muzzleMs: 90,
+      chargeRingStartPad: 20,
+      chargeRingEndPad: 3,
+      chargeColor: P.gold,
+      releaseRingRadius: 30,
+      releaseRingMs: 180,
+      releaseColor: P.autoCore,
+    },
+    rangeRing: {
+      idle: P.cream,
+      inRange: P.good,
+      pending: P.danger,
+    },
+    moveMarker: P.cream,
   },
 
   // -------------------------------------------------------------- enemies
-  target: {
-    core: 0xff6b6b,
-    coreDark: 0x8e2330,
-    outline: 0x2a0f14,
-    plateColor: 0xff9a8a,
-    shadowAlpha: 0.3,
-    /** Hostiles rotate slowly so they read as active machines, not props. */
-    spinSpeed: 0.00035,
-    hitFlashColor: 0xffe3e3,
+  enemy: {
+    hitFlashMs: 130,
+    /** Death pop length. Visual only — the kill registers immediately. */
+    deathAnimMs: 300,
+    deathShards: 10,
+    damageNumber: P.cream,
+    damageNumberRiseMs: 520,
   },
 
-  /**
-   * The Pursuer. Deliberately a different hue and a heavier silhouette than the
-   * basic target so the two never blur together at speed.
-   */
+  basic: {
+    originY: 0.54,
+    shadowOffsetY: 17,
+    frameMs: 260,
+    hpBarOffsetY: 24,
+    burst: [P.red, P.redLight, P.redShine],
+  },
+
   pursuer: {
-    core: 0xc2410c,
-    coreDark: 0x5c1a06,
-    outline: 0x2a0f05,
-    accent: 0xffa94d,
-    eye: 0xffd9a8,
-    shadowAlpha: 0.34,
-    /** Telegraph ring colour while it winds up a swing. */
-    windupColor: 0xff7a6b,
+    originY: 0.61,
+    shadowOffsetY: 20,
+    frameMs: 180,
+    hpBarOffsetY: 30,
+    burst: [P.purple, P.purpleLight, P.horn],
+    /** How long the flattened "slam" frame holds after a swing resolves. */
+    slamMs: 160,
+    /** Telegraph: the ground under its real reach warms up across the windup. */
+    telegraph: { color: P.warning, fillAlphaStart: 0.1, fillAlphaEnd: 0.28, alertAt: 0.55 },
+    slashColor: P.purpleShine,
+  },
+
+  /** Compact pixel health bars under each unit. */
+  hpBar: {
+    height: 4,
+    border: 1,
+    back: P.ink,
+    ghost: P.hpGhost,
+    player: { top: P.hpGreen, bottom: P.hpGreenDark },
+    enemy: { top: P.hpRed, bottom: P.hpRedDark },
+  },
+
+  /** Segmented enemy health: one cell per pip (see PipBar). */
+  pipBar: {
+    cellW: 8,
+    cellH: 5,
+    gap: 2,
+    border: 1,
+    back: P.ink,
+    top: P.hpRed,
+    bottom: P.hpRedDark,
+    /** A lost pip: a hollow slot that still shows the enemy's full count. */
+    empty: P.panelEdge,
+    /** Pale flash on a pip as it is lost. */
+    lossFlash: P.hpGhost,
+    lossFlashMs: 260,
+  },
+
+  /** The W mark drawn on a marked enemy. */
+  mark: {
+    color: P.w,
+    accent: P.wCore,
+    ringColor: P.wHot,
+    /** Fade/blink over this final stretch so the lapse is readable. */
+    warnMs: 600,
+    bobPx: 3,
+  },
+
+  // --------------------------------------------------------------- effects
+  fx: {
+    auto: { color: P.auto, core: P.autoCore, deep: P.autoDeep, impactRadius: 18, impactMs: 180, sparks: 5 },
+    q: { color: P.q, core: P.qCore, deep: P.qDeep, castFlashRadius: 24, castFlashMs: 120, impactRadius: 30, impactMs: 200, sparks: 9 },
+    w: { color: P.w, core: P.wCore, deep: P.wDeep, castFlashRadius: 28, castFlashMs: 130, impactRadius: 34, impactMs: 220, sparks: 8 },
+    e: { color: P.e, core: P.eCore, deep: P.eDeep, blue: P.eBlue, blinkMs: 180, impactRadius: 24, impactMs: 200, sparks: 7 },
+    flash: { color: P.flash, core: P.flashCore, burstMs: 220 },
+    hostile: { color: P.fireOrange, core: P.fireCore, deep: P.fire },
+    detonation: { color: P.wHot, accent: P.wCore, deep: P.w, radius: 46, ms: 280, shards: 12 },
+    hit: { color: P.white },
+    passive: P.passive,
+    cancel: P.danger,
+    ping: { move: P.cream, attackMove: P.danger, durationMs: 260 },
+    /** Trail puffs: one every `spacing` px of travel. */
+    trails: {
+      auto: { color: P.auto, spacing: 14, life: 120, size: 3 },
+      q: { color: P.q, spacing: 10, life: 150, size: 3 },
+      w: { color: P.wHot, spacing: 12, life: 240, size: 6 },
+      e: { color: P.e, spacing: 10, life: 160, size: 3 },
+      hostile: { color: P.fireOrange, spacing: 16, life: 220, size: 6 },
+    },
   },
 
   /**
@@ -74,94 +322,57 @@ export const THEME = {
    * when a cast completes; these only shape how that reads on screen.
    */
   cast: {
-    /**
-     * Shape of the charge-up. <1 front-loads it: the anticipation is visible
-     * almost immediately and then eases into the peak, so a 165ms cast still
-     * reads as a real windup instead of a blur. Applied as pow(progress, this).
-     */
+    /** <1 front-loads the charge so a 165ms cast still reads. Applied as pow(progress, this). */
     anticipationCurve: 0.55,
-    /** How much the player compresses at full charge. */
-    compression: 0.14,
-    /** W: the gathering orb grows between these radii over the cast. */
-    wOrbStartRadius: 2,
+    wOrbStartRadius: 3,
     wOrbEndRadius: 9,
-    /** W: how far in front of the player the orb gathers. */
-    wOrbOffset: 8,
-    /** E: the gathering ring contracts between these pads over the cast. */
     eRingStartPad: 24,
     eRingEndPad: 2,
-    /** Peak flash at the moment a cast completes. */
     releaseFlashMs: 105,
     releaseFlashRadius: 30,
   },
 
-  /** The W mark drawn on a marked enemy. */
-  mark: {
-    color: 0x9d7cf3,
-    accent: 0xe8dcff,
-    /** Radians per ms for the rotating accents. */
-    spinSpeed: 0.0026,
-  },
-
-  /** Ability passive: stack pips + duration bar under the ability bar. */
   passive: {
-    pipFilled: 0x7cf3c0,
-    pipEmpty: 0x25323f,
-    pipStroke: 0x3d5c6e,
-    pipRadius: 5,
-    pipGap: 15,
+    pipFilled: P.passive,
+    maxStackColor: P.passive,
+    barColor: P.passive,
     barWidth: 76,
-    barHeight: 3,
-    barColor: 0x7cf3c0,
-    /** Extra emphasis on the player while the passive is fully stacked. */
-    maxStackColor: 0x7cf3c0,
+    barHeight: 4,
+    pipGap: 16,
   },
 
-  // ----------------------------------------------------------- projectiles
-  projectiles: {
-    /** Your autos: fast, thin, cyan. */
-    autoColor: 0x9fe8ff,
-    autoCore: 0xffffff,
-    /** Q: chunkier, green, unmistakably an ability. */
-    qColor: 0x7cf3c0,
-    qCore: 0xe8fff6,
-    /** W: violet mark orb — fatter and unmistakably not Q. */
-    wColor: 0x9d7cf3,
-    wCore: 0xe8dcff,
-    /** E: hot-pink homing bolt, and the blink flashes that go with it. */
-    eColor: 0xff5fa8,
-    eCore: 0xffd9ec,
-    /** Flash: pale gold starburst. */
-    flashColor: 0xfff3c4,
-    /** Incoming: fat, amber, heavy dark rim — "dodge me". */
-    enemyColor: 0xffb347,
-    enemyRim: 0x3a2405,
-    enemyCore: 0xfff0cf,
-  },
-
-  // -------------------------------------------------------------- markers
   markers: {
-    moveColor: 0x5fb0ff,
-    attackMoveColor: 0xff7a6b,
-    targetLockColor: 0x62d26f,
-    targetAcquiringColor: 0xffd166,
+    targetInRange: P.good,
+    targetOutOfRange: P.gold,
   },
 
   // ------------------------------------------------------------------- ui
   ui: {
-    fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
-    text: '#dce6f5',
-    dim: '#7d8aa0',
-    faint: '#5a6577',
-    accent: '#5fb0ff',
-    danger: '#ff7a6b',
-    good: '#62d26f',
-    warn: '#ffd166',
-    /** Panel plates behind HUD groups. */
-    panelColor: 0x0e141d,
-    panelAlpha: 0.72,
-    panelStroke: 0x27364a,
-    panelRadius: 8,
+    text: P.cream,
+    dim: P.creamDim,
+    faint: P.creamFaint,
+    accent: P.gold,
+    danger: P.danger,
+    good: P.good,
+    warn: P.gold,
+    panel: P.panel,
+    panelAlpha: 0.82,
+    panelEdge: P.panelEdge,
+    panelHighlight: P.panelHighlight,
+    hpTop: P.hpGreen,
+    hpBottom: P.hpGreenDark,
+    hpMidTop: P.hpAmber,
+    hpMidBottom: P.hpAmberDark,
+    hpLowTop: P.hpRed,
+    hpLowBottom: P.hpRedDark,
+    hitRim: P.danger,
+    scrim: P.ink,
+  },
+
+  /** Stage / wave transition banners. Presentation only. */
+  banners: {
+    stageMs: 1500,
+    waveMs: 900,
   },
 
   /**
@@ -178,33 +389,35 @@ export const THEME = {
   ability: {
     slotSize: 62,
     slotGap: 10,
-    /** Distance from the bottom of the arena to the bottom of the slots. */
     bottomMargin: 40,
-    /** Summoner spells (Flash) are smaller and set apart from the kit row. */
     summonerSize: 46,
     summonerGap: 26,
-    radius: 10,
-    readyFill: 0x152233,
-    readyStroke: 0x5fb0ff,
-    cooldownFill: 0x0c1119,
-    cooldownStroke: 0x2b3a4e,
-    /** Dark wash over the slot while the ability is unavailable. */
-    cooldownWashAlpha: 0.62,
-    /** The radial sweep that drains as the cooldown runs down. */
-    sweepColor: 0x05070b,
-    sweepAlpha: 0.66,
+    readyEdge: P.creamDim,
+    cooldownEdge: P.panelEdge,
+    fill: P.panel,
+    cooldownWashAlpha: 0.55,
+    sweepColor: P.ink,
+    sweepAlpha: 0.7,
+    /** Per-slot accent: the ability's own colour. */
+    accents: { q: P.q, w: P.w, e: P.e, flash: P.flash } as Record<string, number>,
   },
 
   /** Pause / settings menu. */
   menu: {
-    panelColor: 0x0d131c,
-    panelAlpha: 0.97,
-    panelStroke: 0x35506e,
-    scrimColor: 0x04060a,
-    scrimAlpha: 0.72,
-    buttonFill: 0x16202e,
-    buttonFillHover: 0x22344a,
-    buttonStroke: 0x3d5c7e,
-    buttonStrokeHover: 0x5fb0ff,
+    scrimAlpha: 0.7,
+    button: P.ink,
+    buttonHover: P.panelHover,
+    buttonEdge: P.panelEdge,
+    buttonEdgeHover: P.gold,
   },
 } as const;
+
+/** Depth for a y-sorted combatant: lower on screen draws in front. */
+export function actorDepth(y: number): number {
+  return THEME.depth.actors + Math.max(0, y) / 10000;
+}
+
+/** Depth for a y-sorted prop, always beneath every combatant. */
+export function propDepth(y: number): number {
+  return THEME.depth.props + Math.max(0, y) / 10000;
+}

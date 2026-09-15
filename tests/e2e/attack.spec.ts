@@ -24,7 +24,7 @@ test('attack: ground move, direct attack + chase, windup/recovery, cancel, post-
     const t = s.attacks.currentTarget;
     return {
       player: { x: p.x, y: p.y, rooted: p.isRooted, moving: p.isMoving },
-      ring: { visible: p.rangeRing.visible, radius: p.rangeRing.radius },
+      ring: { visible: p.view.rangeRing.visible, radius: p.view.rangeRing.radius },
       attack: {
         state: s.attacks.state,
         windupMs: s.attacks.windupMs,
@@ -141,7 +141,8 @@ test('attack: ground move, direct attack + chase, windup/recovery, cancel, post-
   const before = (await state()).attack.targetHp;
   await page.waitForTimeout(1900);
   const afterRepeat = await state();
-  const hits = Math.round((before - (afterRepeat.attack.targetHp ?? 0)) / 12);
+  // One auto = one pip.
+  const hits = before - (afterRepeat.attack.targetHp ?? 0);
   hits >= 2
     ? pass(`keeps attacking with no new command (${hits} more autos in 1.9s)`)
     : fail(`only ${hits} autos in 1.9s (hp ${before} -> ${afterRepeat.attack.targetHp})`);
@@ -221,8 +222,8 @@ test('attack: ground move, direct attack + chase, windup/recovery, cancel, post-
     const cancelled = await state();
     const hpNow = await tagHp();
     hpNow === hpAtWindup
-      ? pass(`windup cancelled by a move order — no damage dealt (hp still ${hpNow})`)
-      : fail(`target took damage after cancel (${hpAtWindup} -> ${hpNow})`);
+      ? pass(`windup cancelled by a move order — no pip lost (still ${hpNow})`)
+      : fail(`target lost pips after cancel (${hpAtWindup} -> ${hpNow})`);
     cancelled.attack.state === 'idle' ? pass('cancel returns the state to idle')
       : fail('state after cancel: ' + cancelled.attack.state);
     !cancelled.attack.hasTarget ? pass('move order clears the attack target')
@@ -262,8 +263,8 @@ test('attack: ground move, direct attack + chase, windup/recovery, cancel, post-
       : fail(`did not move after firing (${dist(p0, p1.player).toFixed(0)}px)`);
     const hpsNow = await page.evaluate(() => window.__warmup.scene.getScene('GameScene').enemies.map((t) => t.hp));
     hpsNow.some((h) => h <= hpAtFire)
-      ? pass('damage from the fired attack persisted through the move order')
-      : fail('fired damage was undone');
+      ? pass('the fired attack\'s hit persisted through the move order')
+      : fail('fired hit was undone');
   }
 
   await finish();

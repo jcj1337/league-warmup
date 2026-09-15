@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import * as balance from './config/balance';
 import { ARENA } from './config/balance';
+import { THEME } from './config/theme';
 import { GameScene } from './game/scenes/GameScene';
 import { UIScene } from './game/scenes/UIScene';
 
@@ -9,7 +10,7 @@ const game = new Phaser.Game({
   parent: 'game',
   width: ARENA.width,
   height: ARENA.height,
-  backgroundColor: ARENA.backgroundColor,
+  backgroundColor: THEME.battlefield.void,
   // No physics engine: movement and collision are plain math in the systems,
   // which keeps the feel fully under our control while tuning.
   scale: {
@@ -17,8 +18,10 @@ const game = new Phaser.Game({
     autoCenter: Phaser.Scale.CENTER_BOTH,
   },
   render: {
-    antialias: true,
-    roundPixels: false,
+    // Pixel art: nearest-neighbour texture filtering, crisp canvas scaling and
+    // whole-pixel sprite placement. Gameplay positions stay fractional — only
+    // where sprites are DRAWN is rounded.
+    pixelArt: true,
   },
   // GameScene simulates; UIScene runs on top of it and only reads state.
   scene: [GameScene, UIScene],
@@ -27,4 +30,5 @@ const game = new Phaser.Game({
 // Handy while playtesting, from the browser console:
 //   __warmup.scene.getScene('GameScene').getHudState()
 //   __balance.ATTACK.range = 400      // most values apply on the next frame
-Object.assign(window as unknown as Record<string, unknown>, { __warmup: game, __balance: balance });
+//   __theme.player.attack.windupLeanPx // presentation values
+Object.assign(window as unknown as Record<string, unknown>, { __warmup: game, __balance: balance, __theme: THEME });

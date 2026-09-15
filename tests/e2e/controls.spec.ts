@@ -47,7 +47,6 @@ test('controls: Q quick-cast, T attack-move-click, targeting modes, T orbwalk, T
   const cfg = await page.evaluate(() => ({
     qRange: window.__balance.SKILLSHOT_Q.maxRange,
     qSpeed: window.__balance.SKILLSHOT_Q.speed,
-    qDmg: window.__balance.SKILLSHOT_Q.damage,
     qCd: window.__balance.SKILLSHOT_Q.cooldownMs,
     atkRange: window.__balance.ATTACK.range,
     targeting: window.__balance.ATTACK.attackMoveTargeting,
@@ -132,7 +131,7 @@ test('controls: Q quick-cast, T attack-move-click, targeting modes, T orbwalk, T
   await page.waitForTimeout(500);
   const hp1 = await tagHp(1);
   const hp2 = await tagHp(2);
-  hp1 === 9999 - cfg.qDmg ? pass(`first enemy took Q damage (${cfg.qDmg})`) : fail(`first enemy hp ${hp1}`);
+  hp1 === 9998 ? pass('Q hit removes exactly 1 pip from the first enemy') : fail(`first enemy pips ${hp1} (expected 9998)`);
   hp2 === 9999 ? pass('bolt did not pierce to the second enemy') : fail(`second enemy hp ${hp2} — pierced`);
   (await G()).qMissiles === 0 ? pass('bolt is consumed on impact') : fail('bolt survived impact');
 

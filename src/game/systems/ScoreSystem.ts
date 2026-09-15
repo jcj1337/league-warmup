@@ -3,7 +3,10 @@ import { SCORE } from '../../config/balance';
 /** Round tallies. Kept dumb on purpose — scoring will change a lot. */
 export class ScoreSystem {
   public score = 0;
-  public damageDealt = 0;
+  /** Pip-removing hits landed by autos, Q and the E bolt. */
+  public hitsLanded = 0;
+  /** W marks cashed in for their extra pip. */
+  public markProcs = 0;
   public targetsKilled = 0;
   /** Kills broken down by archetype id, for the end screen. */
   public readonly killsByType: Record<string, number> = {};
@@ -11,9 +14,12 @@ export class ScoreSystem {
 
   private survivalCredit = 0;
 
-  addDamage(amount: number): void {
-    this.damageDealt += amount;
-    this.score += amount * SCORE.pointsPerDamage;
+  addHit(): void {
+    this.hitsLanded++;
+  }
+
+  addMarkProc(): void {
+    this.markProcs++;
   }
 
   /**

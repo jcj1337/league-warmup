@@ -28,9 +28,13 @@ collision test is explicit arithmetic inside a system class, which keeps timing
 deterministic and tunable.
 
 Phaser provides exactly five things: the game loop (`Scene.update`), two parallel
-scenes, input capture, drawing primitives (`Arc`, `Polygon`, `Rectangle`, `Ellipse`,
-`Line`, `Graphics`, `Container`, `Text`), and tweens — used **only** for
-fire-and-forget decoration. No tween is ever load-bearing.
+scenes, input capture, rendering (`Image` sprites from canvas-generated textures,
+`BitmapText`, `Graphics`, `Rectangle`, plus a debug `Text`), and tweens — used **only**
+for a couple of fire-and-forget screen effects. No tween is ever load-bearing.
+
+Rendering runs with `pixelArt: true` (nearest-neighbour filtering, no antialias,
+whole-pixel sprite placement). Gameplay positions stay fractional; only where a sprite
+is *drawn* is rounded.
 
 ```mermaid
 flowchart TD
@@ -91,14 +95,16 @@ object, and an event-wired HUD kept breaking across restarts).
 ### Config *(pure data)*
 
 - **`src/config/balance.ts`** — gameplay tuning: `ARENA`, `PLAYER`, `ATTACK`,
-  `attackReach()`, `KEYBINDS`, `INDICATORS`, `DEBUG`, `SKILLSHOT_Q`, `SKILLSHOT_W`,
+  `attackReach()`, `KEYBINDS`, `DEBUG`, `SKILLSHOT_Q`, `SKILLSHOT_W`,
   `BLINK_E`, `FLASH`, `PASSIVE`, `TARGETS`, `ENEMY_PROJECTILES`, `PURSUER`, `RUN`,
-  `STAGES`, `BANNERS`, `SCORE`, `UI`. `ATTACK`, `DEBUG` and `KEYBINDS` are deliberately
+  `STAGES`, `SCORE`. Gameplay numbers only — no colours or effect timings.
+  `ATTACK`, `DEBUG` and `KEYBINDS` are deliberately
   not `as const` so they stay writable from the console. `RUN` + `STAGES` are the one
   place the run's structure and per-stage difficulty are tuned (§9, §10).
-- **`src/config/theme.ts`** — `THEME.{arena, player, target, pursuer, cast, mark,
-  passive, projectiles, markers, ui, rangeHint, ability, menu}`. Nothing here
-  affects gameplay.
+- **`src/config/theme.ts`** — `PALETTE` (raw colours) and `THEME.{art, depth,
+  battlefield, player, enemy, basic, pursuer, hpBar, mark, fx, cast, passive, markers,
+  ui, banners, rangeHint, ability, menu}`, plus `actorDepth()` / `propDepth()` for
+  y-sorting. Nothing here affects gameplay.
 
 ### Scenes
 
@@ -114,24 +120,24 @@ object, and an event-wired HUD kept breaking across restarts).
 ### Entities
 
 - **`Player.ts`** — authoritative `x`, `y`, `hp`, move order, `rootCount`
-  (reference-counted movement lock), `lastHitAt`. Also owns its own rendering: a
-  `Container` with a dart `Polygon` hull, core, idle ring; plus shadow, range ring,
-  move marker, charge ring, release ring, passive aura and a cast `Graphics`.
-  Visual entry points (`applyAttackVisual`, `setCastVisual`, `setRangeRingState`,
-  `playReleaseBurst`, `playCastRelease`, `showCancelTag`, `playPassivePulse`) are
-  pure sinks — none can change timing.
+  (reference-counted movement lock), `lastHitAt`. Rendering lives in its
+  `PlayerView` (`player.view`); the visual entry points (`applyAttackVisual`,
+  `setCastVisual`, `setRangeRingState`, `playReleaseBurst`, `playCastRelease`,
+  `showCancelTag`, `playPassivePulse`) only forward state to it — none can change
+  timing or position.
 - **`Enemy.ts`** — abstract base holding everything archetype-independent: position,
-  HP, damage/death lifecycle, `spawnId`, the W mark, and all shared feedback (hit
-  flash, floating damage numbers, draining ghost HP bar, death burst, shadow).
-  Subclasses supply the body (in their constructor), `syncBody()` and optionally
-  `updateAi()`. Every combat system types against `Enemy`, never a concrete
-  archetype.
-- **`Target.ts`** — basic dummy: red hexagon, wanders, never attacks.
-- **`Pursuer.ts`** — melee stalker with a two-state AI (§9).
-- **`AutoAttackMissile.ts`** — homing missile, spec-driven so autos (cyan) and the E
-  bolt (pink) share one class. Carries a `targetSpawnId` guard.
+  HP, damage/death lifecycle, `spawnId`, the W mark, and a `pose` (moving / facing /
+  windup progress / reach) the AI publishes for its view. Subclasses build their
+  `view` in the constructor and supply `updateAi()`. Every combat system types
+  against `Enemy`, never a concrete archetype.
+- **`Target.ts`** — basic enemy (red slime): wanders, never attacks.
+- **`Pursuer.ts`** — melee brute (horned purple slime) with a two-state AI (§9); tells its `PursuerView`
+  when a swing resolves and whether it landed.
+- **`AutoAttackMissile.ts`** — homing missile, spec-driven (speed, art, impact effect)
+  so autos and the E bolt share one class. Carries a `targetSpawnId` guard.
 - **`Projectile.ts`** — straight-line projectile shared by Q, W and enemy fire.
-  Fixed `vx/vy`, accumulates `travelled`, dies at `maxRange` or out of bounds.
+  Fixed `vx/vy`, accumulates `travelled`, dies at `maxRange` or out of bounds. Its
+  sprite (`ProjectileView`) is separate from its collision `radius`.
 
 ### Systems
 
@@ -152,9 +158,27 @@ object, and an event-wired HUD kept breaking across restarts).
 
 ### UI
 
-`AbilityBar.ts` (slots + procedural icons + cooldown sweep + cast fill),
-`PassiveDisplay.ts` (pips + duration bar), `PauseMenu.ts` (scrim, panel, buttons,
-settings rows, controls reference).
+`AbilityBar.ts` (pixel slots + pixel icons + cooldown sweep + cast fill),
+`PassiveDisplay.ts` (stack gems + duration bar), `PauseMenu.ts` (scrim, pixel panel,
+buttons, settings rows, controls reference). All HUD text is `BitmapText` in the
+generated 5×7 pixel font except the utilitarian debug readout.
+
+### Art and view *(presentation only)*
+
+| File | Role |
+| --- | --- |
+| `art/sprites.ts` | Every sprite as an original text pixel map with a character → `PALETTE` map |
+| `art/textures.ts` | `ensureArt()` rasterises sprites + font once per game; `TEX` holds every texture key |
+| `art/font.ts`, `art/glyphs.ts` | 5×7 bitmap font and `pixelText()` |
+| `view/PlayerView.ts` | Blue slime sprite + squash/stretch frames, shot flash, rings, cast charge-ups, HP bar |
+| `view/EnemyView.ts` | Enemy slime sprite, hit flash, death pop, W mark, HP bar; `PursuerView` adds slam frame + telegraph |
+| `view/ProjectileView.ts`, `view/projectileArt.ts` | Projectile sprites and trails |
+| `view/Fx.ts` | Pooled pixel particles, dotted rings and popups, advanced by `GameScene.update()` |
+| `view/Battlefield.ts` | Seeded painted ground texture + decorative props (no collision) |
+| `view/PixelBar.ts`, `view/pixelDraw.ts` | Health bars; dotted rings, pixel discs, HUD panels |
+
+Views observe entity state and gameplay events; nothing in `art/` or `view/` is read
+back by gameplay.
 
 ---
 
@@ -774,8 +798,21 @@ duration, and a wave breather's remaining time.
 Enforced by shape: `AttackSystem.windupProgress` and `CastSystem.progress` are derived
 from real deadlines; `Player.applyAttackVisual()` / `setCastVisual()` write only to
 visual-only fields and cannot call `root()`, change position, or touch a timer. The
-lean is a render offset applied to the body container — `this.x/this.y` stay
-authoritative.
+lean is a render offset applied to the sprite — `this.x/this.y` stay authoritative.
+
+**The view layer.** `PlayerView`, `EnemyView`, `ProjectileView`, `Fx` and
+`Battlefield` own every GameObject. Entities publish state (`Enemy.pose`, the
+player's view state) and emit events (`onHit`, `onDeath`, `strike`); views read them.
+Sprite size never feeds collision or range: enemy radii, Pursuer reach and projectile
+radii stay the gameplay values, and the Pursuer's ground telegraph *reads* its real
+reach. Animation frames are picked from gameplay progress and a view-local clock
+advanced by frame `dt` (so they freeze with the pause) — never from Phaser animation
+callbacks.
+
+**Depth.** Fixed bands from `THEME.depth`: ground → pings → shadows → props (y-sorted)
+→ ground overlays (range ring, telegraph, mark ring) → units (y-sorted by gameplay
+`y`) → projectiles → effects → marks → health bars → reticle → text. Props sit below
+every unit, so decoration never hides a combatant.
 
 One-shot effects (release burst, cancel tag, cast release flash) are driven by
 polling the owning system's timestamp (`lastReleaseAt`, `lastCancelAt`,
@@ -814,17 +851,19 @@ leads or lags the mechanic.
 
 The base attack cycle is per stage: `STAGES[n].baseAttackCooldownMs`.
 
-Visual-only: `windupLeanPx` 9, `windupScale` 1.18, `releaseKickPx/Ms` 8/120,
-`chargeRingStartPad/EndPad` 20/3, `releaseRingRadius/Ms` 30/180.
+The attack animation knobs live in `THEME.player.attack`: `windupLeanPx` 6,
+`releaseKickPx/Ms` 6/120, `chargeRingStartPad/EndPad` 20/3, `releaseRingRadius/Ms` 30/180.
 
 ### Abilities
 
 | | `castTimeMs` | `cooldownMs` | Range | Speed | Damage | Notes |
 | --- | --- | --- | --- | --- | --- | --- |
-| `SKILLSHOT_Q` | 165 | 3000 | 450 | 1250 | 30 | `hitCooldownReductionMs` 750, radius 7, `boltLength` 26 |
+| `SKILLSHOT_Q` | 165 | 3000 | 450 | 1250 | 30 | `hitCooldownReductionMs` 750, radius 7 |
 | `SKILLSHOT_W` | 185 | 6000 | 450 | 1000 | 0 / **45** detonation | `markDurationMs` 4000, radius 12 |
-| `BLINK_E` | 210 | 8000 | 364 | bolt 1050 | 38 | `boltAcquisitionRange` 380, `boltRadius` 7, `blinkStreakMs` 100 |
-| `FLASH` | — | 20000 | 325 | — | — | `burstMs` 200 |
+| `BLINK_E` | 210 | 8000 | 364 | bolt 1050 | 38 | `boltAcquisitionRange` 380, `boltRadius` 7 |
+| `FLASH` | — | 20000 | 325 | — | — | — |
+
+Effect sizes and durations for every ability are presentation and live in `THEME.fx`.
 
 `PASSIVE`: `maxStacks` 5, `attackSpeedPerStack` 0.10, `durationMs` 6000.
 
@@ -836,12 +875,12 @@ Visual-only: `windupLeanPx` 9, `windupScale` 1.18, `releaseKickPx/Ms` 8/120,
 `enemyFire`, and `waves` (each a `WaveRoster` such as `{ basic: 2, pursuer: 2 }`).
 Values in §9.
 
-`BANNERS`: `stageMs` 1500, `waveMs` 900.
+Banner durations are presentation: `THEME.banners` (`stageMs` 1500, `waveMs` 900).
 
 ### Enemies
 
-`TARGETS`: radius 18, maxHp 24, deathAnim 300ms, hitFeedback 130ms, drift 45 px/s
-every 1800ms, minSpawnDistance 240, edgeMargin 60.
+`TARGETS`: radius 18, maxHp 24, drift 45 px/s every 1800ms, minSpawnDistance 240,
+edgeMargin 60. (Hit flash / death pop timings: `THEME.enemy`.)
 
 `PURSUER`: `baseHpMultiplier` 2.5, radius 26, `moveSpeedFraction` 0.55,
 `attackRange` 16, `attackDamage` 10, `windupMs` 400, `attackCooldownMs` 1200,
@@ -961,11 +1000,9 @@ cancelling uncommitted ones, and cast windows committing their aim at keypress.
 
 ### Important
 
-1. **Two sources of truth for colour.** `theme.ts` owns the look, but `balance.ts`
-   still declares colours nothing reads. Verified dead: the entire `UI` block,
-   `ARENA.floorColor`, `ARENA.borderColor`, `PLAYER.color`, `TARGETS.color`,
-   `ENEMY_PROJECTILES.color`, `ATTACK.projectileColor`. Editing them does nothing —
-   an active trap while tuning. (`ARENA.backgroundColor` *is* used, in `main.ts`.)
+1. *(Resolved in the pixel-art pass.)* Colours and effect timings now live only in
+   `theme.ts`; the dead `balance.ts` colours, the `UI` block, `INDICATORS`,
+   `BANNERS` and the visual-only ability/enemy fields were removed.
 2. **`stopsOnFirstHit` is now dead.** Both `SKILLSHOT_Q.stopsOnFirstHit` and
    `SKILLSHOT_W.stopsOnFirstHit` are documented but unread — the generalised
    `SkillshotSystem` kills the missile unconditionally on contact. Setting either
@@ -987,22 +1024,20 @@ cancelling uncommitted ones, and cast windows committing their aim at keypress.
 8. **The drawn range ring assumes all enemies share `TARGETS.radius`.** With the
    Pursuer at radius 26, the ring is exact for basic targets and conservative for
    Pursuers; the per-target reticle is the accurate cue.
-9. **`TARGETS` config is doing double duty** — `hitFeedbackMs`, `deathAnimMs`,
-   `deathShards` are read by *all* enemies from a block named for the basic target.
+9. *(Resolved.)* Shared enemy feedback timings moved to `THEME.enemy`.
 10. **`attacksFired` counts releases with no missile** (target died mid-windup).
 11. **i-frames are global**, so a Pursuer swing and a projectile landing together
     means one is silently eaten.
 12. **`HudState` is ~35 fields** — one grab-bag for every HUD region.
-13. **Magic numbers remain in visual code** despite `theme.ts`: the 0.22 hit-squash,
-    1.6 ghost-bar drain rate, 10px click grace, 0.35 rotation smoothing, reticle arc
-    count and 1400 spin divisor.
+13. **Small animation constants remain inline in the views** (hit-squash amount,
+    ghost-bar drain rate, bob/pulse speeds, spark speeds). Colours no longer do.
 14. **`AbilityId` / `CastAbility` unions are declared in three places** (cooldown
     durations, cast system, HUD).
 
 ### Future cleanup
 
-15. No object pooling — every projectile, damage number, ping and shard is a fresh
-    GameObject destroyed on completion. Fine at current densities.
+15. Particles, rings, pings and damage numbers are pooled in `Fx`; projectile sprites
+    are still created/destroyed per shot. Fine at current densities.
 16. `GameScene.update()` calls `attacks.hasTargetInRange(enemies)` purely for metrics,
     duplicating the range scan `attacks.update()` already did.
 17. **No tests live in the repository.** The eleven browser suites that validate every

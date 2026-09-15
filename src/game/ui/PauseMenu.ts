@@ -1,6 +1,8 @@
 import Phaser from 'phaser';
 import { ARENA } from '../../config/balance';
 import { THEME } from '../../config/theme';
+import { pixelText } from '../art/font';
+import { pixelPanel } from '../view/pixelDraw';
 
 export interface PauseMenuActions {
   resume(): void;
@@ -17,7 +19,7 @@ interface SettingRow {
 }
 
 /**
- * The Escape menu: a scrim plus a centred panel with actions and settings.
+ * The Escape menu: a scrim plus a centred pixel panel with actions and settings.
  *
  * It lives in UIScene, which is never paused, so its buttons keep working while
  * the simulation is frozen. It owns no gameplay state — buttons call into
@@ -26,7 +28,7 @@ interface SettingRow {
  */
 export class PauseMenu {
   private readonly container: Phaser.GameObjects.Container;
-  private readonly rows: Array<{ row: SettingRow; value: Phaser.GameObjects.Text }> = [];
+  private readonly rows: Array<{ row: SettingRow; value: Phaser.GameObjects.BitmapText }> = [];
 
   constructor(
     private readonly scene: Phaser.Scene,
@@ -34,81 +36,49 @@ export class PauseMenu {
     settings: SettingRow[],
     controls: string[] = [],
   ) {
-    const w = 430;
-    const h = 400 + (controls.length ? 40 + controls.length * 18 : 0);
+    const w = 480;
+    const h = 380 + (controls.length ? 44 + controls.length * 20 : 0);
     const x = ARENA.width / 2;
     const y = ARENA.height / 2;
-    const left = x - w / 2;
-    const top = y - h / 2;
+    const left = Math.round(x - w / 2);
+    const top = Math.round(y - h / 2);
 
     const parts: Phaser.GameObjects.GameObject[] = [];
 
     // Scrim: also swallows stray clicks so nothing lands on the arena behind.
     const scrim = scene.add
-      .rectangle(0, 0, ARENA.width, ARENA.height, THEME.menu.scrimColor, THEME.menu.scrimAlpha)
+      .rectangle(0, 0, ARENA.width, ARENA.height, THEME.ui.scrim, THEME.menu.scrimAlpha)
       .setOrigin(0, 0)
       .setInteractive();
     parts.push(scrim);
 
     const panel = scene.add.graphics();
-    panel.fillStyle(THEME.menu.panelColor, THEME.menu.panelAlpha);
-    panel.fillRoundedRect(left, top, w, h, 12);
-    panel.lineStyle(1, THEME.menu.panelStroke, 0.95);
-    panel.strokeRoundedRect(left, top, w, h, 12);
-    // Accent rule under the title, in the same language as the arena brackets.
-    // (numeric accent — THEME.ui.accent is the CSS string form, for Text styles)
-    panel.lineStyle(2, THEME.menu.buttonStrokeHover, 0.75);
-    panel.lineBetween(left + 28, top + 68, left + w - 28, top + 68);
+    pixelPanel(panel, left, top, w, h, {
+      fill: THEME.ui.panel, fillAlpha: 0.97, edge: THEME.ui.panelEdge, highlight: THEME.ui.panelHighlight, border: 3,
+    });
+    panel.fillStyle(THEME.ui.accent, 0.9);
+    panel.fillRect(left + 28, top + 66, w - 56, 3);
     parts.push(panel);
 
-    parts.push(
-      scene.add
-        .text(x, top + 34, 'PAUSED', {
-          fontFamily: THEME.ui.fontFamily,
-          fontSize: '26px',
-          color: THEME.ui.text,
-        })
-        .setOrigin(0.5),
-    );
+    parts.push(pixelText(scene, x, top + 36, 'PAUSED', 4).setOrigin(0.5));
 
     // ---- actions ---------------------------------------------------------
-    parts.push(...this.button(x, top + 108, 240, 42, 'RESUME', actions.resume));
-    parts.push(...this.button(x, top + 160, 240, 42, 'RESTART ROUND', actions.restart));
+    parts.push(...this.button(x, top + 104, 260, 40, 'RESUME', actions.resume));
+    parts.push(...this.button(x, top + 154, 260, 40, 'RESTART ROUND', actions.restart));
 
     // ---- settings --------------------------------------------------------
-    parts.push(
-      scene.add
-        .text(x, top + 212, '— SETTINGS —', {
-          fontFamily: THEME.ui.fontFamily,
-          fontSize: '13px',
-          color: THEME.ui.faint,
-        })
-        .setOrigin(0.5),
-    );
+    parts.push(pixelText(scene, x, top + 204, '- SETTINGS -', 2, THEME.ui.faint).setOrigin(0.5));
 
     settings.forEach((row, i) => {
-      const rowY = top + 246 + i * 38;
-      parts.push(
-        scene.add
-          .text(left + 30, rowY, row.label, {
-            fontFamily: THEME.ui.fontFamily,
-            fontSize: '14px',
-            color: THEME.ui.dim,
-          })
-          .setOrigin(0, 0.5),
-      );
+      const rowY = top + 238 + i * 34;
+      parts.push(pixelText(scene, left + 30, rowY, row.label, 2, THEME.ui.dim).setOrigin(0, 0.5));
 
-      const value = scene.add
-        .text(left + w - 30, rowY, row.read(), {
-          fontFamily: THEME.ui.fontFamily,
-          fontSize: '14px',
-          color: THEME.ui.accent,
-        })
+      const value = pixelText(scene, left + w - 30, rowY, row.read(), 2, THEME.ui.accent)
         .setOrigin(1, 0.5)
         .setInteractive({ useHandCursor: true });
 
-      value.on('pointerover', () => value.setColor(THEME.ui.text));
-      value.on('pointerout', () => value.setColor(THEME.ui.accent));
+      value.on('pointerover', () => value.setTint(THEME.ui.text));
+      value.on('pointerout', () => value.setTint(THEME.ui.accent));
       value.on('pointerdown', () => {
         row.cycle();
         value.setText(row.read());
@@ -120,58 +90,26 @@ export class PauseMenu {
 
     // ---- controls reference ----------------------------------------------
     if (controls.length) {
-      const controlsTop = top + 246 + settings.length * 38 + 18;
-      panel.lineStyle(1, THEME.menu.panelStroke, 0.8);
-      panel.lineBetween(left + 28, controlsTop, left + w - 28, controlsTop);
+      const controlsTop = top + 238 + settings.length * 34 + 10;
+      panel.fillStyle(THEME.ui.panelEdge, 1);
+      panel.fillRect(left + 28, controlsTop, w - 56, 2);
 
-      parts.push(
-        scene.add
-          .text(x, controlsTop + 14, '— CONTROLS —', {
-            fontFamily: THEME.ui.fontFamily,
-            fontSize: '11px',
-            color: THEME.ui.faint,
-          })
-          .setOrigin(0.5),
-      );
+      parts.push(pixelText(scene, x, controlsTop + 18, '- CONTROLS -', 2, THEME.ui.faint).setOrigin(0.5));
 
       controls.forEach((line, i) => {
         const [keys, action] = line.split('|');
-        const rowY = controlsTop + 38 + i * 18;
-        parts.push(
-          scene.add
-            .text(left + 30, rowY, keys.trim(), {
-              fontFamily: THEME.ui.fontFamily,
-              fontSize: '11px',
-              color: THEME.ui.dim,
-            })
-            .setOrigin(0, 0.5),
-        );
-        parts.push(
-          scene.add
-            .text(left + w - 30, rowY, (action ?? '').trim(), {
-              fontFamily: THEME.ui.fontFamily,
-              fontSize: '11px',
-              color: THEME.ui.faint,
-            })
-            .setOrigin(1, 0.5),
-        );
+        const rowY = controlsTop + 44 + i * 20;
+        parts.push(pixelText(scene, left + 30, rowY, keys.trim(), 2, THEME.ui.dim).setOrigin(0, 0.5));
+        parts.push(pixelText(scene, left + w - 30, rowY, (action ?? '').trim(), 2, THEME.ui.faint).setOrigin(1, 0.5));
       });
     }
 
-    parts.push(
-      scene.add
-        .text(x, top + h - 18, 'ESC to resume', {
-          fontFamily: THEME.ui.fontFamily,
-          fontSize: '11px',
-          color: THEME.ui.faint,
-        })
-        .setOrigin(0.5),
-    );
+    parts.push(pixelText(scene, x, top + h - 20, 'ESC TO RESUME', 2, THEME.ui.faint).setOrigin(0.5));
 
     this.container = scene.add.container(0, 0, parts).setDepth(400).setVisible(false);
   }
 
-  /** Rectangle + label with hover states; returns the objects to be contained. */
+  /** Pixel button with hover states; returns the objects to be contained. */
   private button(
     cx: number,
     cy: number,
@@ -181,27 +119,21 @@ export class PauseMenu {
     onClick: () => void,
   ): Phaser.GameObjects.GameObject[] {
     const rect = this.scene.add
-      .rectangle(cx, cy, w, h, THEME.menu.buttonFill)
-      .setStrokeStyle(1, THEME.menu.buttonStroke)
+      .rectangle(Math.round(cx), Math.round(cy), w, h, THEME.menu.button)
+      .setStrokeStyle(3, THEME.menu.buttonEdge)
       .setInteractive({ useHandCursor: true });
 
-    const text = this.scene.add
-      .text(cx, cy, label, {
-        fontFamily: THEME.ui.fontFamily,
-        fontSize: '15px',
-        color: THEME.ui.accent,
-      })
-      .setOrigin(0.5);
+    const text = pixelText(this.scene, cx, cy, label, 2, THEME.ui.accent).setOrigin(0.5);
 
     rect.on('pointerover', () => {
-      rect.setFillStyle(THEME.menu.buttonFillHover);
-      rect.setStrokeStyle(1, THEME.menu.buttonStrokeHover);
-      text.setColor(THEME.ui.text);
+      rect.setFillStyle(THEME.menu.buttonHover);
+      rect.setStrokeStyle(3, THEME.menu.buttonEdgeHover);
+      text.setTint(THEME.ui.text);
     });
     rect.on('pointerout', () => {
-      rect.setFillStyle(THEME.menu.buttonFill);
-      rect.setStrokeStyle(1, THEME.menu.buttonStroke);
-      text.setColor(THEME.ui.accent);
+      rect.setFillStyle(THEME.menu.button);
+      rect.setStrokeStyle(3, THEME.menu.buttonEdge);
+      text.setTint(THEME.ui.accent);
     });
     rect.on('pointerdown', onClick);
 

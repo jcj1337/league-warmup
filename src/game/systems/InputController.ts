@@ -32,6 +32,13 @@ export interface CommandHandler {
   /** Enemy under a world point, if any (click hit test). */
   targetAt(x: number, y: number): Enemy | null;
 
+  /**
+   * One raw player input for the APM readout: any physical key press (not
+   * auto-repeat) or mouse-button press, bound or not, gameplay or UI. Never
+   * called for mouse movement or anything the game generates itself.
+   */
+  recordAction(): void;
+
   isRoundRunning(): boolean;
   /** False while paused: gameplay input is swallowed, UI input still works. */
   acceptsGameplayInput(): boolean;
@@ -67,7 +74,22 @@ export class InputController {
     scene.input.on('pointerdown', this.onPointerDown, this);
     // One keyboard listener + a binding table, so keys stay rebindable.
     scene.input.keyboard?.on('keydown', this.onKeyDown, this);
+
+    // APM counts RAW input straight from the DOM, before Phaser decides who (if
+    // anyone) handles it — so menu clicks and unbound keys count too. These
+    // listeners outlive the scene unless removed, so drop them on shutdown.
+    window.addEventListener('keydown', this.onRawKeyDown);
+    scene.game.canvas.addEventListener('pointerdown', this.onRawPointerDown);
+    scene.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.destroy());
   }
+
+  private readonly onRawKeyDown = (event: KeyboardEvent): void => {
+    if (!event.repeat) this.cmd.recordAction();
+  };
+
+  private readonly onRawPointerDown = (): void => {
+    this.cmd.recordAction();
+  };
 
   /** Leave Attack Move targeting without issuing anything. */
   cancelPending(): void {
@@ -192,6 +214,8 @@ export class InputController {
   destroy(): void {
     this.scene.input.off('pointerdown', this.onPointerDown, this);
     this.scene.input.keyboard?.off('keydown', this.onKeyDown, this);
+    window.removeEventListener('keydown', this.onRawKeyDown);
+    this.scene.game.canvas.removeEventListener('pointerdown', this.onRawPointerDown);
   }
 }
 

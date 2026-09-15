@@ -10,7 +10,7 @@ test('orbwalk: movement, direct attack, attack-move, targeting, cancel, post-fir
     const t = s.attacks.currentTarget;
     return {
       p: { x: p.x, y: p.y, moving: p.isMoving, rooted: p.isRooted },
-      ring: { visible: p.rangeRing.visible, radius: p.rangeRing.radius },
+      ring: { visible: p.view.rangeRing.visible, radius: p.view.rangeRing.radius },
       atk: {
         state: s.attacks.state,
         source: s.attacks.targetSource,
@@ -205,8 +205,8 @@ test('orbwalk: movement, direct attack, attack-move, targeting, cancel, post-fir
     await page.waitForTimeout(350);
     const c = await G();
     const hpNow = await page.evaluate(() => window.__warmup.scene.getScene('GameScene').enemies.find((t) => t.__tag === 1)?.hp);
-    hpNow === hpAtWindup ? pass(`5. windup cancelled by move — no damage (hp ${hpNow})`)
-      : fail(`5. damage landed after cancel (${hpAtWindup} -> ${hpNow})`);
+    hpNow === hpAtWindup ? pass(`5. windup cancelled by move — no pip lost (${hpNow})`)
+      : fail(`5. a pip was lost after cancel (${hpAtWindup} -> ${hpNow})`);
     c.atk.state === 'idle' && c.p.moving ? pass('5. cancel returns to idle and the player moves')
       : fail(`5. after cancel state=${c.atk.state} moving=${c.p.moving}`);
     c.m.cancelled >= 1 ? pass(`5. cancelled auto counted in metrics (${c.m.cancelled})`)
@@ -234,7 +234,7 @@ test('orbwalk: movement, direct attack, attack-move, targeting, cancel, post-fir
     d(after.p, p0) > 60 ? pass('6. movement allowed immediately after the attack fires')
       : fail(`6. only moved ${d(after.p, p0).toFixed(0)}px after firing`);
     const hpNow = await page.evaluate(() => window.__warmup.scene.getScene('GameScene').enemies.find((t) => t.__tag === 2)?.hp);
-    hpNow <= hpAtFire ? pass(`6. the fired attack still resolved (hp ${hpNow})`) : fail('6. fired damage undone');
+    hpNow <= hpAtFire ? pass(`6. the fired attack still resolved (${hpNow} pips)`) : fail('6. fired hit undone');
     // Next attack must still wait for the cooldown.
     const ready = await page.evaluate(() => window.__warmup.scene.getScene('GameScene').attacks.cooldownRemaining);
     ready >= 0 ? pass(`6. cooldown still running after fire (${Math.round(ready)}ms left)`) : fail('6. cooldown missing');
@@ -269,7 +269,8 @@ test('orbwalk: movement, direct attack, attack-move, targeting, cancel, post-fir
     await page.waitForTimeout(180);
   }
   const hpEnd = await page.evaluate(() => window.__warmup.scene.getScene('GameScene').enemies.find((t) => t.__tag === 3)?.hp);
-  const landed = Math.round((hpStart - hpEnd) / 12);
+  // One auto = one pip.
+  const landed = hpStart - hpEnd;
   cycles === 4 && landed >= 4
     ? pass(`4. orbwalk loop: ${cycles} A-click -> auto -> kite cycles, ${landed} autos landed`)
     : fail(`4. orbwalk loop: ${cycles} cycles, ${landed} autos landed (hp ${hpStart} -> ${hpEnd})`);
@@ -305,7 +306,7 @@ test('orbwalk: movement, direct attack, attack-move, targeting, cancel, post-fir
     await key('s');
     await page.waitForTimeout(300);
     const hpA = await page.evaluate(() => window.__warmup.scene.getScene('GameScene').enemies.find((t) => t.__tag === 4)?.hp);
-    hpA === hpW ? pass('S during windup cancels the attack (no damage)') : fail(`S windup cancel failed (${hpW} -> ${hpA})`);
+    hpA === hpW ? pass('S during windup cancels the attack (no pip lost)') : fail(`S windup cancel failed (${hpW} -> ${hpA})`);
   } else fail('S windup test: never entered windup');
 
   // === Metrics sanity =========================================================

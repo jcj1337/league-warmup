@@ -38,8 +38,6 @@ test('scaling: stage-based attack speed, measured cycle, passive on top, cancel 
     stages: window.__balance.STAGES,
     windupPct: window.__balance.ATTACK.windupPercent,
     minWindup: window.__balance.ATTACK.minWindupMs,
-    dmg: window.__balance.ATTACK.damage,
-    hp: window.__balance.TARGETS.maxHp,
     spawn: window.__balance.ENEMY_PROJECTILES.spawnIntervalMs,
     passive: window.__balance.PASSIVE,
   }));
@@ -235,10 +233,10 @@ test('scaling: stage-based attack speed, measured cycle, passive on top, cancel 
         t: performance.now() - t0,
         state: g.attacks.state,
         prog: g.attacks.windupProgress,
-        chargeVisible: g.player.chargeRing.visible,
-        chargeR: g.player.chargeRing.radius,
-        releaseVisible: g.player.releaseRing.visible,
-        releaseR: g.player.releaseRing.radius,
+        chargeVisible: g.player.view.chargeRing.visible,
+        chargeR: g.player.view.chargeRing.radius,
+        releaseVisible: g.player.view.releaseRing.visible,
+        releaseR: g.player.view.releaseRing.radius,
       });
       if (performance.now() - t0 < 900) requestAnimationFrame(tick); else res(out);
     };
@@ -256,9 +254,9 @@ test('scaling: stage-based attack speed, measured cycle, passive on top, cancel 
 
   // === 6. Pressure / lethality ===============================================
   section('6. Pressure / lethality');
-  Math.round(cfg.hp / cfg.dmg) === 2
-    ? pass(`targets die in 2 autos (${cfg.hp} hp / ${cfg.dmg} dmg)`)
-    : fail(`targets take ${cfg.hp / cfg.dmg} autos`);
+  cfg.stages[0].enemyPips.basic === 1
+    ? pass('Stage 1 basic targets die to a single hit (1 pip)')
+    : fail(`Stage 1 basic pips ${cfg.stages[0].enemyPips.basic}`);
   cfg.spawn.start >= 2400 && cfg.stages[0].enemyFire === 0
     ? pass(`Stage 1 enemy fire sits at the ramp start: ${cfg.spawn.start}ms interval (calm opening)`)
     : fail(`Stage 1 fire: interval start ${cfg.spawn.start}ms, enemyFire ${cfg.stages[0].enemyFire}`);

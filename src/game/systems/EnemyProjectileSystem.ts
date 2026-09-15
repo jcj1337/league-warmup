@@ -2,9 +2,13 @@ import Phaser from 'phaser';
 import { ARENA, ENEMY_PROJECTILES } from '../../config/balance';
 import { THEME } from '../../config/theme';
 import { Projectile } from '../entities/Projectile';
+import { PROJECTILE_ART } from '../view/projectileArt';
 import type { Player } from '../entities/Player';
 
 type Ramp = { start: number; end: number };
+
+/** Source size of the hostile fireball sprite, in art pixels. */
+const HOSTILE_SPRITE_PX = 7;
 
 /** What enemy fire needs to know about the run. The WaveDirector provides it. */
 export interface EnemyFirePressure {
@@ -124,6 +128,7 @@ export class EnemyProjectileSystem {
       Phaser.Math.FloatBetween(-ENEMY_PROJECTILES.aimJitterDegrees, ENEMY_PROJECTILES.aimJitterDegrees),
     );
     const angle = Math.atan2(this.player.y - y, this.player.x - x) + jitter;
+    const radius = this.projectileRadius;
 
     this.missiles.push(
       new Projectile(this.scene, {
@@ -131,11 +136,12 @@ export class EnemyProjectileSystem {
         y,
         angle,
         speed: this.projectileSpeed,
-        radius: this.projectileRadius,
+        radius,
         damage: this.projectileDamage,
-        color: THEME.projectiles.enemyColor,
         team: 'enemy',
-        heavyOutline: true,
+        art: PROJECTILE_ART.hostile,
+        // Whole-pixel sprite scale that tracks the (stage-scaled) collision size.
+        artScale: Math.max(THEME.art.scale, Math.round((radius * 2) / HOSTILE_SPRITE_PX)),
       }),
     );
   }

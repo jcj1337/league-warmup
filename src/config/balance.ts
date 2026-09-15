@@ -1,6 +1,7 @@
 /**
  * All gameplay tuning lives here. Nothing else in the codebase should hard-code
  * a balance number — if you want to change how the game feels, change it here.
+ * How the game LOOKS (colours, sprite sizes, effect timings) lives in theme.ts.
  *
  * Units:
  *   distance  = pixels
@@ -13,14 +14,10 @@ export const ARENA = {
   height: 720,
   /** Playable inset from the canvas edge; the visible border is drawn here. */
   padding: 24,
-  backgroundColor: 0x11151c,
-  floorColor: 0x171d27,
-  borderColor: 0x2c3644,
 } as const;
 
 export const PLAYER = {
   radius: 14,
-  color: 0x4ea1ff,
   maxHp: 100,
   /** League-ish move speed (a marksman is ~330 units/s). */
   moveSpeed: 340,
@@ -76,9 +73,8 @@ export const ATTACK = {
   windupMsOverride: null as number | null,
   /** Never let the scaled windup drop below this, or it becomes unreadable. */
   minWindupMs: 90,
-  damage: 12,
   /**
-   * If true, a move order during windup cancels the attack: no damage dealt and
+   * If true, a move order during windup cancels the attack: no hit lands and
    * the cooldown is refunded. This is what makes animation-cancel drills work.
    * Move orders AFTER the attack fires never undo it.
    */
@@ -126,26 +122,6 @@ export const ATTACK = {
    */
   projectileSpeed: 1150,
   projectileRadius: 6,
-  projectileColor: 0x9fe8ff,
-
-  // --- windup animation (visual only; read from the real attack state) ------
-  /** How far the player leans toward the target at the end of the windup. */
-  windupLeanPx: 9,
-  /** How much the player squashes toward the target during windup. */
-  windupScale: 1.18,
-  /** Recoil kick after release, and how long it decays over. */
-  releaseKickPx: 8,
-  releaseKickMs: 120,
-  /**
-   * The charge ring that contracts onto the player through the windup. This is
-   * the precise "can I still cancel?" cue — it lands on the body exactly when
-   * the missile leaves.
-   */
-  chargeRingStartPad: 20,
-  chargeRingEndPad: 3,
-  /** Expanding ring drawn at the moment of release. */
-  releaseRingRadius: 30,
-  releaseRingMs: 180,
 };
 
 /**
@@ -187,15 +163,6 @@ export const KEYBINDS = {
   restart: ['R', 'SPACE'],
 };
 
-/** Colors/durations for the gray-box command feedback pings. */
-export const INDICATORS = {
-  moveColor: 0x5fb0ff,
-  attackMoveColor: 0xff7a6b,
-  /** Ground markers are deliberately short-lived so the arena stays clean. */
-  pingDurationMs: 260,
-  pingRadius: 15,
-} as const;
-
 /**
  * Development readouts. All of these are pure overlay — turning any of them off
  * changes nothing about how the game plays.
@@ -211,14 +178,26 @@ export const DEBUG = {
    * Changing this never changes the attack range calculation.
    */
   attackRangeDisplay: 'contextual' as 'contextual' | 'always' | 'off',
-  /** READY / WINDUP / RECOVERY readout in the HUD panel. */
-  showAttackState: true,
   /** The little "CANCEL" tag when a windup is aborted. */
   showCancelFeedback: true,
   /** Ring around the current attack target. */
   showTargetMarker: true,
-  /** Floating damage numbers over targets. */
+  /** Floating "-1" pip-loss numbers over targets. */
   showDamageNumbers: true,
+};
+
+/**
+ * APM readout: raw player inputs (every key press and mouse-button press,
+ * bound or not) per minute over a rolling window. Informational only — it never feeds scoring or gameplay.
+ */
+export const APM = {
+  /** Only inputs this recent count. */
+  windowMs: 30000,
+  /**
+   * Early in a run the window is not full yet; divide by at least this much
+   * time so a few opening clicks cannot read as thousands of APM.
+   */
+  minWindowMs: 10000,
 };
 
 /**
@@ -242,7 +221,6 @@ export const SKILLSHOT_Q = {
    * near able to cross the 1280px arena.
    */
   maxRange: 450,
-  damage: 30,
   cooldownMs: 3000,
   /**
    * A landed Q takes this much off the REMAINING cooldown of Q, W AND E — never
@@ -255,24 +233,16 @@ export const SKILLSHOT_Q = {
    * weaving Q between autos feels like the same rhythm. Set 0 for instant.
    */
   castTimeMs: 165,
-  /** Missile stops on the first target it damages — no pierce. */
+  /** Missile stops on the first target it hits — no pierce. */
   stopsOnFirstHit: true,
-  // --- visuals -------------------------------------------------------------
-  /** Drawn length of the bolt; the collision size stays `radius`. */
-  boltLength: 26,
-  /** Muzzle flash thrown out from the player on cast. */
-  castFlashRadius: 26,
-  castFlashMs: 120,
-  impactRadius: 30,
-  impactMs: 200,
 } as const;
 
 /**
  * W: an Essence-Flux-flavoured MARK skillshot.
  *
- * The projectile itself deals no damage — it marks whatever it touches. The
- * mark then detonates for real damage the next time that enemy is hit by an
- * auto, Q, or the E bolt.
+ * The projectile itself removes no pips — it marks whatever it touches. The
+ * mark detonates the next time that enemy takes a hit from an auto, Q, or the
+ * E bolt, removing one extra pip on top of that hit's own.
  */
 export const SKILLSHOT_W = {
   /**
@@ -288,14 +258,8 @@ export const SKILLSHOT_W = {
   cooldownMs: 6000,
   /** Marks last this long before lapsing harmlessly. */
   markDurationMs: 4000,
-  /** Detonation damage: 1.5x a Q hit (SKILLSHOT_Q.damage 30). */
-  detonationDamage: 45,
   /** Marks stop on the first enemy touched — no pierce. */
   stopsOnFirstHit: true,
-  castFlashRadius: 30,
-  castFlashMs: 130,
-  impactRadius: 34,
-  impactMs: 220,
 } as const;
 
 /**
@@ -313,8 +277,8 @@ export const BLINK_E = {
    */
   castTimeMs: 210,
   cooldownMs: 8000,
-  /** ~1.4x attack range. Real repositioning, well short of Q/W reach. */
-  range: 364,
+  /** ~1.2x attack range. Real repositioning, well short of Q/W reach. (Was 364.) */
+  range: 310,
   /**
    * Post-blink search radius for the bolt, measured from where E lands.
    * ~1.46x attack range. Provisional — was 455; tune after playtesting.
@@ -322,18 +286,13 @@ export const BLINK_E = {
   boltAcquisitionRange: 380,
   boltSpeed: 1050,
   boltRadius: 7,
-  /** 1.25x a Q hit. */
-  damage: 38,
-  /** How long the departure/arrival streak lingers. Kept very short. */
-  blinkStreakMs: 100,
 } as const;
 
-/** F: a summoner-style blink. No damage, no passive, no cooldown refund. */
+/** F: a summoner-style blink. No hit, no passive, no cooldown refund. */
 export const FLASH = {
   cooldownMs: 20000,
-  /** ~1.25x attack range — a touch shorter than E. */
-  range: 325,
-  burstMs: 200,
+  /** ~1.06x attack range — shorter than E. (Was 325.) */
+  range: 275,
 } as const;
 
 /**
@@ -355,23 +314,6 @@ export const PASSIVE = {
 
 export const TARGETS = {
   radius: 18,
-  /**
-   * Sized against ATTACK.damage so a target dies in a known number of autos:
-   * 24 / 12 = 2 hits, so the attack loop comes round fast while testing.
-   * Both values stay independent — change either one.
-   */
-  maxHp: 24,
-  color: 0xff6b6b,
-  /** Death animation length (visual only — the kill registers immediately). */
-  deathAnimMs: 300,
-  /** Shards thrown out on death. 0 disables the burst. */
-  deathShards: 6,
-  /** Hit flash + squash duration. */
-  hitFeedbackMs: 130,
-  /** Health bar geometry, drawn above the target. */
-  hpBarWidth: 46,
-  hpBarHeight: 7,
-  hpBarOffsetY: 16,
   /** Never spawn a target closer than this to the player. */
   minSpawnDistanceFromPlayer: 240,
   /** Keep targets this far from the arena border so they stay reachable. */
@@ -389,7 +331,6 @@ export const TARGETS = {
  * `start` to `end` by the current stage's `enemyFire` (see STAGES).
  */
 export const ENEMY_PROJECTILES = {
-  color: 0xffd166,
   /**
    * Roughly 45% of the old spawn frequency (was 900 -> 220ms) so dodging stays
    * present but secondary to kiting during this testing stage.
@@ -412,13 +353,9 @@ export const ENEMY_PROJECTILES = {
 /**
  * The Pursuer: our first mob with movement AI. It walks the player down, so the
  * drill becomes "keep spacing" rather than "hit the stationary dummy".
- *
- * HP is expressed as a multiple of the basic target so the two stay in
- * proportion when you retune TARGETS.maxHp.
+ * Its health pips are set per stage in STAGES[n].enemyPips.
  */
 export const PURSUER = {
-  /** maxHp = TARGETS.maxHp * this. 24 * 2.5 = 60 == 5 autos at 12 damage. */
-  baseHpMultiplier: 2.5,
   radius: 26,
   /** Fraction of PLAYER.moveSpeed. Below 1 so it can always be kited. */
   moveSpeedFraction: 0.55,
@@ -431,9 +368,6 @@ export const PURSUER = {
   attackCooldownMs: 1200,
   /** Kill score relative to a basic target. */
   scoreMultiplier: 2.25,
-  hpBarWidth: 64,
-  hpBarHeight: 8,
-  hpBarOffsetY: 20,
 } as const;
 
 // ============================================================================
@@ -462,9 +396,18 @@ export interface WaveRoster {
   pursuer?: number;
 }
 
+/**
+ * Enemy health in PIPS, per archetype. Every auto, Q hit and E bolt hit removes
+ * exactly one pip; a W-mark detonation removes one more. Whole numbers >= 1.
+ */
+export interface EnemyPips {
+  basic: number;
+  pursuer: number;
+}
+
 export interface StageDefinition {
-  /** Enemy max HP = archetype base HP × this (basic 24, pursuer 60). */
-  enemyHpMultiplier: number;
+  /** How many hits each archetype takes to kill during this stage. */
+  enemyPips: EnemyPips;
   /**
    * The player's base auto cycle (windup + recovery) during this stage, before
    * passive stacks. Higher stage → faster autos; time spent never changes it.
@@ -481,8 +424,8 @@ export interface StageDefinition {
 
 /**
  * The stage table. A provisional first balance pass:
- *   - enemyHpMultiplier: 100% for stages 1-3, then +5% per stage (135% at 10) —
- *     the same curve the old time-based difficulty levels used.
+ *   - enemyPips: basic 1 / 2 / 3 pips across Stages 1-3 / 4-6 / 7-10 (capped at
+ *     3), Pursuer always one more (2 / 3 / 4).
  *   - baseAttackCooldownMs: 700ms → 420ms in even steps, the old ramp's endpoints.
  *   - enemyFire: from the calm opening (0) to full strength (1).
  *   - waves: short early stages (a single wave each for 1-3), two waves for 4-6,
@@ -492,48 +435,31 @@ export interface StageDefinition {
  *     with a single all-Pursuer wave closing the run.
  */
 export const STAGES: StageDefinition[] = [
-  /* 1 */ { enemyHpMultiplier: 1.0, baseAttackCooldownMs: 700, enemyFire: 0,
+  /* 1 */ { enemyPips: { basic: 1, pursuer: 2 }, baseAttackCooldownMs: 700, enemyFire: 0,
     waves: [{ basic: 3 }] },
-  /* 2 */ { enemyHpMultiplier: 1.0, baseAttackCooldownMs: 669, enemyFire: 0.1,
+  /* 2 */ { enemyPips: { basic: 1, pursuer: 2 }, baseAttackCooldownMs: 669, enemyFire: 0.1,
     waves: [{ basic: 3, pursuer: 1 }] },
-  /* 3 */ { enemyHpMultiplier: 1.0, baseAttackCooldownMs: 638, enemyFire: 0.2,
+  /* 3 */ { enemyPips: { basic: 1, pursuer: 2 }, baseAttackCooldownMs: 638, enemyFire: 0.2,
     waves: [{ basic: 2, pursuer: 2 }] },
-  /* 4 */ { enemyHpMultiplier: 1.05, baseAttackCooldownMs: 607, enemyFire: 0.3,
+  /* 4 */ { enemyPips: { basic: 2, pursuer: 3 }, baseAttackCooldownMs: 607, enemyFire: 0.3,
     waves: [{ basic: 3, pursuer: 1 }, { basic: 2, pursuer: 2 }] },
-  /* 5 */ { enemyHpMultiplier: 1.1, baseAttackCooldownMs: 576, enemyFire: 0.4,
+  /* 5 */ { enemyPips: { basic: 2, pursuer: 3 }, baseAttackCooldownMs: 576, enemyFire: 0.4,
     waves: [{ basic: 2, pursuer: 2 }, { basic: 1, pursuer: 3 }] },
-  /* 6 */ { enemyHpMultiplier: 1.15, baseAttackCooldownMs: 544, enemyFire: 0.5,
+  /* 6 */ { enemyPips: { basic: 2, pursuer: 3 }, baseAttackCooldownMs: 544, enemyFire: 0.5,
     waves: [{ basic: 1, pursuer: 3 }, { basic: 2, pursuer: 2 }] },
-  /* 7 */ { enemyHpMultiplier: 1.2, baseAttackCooldownMs: 513, enemyFire: 0.6,
+  /* 7 */ { enemyPips: { basic: 3, pursuer: 4 }, baseAttackCooldownMs: 513, enemyFire: 0.6,
     waves: [{ basic: 2, pursuer: 2 }, { basic: 1, pursuer: 3 }, { basic: 1, pursuer: 3 }] },
-  /* 8 */ { enemyHpMultiplier: 1.25, baseAttackCooldownMs: 482, enemyFire: 0.7,
+  /* 8 */ { enemyPips: { basic: 3, pursuer: 4 }, baseAttackCooldownMs: 482, enemyFire: 0.7,
     waves: [{ basic: 2, pursuer: 2 }, { basic: 1, pursuer: 3 }, { basic: 1, pursuer: 3 }] },
-  /* 9 */ { enemyHpMultiplier: 1.3, baseAttackCooldownMs: 451, enemyFire: 0.85,
+  /* 9 */ { enemyPips: { basic: 3, pursuer: 4 }, baseAttackCooldownMs: 451, enemyFire: 0.85,
     waves: [{ basic: 1, pursuer: 3 }, { basic: 2, pursuer: 2 }, { basic: 1, pursuer: 3 }] },
-  /* 10 */ { enemyHpMultiplier: 1.35, baseAttackCooldownMs: 420, enemyFire: 1,
+  /* 10 */ { enemyPips: { basic: 3, pursuer: 4 }, baseAttackCooldownMs: 420, enemyFire: 1,
     waves: [{ basic: 2, pursuer: 2 }, { basic: 1, pursuer: 3 }, { basic: 2, pursuer: 2 }, { pursuer: 4 }] },
 ];
 
-/** Stage / wave transition feedback. Presentation only. */
-export const BANNERS = {
-  /** How long the big "STAGE N" banner stays up when a stage begins. */
-  stageMs: 1500,
-  /** How long the smaller "WAVE N" banner stays up when a later wave begins. */
-  waveMs: 900,
-} as const;
-
 export const SCORE = {
-  pointsPerDamage: 1,
   /** Base kill value; each archetype multiplies this by its scoreMultiplier. */
   pointsPerKill: 100,
   /** Small trickle just for staying alive; keeps a clean 60s worth something. */
   pointsPerSecondAlive: 5,
-} as const;
-
-export const UI = {
-  fontFamily: 'ui-monospace, Menlo, Consolas, monospace',
-  textColor: '#cfd6e4',
-  dimColor: '#7b879b',
-  accentColor: '#4ea1ff',
-  dangerColor: '#ff6b6b',
 } as const;

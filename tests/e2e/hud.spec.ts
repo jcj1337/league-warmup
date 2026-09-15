@@ -1,7 +1,7 @@
 import { test } from '@playwright/test';
 import { startSuite } from './support/harness';
 
-test('hud: contextual range ring, pause freeze + input gate, Q slot, settings menu, stage banners across restarts', async ({ page }, testInfo) => {
+test('hud: contextual range ring, pause freeze + input gate, Q slot, settings menu, APM, stage banners across restarts', async ({ page }, testInfo) => {
   const { pass, fail, section, finish } = await startSuite(page, testInfo, 400);
 
   const G = () => page.evaluate(() => {
@@ -11,9 +11,9 @@ test('hud: contextual range ring, pause freeze + input gate, Q slot, settings me
       paused: g.isPaused,
       clock: g.clock.now,
       runTime: g.getHudState().runTime,
-      ringVisible: g.player.rangeRing.visible,
-      ringAlpha: g.player.rangeRing.strokeAlpha,
-      ringRadius: g.player.rangeRing.radius,
+      ringVisible: g.player.view.rangeRing.visible,
+      ringAlpha: g.player.view.rangeRing.strokeAlpha,
+      ringRadius: g.player.view.rangeRing.radius,
       aPending: g.inputs.attackMovePending,
       atkState: g.attacks.state,
       windupProgress: g.attacks.windupProgress,
@@ -23,7 +23,7 @@ test('hud: contextual range ring, pause freeze + input gate, Q slot, settings me
       qCd: g.skillshot.cooldownRemainingMs,
       px: g.player.x, py: g.player.y,
       menuVisible: ui.pauseMenu.visible,
-      debugPanelVisible: ui.debugPanel.visible,
+      hasDebugPanel: 'debugPanel' in ui || 'debugText' in ui || 'stateText' in ui,
     };
   });
   const setup = (spots, opts: any = {}) => page.evaluate(({ spots, opts }) => {
@@ -230,7 +230,8 @@ test('hud: contextual range ring, pause freeze + input gate, Q slot, settings me
   // Old bottom-left Q text is gone.
   const oldQ = await page.evaluate(() => {
     const ui = window.__warmup.scene.getScene('UIScene');
-    return ui.children.list.filter((o) => o.type === 'Text' && /^Q\s/.test(o.text ?? '')).length;
+    // Pixel HUD text is BitmapText; the check covers both text object types.
+    return ui.children.list.filter((o) => /Text$/.test(o.type) && /^Q\s/.test(o.text ?? '')).length;
   });
   oldQ === 0 ? pass('old "Q READY" text removed — one Q display only') : fail(`${oldQ} legacy Q text objects remain`);
 
@@ -238,20 +239,17 @@ test('hud: contextual range ring, pause freeze + input gate, Q slot, settings me
   section('5. Settings toggles');
   await page.keyboard.press('Escape');
   await page.waitForTimeout(100);
-  const dbgBefore = (await G()).debugPanelVisible;
-  await page.evaluate(() => { window.__balance.DEBUG.showAttackState = false; });
-  await page.waitForTimeout(120);
-  const dbgAfter = (await G()).debugPanelVisible;
-  dbgBefore && !dbgAfter ? pass('Debug Metrics toggle hides the top-right panel') : fail(`debug panel: ${dbgBefore} -> ${dbgAfter}`);
-  await page.evaluate(() => { window.__balance.DEBUG.showAttackState = true; });
+  !(await G()).hasDebugPanel ? pass('top-right debug/stat panel removed from the HUD') : fail('debug panel objects still on UIScene');
 
-  // Damage numbers toggle is honoured by Target.
+  // Pip-loss numbers toggle is honoured by Target.
   const dmgOff = await page.evaluate(() => {
     window.__balance.DEBUG.showDamageNumbers = false;
     const g = window.__warmup.scene.getScene('GameScene');
-    const before = g.children.list.filter((o) => o.type === 'Text').length;
-    g.enemies.find((t) => t.active)?.takeDamage(1);
-    const after = g.children.list.filter((o) => o.type === 'Text').length;
+    // Damage numbers are pooled pixel text: count the ones currently shown.
+    const shown = () => g.children.list.filter((o) => /Text$/.test(o.type) && o.visible).length;
+    const before = shown();
+    g.enemies.find((t) => t.active)?.takeHit();
+    const after = shown();
     window.__balance.DEBUG.showDamageNumbers = true;
     return { before, after };
   });
@@ -265,7 +263,7 @@ test('hud: contextual range ring, pause freeze + input gate, Q slot, settings me
     return {
       visible: ui.pauseMenu.visible,
       interactive: list.filter((o) => o.input && o.input.enabled).length,
-      texts: list.filter((o) => o.type === 'Text').map((o) => o.text),
+      texts: list.filter((o) => /Text$/.test(o.type)).map((o) => o.text),
     };
   });
   menuBits.visible && menuBits.interactive >= 4
@@ -274,9 +272,121 @@ test('hud: contextual range ring, pause freeze + input gate, Q slot, settings me
   menuBits.texts.includes('PAUSED') && menuBits.texts.includes('RESUME') && menuBits.texts.includes('RESTART ROUND')
     ? pass('menu shows PAUSED / RESUME / RESTART ROUND')
     : fail(`menu texts: ${menuBits.texts.join(', ')}`);
+  !menuBits.texts.some((t) => /debug metrics/i.test(t))
+    ? pass('Debug Metrics setting removed with the panel')
+    : fail('Debug Metrics setting still in the menu');
 
   await page.keyboard.press('Escape');
   await page.waitForTimeout(200);
+
+  // === 5b. APM ===============================================================
+  section('5b. APM');
+  const apm = () => page.evaluate(() => {
+    const g = window.__warmup.scene.getScene('GameScene');
+    const ui = window.__warmup.scene.getScene('UIScene');
+    return { total: g.apm.total, value: g.getHudState().apm, text: ui.apmText.text, visible: ui.apmText.visible };
+  });
+  await setup([{ x: 900, y: 360 }]);
+  await page.evaluate(() => {
+    const g = window.__warmup.scene.getScene('GameScene');
+    g.apm.reset(g.clock.now);
+  });
+  await page.mouse.move(700, 500);
+  await page.mouse.move(300, 200);
+  await page.waitForTimeout(40);
+  (await apm()).total === 0 ? pass('mouse movement records no actions') : fail(`mouse movement counted: ${(await apm()).total}`);
+
+  // An unbound key counts.
+  await page.keyboard.press('z');
+  await page.waitForTimeout(40);
+  const aZ = await apm();
+  aZ.total === 1 ? pass('unbound key Z counts as one action') : fail(`Z counted ${aZ.total}, want 1`);
+
+  // Several different keys each count, bound or not (Q W E F A T S, X, 1).
+  const keys = ['q', 'w', 'e', 'f', 'a', 't', 's', 'x', '1'];
+  for (const k of keys) {
+    await page.keyboard.press(k);
+    await page.waitForTimeout(30);
+  }
+  await page.waitForTimeout(40);
+  const aKeys = await apm();
+  aKeys.total === 1 + keys.length
+    ? pass(`${keys.length} different key presses each count (${aZ.total} -> ${aKeys.total})`)
+    : fail(`keys counted ${aKeys.total - aZ.total}, want ${keys.length}`);
+
+  // Clicks count even when they issue nothing meaningful: empty-ground left click
+  // (no A pending, no enemy) and a right click on the far edge of the field.
+  await page.mouse.click(300, 600);
+  await rclick(1200, 650);
+  await page.waitForTimeout(40);
+  const a1 = await apm();
+  a1.total === aKeys.total + 2
+    ? pass('left and right clicks on empty space each count')
+    : fail(`clicks counted ${a1.total - aKeys.total}, want 2`);
+  // 12 actions, under 10s since reset, so the window floor applies: 12 / 10s * 60 = 72.
+  a1.value === Math.round((a1.total / 10000) * 60000)
+    ? pass(`early APM is normalised over the 10s floor (${a1.total} actions -> ${a1.value})`)
+    : fail(`early APM ${a1.value} for ${a1.total} actions`);
+  await page.waitForTimeout(40);
+  const a1Hud = await apm();
+  a1Hud.visible && a1Hud.text === String(a1Hud.value)
+    ? pass(`HUD shows "APM ${a1Hud.text}"`)
+    : fail(`HUD APM text "${a1Hud.text}" (visible ${a1Hud.visible}) vs ${a1Hud.value}`);
+
+  // Holding a key: the browser's auto-repeat keydowns (repeat === true) do not count.
+  const repeats = await page.evaluate(() => {
+    const w = window as any;
+    w.__repeatSeen = 0;
+    w.__repeatProbe = (e: KeyboardEvent) => { if (e.repeat) w.__repeatSeen++; };
+    window.addEventListener('keydown', w.__repeatProbe);
+    return window.__warmup.scene.getScene('GameScene').apm.total;
+  });
+  for (let i = 0; i < 6; i++) {
+    await page.keyboard.down('z');             // first down is the press, the rest are auto-repeats
+    await page.waitForTimeout(20);
+  }
+  await page.keyboard.up('z');
+  await page.waitForTimeout(40);
+  const held = await page.evaluate(() => {
+    const w = window as any;
+    window.removeEventListener('keydown', w.__repeatProbe);
+    return { total: window.__warmup.scene.getScene('GameScene').apm.total, repeats: w.__repeatSeen };
+  });
+  held.repeats >= 5 && held.total === repeats + 1
+    ? pass(`holding Z counts once (${held.repeats} repeat keydowns ignored)`)
+    : fail(`held key: +${held.total - repeats} actions, ${held.repeats} repeat events seen`);
+
+  // UI clicks count too: open the menu (Esc is a key press) and click a setting.
+  const beforeMenu = (await apm()).total;
+  await page.keyboard.press('Escape');
+  await page.waitForTimeout(80);
+  const settingValue = await page.evaluate(() => {
+    const v = window.__warmup.scene.getScene('UIScene').pauseMenu.rows[0].value;
+    return { x: v.x - v.width / 2, y: v.y };
+  });
+  for (let i = 0; i < 3; i++) {                // 3 clicks cycles Range Indicator back to where it was
+    await page.mouse.click(settingValue.x, settingValue.y);
+    await page.waitForTimeout(30);
+  }
+  await page.keyboard.press('Escape');
+  await page.waitForTimeout(80);
+  const a2 = await apm();
+  a2.total === beforeMenu + 5
+    ? pass('menu open/close keys and settings clicks each count (+5)')
+    : fail(`menu inputs counted +${a2.total - beforeMenu}, want +5`);
+
+  // Mouse movement after all that still adds nothing.
+  await page.mouse.move(900, 100);
+  await page.mouse.move(200, 650);
+  await page.waitForTimeout(40);
+  (await apm()).total === a2.total ? pass('mouse movement never counts') : fail('mouse movement counted');
+
+  // Rolling window: actions older than 30s drop out.
+  const later = await page.evaluate(() => {
+    const g = window.__warmup.scene.getScene('GameScene');
+    return g.apm.valueAt(g.clock.now + window.__balance.APM.windowMs + 1000);
+  });
+  later === 0 ? pass('actions age out of the 30s rolling window') : fail(`APM ${later} after the window passed`);
 
   // === 6. Stage banner state across round restarts ===========================
   section('6. Stage banner state across round restarts');
@@ -298,13 +408,11 @@ test('hud: contextual range ring, pause freeze + input gate, Q slot, settings me
     g.director.waveIndex = wv - 1;
     g.director.spawnWave();
   }, [stage, wave]);
-  /** Kill the current wave through the scene's real damage funnel. */
+  /** Kill the current wave through the scene's real hit funnel. */
   const clearWave = () => page.evaluate(() => {
     const g = window.__warmup.scene.getScene('GameScene');
     for (const e of g.director.enemies) {
-      if (!e.active) continue;
-      const damage = e.hp;
-      g.onTargetDamaged(e, damage, e.takeDamage(damage));
+      while (e.active) g.onTargetHit(e, e.takeHit());
     }
   });
   const waitFor = (fn, arg = null, timeout = 5000) =>
@@ -338,6 +446,7 @@ test('hud: contextual range ring, pause freeze + input gate, Q slot, settings me
         probe.frames.push({
           round: hud.round, stage: hud.stage, wave: hud.wave, phase: hud.wavePhase, runTime: hud.runTime,
           over: g.getRoundResult() !== null, alive: hud.enemiesRemaining, shots: g.enemyProjectiles.activeCount,
+          apmActions: g.apm.total,
           lastStage: ui.lastStage, lastWave: ui.lastWave,
           banner: ui.stageText.visible ? ui.stageText.text : null,
         });
@@ -365,6 +474,9 @@ test('hud: contextual range ring, pause freeze + input gate, Q slot, settings me
     f.length > 0 && f.every((x) => x.alive === firstWaveSize && x.shots === 0)
       ? pass(`${label}: a fresh Stage 1 Wave 1 roster (${firstWaveSize} enemies), no hostile shots carried over`)
       : fail(`${label}: leftovers after restart: ${JSON.stringify(f.find((x) => x.alive !== firstWaveSize || x.shots !== 0) ?? f.length)}`);
+    f.length > 0 && f.every((x) => x.apmActions === 0)
+      ? pass(`${label}: the new run's APM starts empty (the restart input belongs to the old run)`)
+      : fail(`${label}: APM actions after restart: ${JSON.stringify(f.find((x) => x.apmActions !== 0))}`);
     f.length > 0 && f.every((x) => x.banner === null)
       ? pass(`${label}: no stage banner in the new run's first ${f[f.length - 1].runTime.toFixed(1)}s (${f.length} frames)`)
       : fail(`${label}: false stage banner after restart: ${JSON.stringify(f.find((x) => x.banner !== null) ?? f.length)}`);
@@ -401,7 +513,7 @@ test('hud: contextual range ring, pause freeze + input gate, Q slot, settings me
     window.__warmup.scene.getScene('GameScene').isPaused && window.__warmup.scene.getScene('UIScene').pauseMenu.visible);
   const restartButton = await page.evaluate(() => {
     const t = window.__warmup.scene.getScene('UIScene').pauseMenu.container.list
-      .find((o) => o.type === 'Text' && o.text === 'RESTART ROUND');
+      .find((o) => /Text$/.test(o.type) && o.text === 'RESTART ROUND');
     return t ? { x: t.x, y: t.y } : null;
   });
   midB && pausedB && restartButton
@@ -421,7 +533,7 @@ test('hud: contextual range ring, pause freeze + input gate, Q slot, settings me
     && window.__warmup.scene.getScene('UIScene').overlay.visible);
   const playAgain = await page.evaluate(() => {
     const t = window.__warmup.scene.getScene('UIScene').overlay.list
-      .find((o) => o.type === 'Text' && /^PLAY AGAIN/.test(o.text));
+      .find((o) => /Text$/.test(o.type) && /^PLAY AGAIN/.test(o.text));
     return t ? { x: t.x, y: t.y } : null;
   });
   midC && endedC && playAgain

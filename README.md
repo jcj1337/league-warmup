@@ -5,8 +5,9 @@ gauntlet of 10 stages of authored enemy waves — quick early stages, a four-wav
 stage — built to drill four things at once: click-to-move positioning, kiting/orbwalking, dodging non-homing
 projectiles, and aiming an Ezreal-flavoured ability kit.
 
-Gray-box by design: every visual is procedural Phaser geometry. No art, no audio,
-no backend, no accounts.
+Top-down pixel-art slime skirmish on a dark, quiet volcanic waste. All art is original and
+repo-owned: small hand-authored pixel maps rasterised to textures at boot and drawn at an
+integer 3× scale. No audio, no backend, no accounts.
 
 ```bash
 npm install
@@ -61,7 +62,8 @@ practising the easier ones for longer.
 
 The run ends when you **die**, or when you clear **Stage 10's final wave** (run complete).
 The end screen shows the outcome, the stage and wave reached, waves cleared, run time,
-score, kills by type, Q accuracy and the raw mechanical metrics. `R` restarts at
+score, kills by type, hits landed and W mark procs, Q accuracy and the raw mechanical
+metrics. `R` restarts at
 Stage 1 Wave 1.
 
 Later stages are harder, not faster. Each stage row sets:
@@ -69,43 +71,47 @@ Later stages are harder, not faster. Each stage row sets:
 - **Waves** — how many (one early, four at Stage 10) and each one's roster. Stage 1 is
   basic targets only; Pursuers join in Stage 2 and take a growing share of later waves,
   with mixed waves throughout.
-- **Enemy HP** — 100% for Stages 1–3, then +5% per stage (135% at Stage 10).
+- **Enemy pips** — how many hits each enemy takes: basic 1 / 2 / 3 pips across Stages
+  1–3 / 4–6 / 7–10 (capped at 3), Pursuer always one more (2 / 3 / 4).
 - **Enemy fire** — edge projectiles go from the calm opening to full strength at Stage 10.
 - **Your base attack speed** — the auto cycle shortens from 700ms (Stage 1) to 420ms
   (Stage 10). Time spent in a stage never speeds it up.
 
 B = basic target, P = Pursuer.
 
-| Stage | Waves | Wave 1 | Wave 2 | Wave 3 | Wave 4 | Enemy HP | Base auto cycle |
+| Stage | Waves | Wave 1 | Wave 2 | Wave 3 | Wave 4 | Pips (B / P) | Base auto cycle |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| 1 | 1 | 3B | — | — | — | 100% | 700ms |
-| 2 | 1 | 3B + 1P | — | — | — | 100% | 669ms |
-| 3 | 1 | 2B + 2P | — | — | — | 100% | 638ms |
-| 4 | 2 | 3B + 1P | 2B + 2P | — | — | 105% | 607ms |
-| 5 | 2 | 2B + 2P | 1B + 3P | — | — | 110% | 576ms |
-| 6 | 2 | 1B + 3P | 2B + 2P | — | — | 115% | 544ms |
-| 7 | 3 | 2B + 2P | 1B + 3P | 1B + 3P | — | 120% | 513ms |
-| 8 | 3 | 2B + 2P | 1B + 3P | 1B + 3P | — | 125% | 482ms |
-| 9 | 3 | 1B + 3P | 2B + 2P | 1B + 3P | — | 130% | 451ms |
-| 10 | 4 | 2B + 2P | 1B + 3P | 2B + 2P | 4P | 135% | 420ms |
+| 1 | 1 | 3B | — | — | — | 1 / 2 | 700ms |
+| 2 | 1 | 3B + 1P | — | — | — | 1 / 2 | 669ms |
+| 3 | 1 | 2B + 2P | — | — | — | 1 / 2 | 638ms |
+| 4 | 2 | 3B + 1P | 2B + 2P | — | — | 2 / 3 | 607ms |
+| 5 | 2 | 2B + 2P | 1B + 3P | — | — | 2 / 3 | 576ms |
+| 6 | 2 | 1B + 3P | 2B + 2P | — | — | 2 / 3 | 544ms |
+| 7 | 3 | 2B + 2P | 1B + 3P | 1B + 3P | — | 3 / 4 | 513ms |
+| 8 | 3 | 2B + 2P | 1B + 3P | 1B + 3P | — | 3 / 4 | 482ms |
+| 9 | 3 | 1B + 3P | 2B + 2P | 1B + 3P | — | 3 / 4 | 451ms |
+| 10 | 4 | 2B + 2P | 1B + 3P | 2B + 2P | 4P | 3 / 4 | 420ms |
 
 All of it is tuned in one place: `RUN` (enemy cap, breathers) and `STAGES` (per-stage
-waves, HP, attack speed, enemy fire) in [balance.ts](src/config/balance.ts). Add or
+waves, `enemyPips`, attack speed, enemy fire) in [balance.ts](src/config/balance.ts). Add or
 remove waves in a stage by editing its `waves` list.
 
 The HUD shows `STAGE 7 / 10   WAVE 2 / 3   ENEMIES 2` along the top — the wave total is
-the current stage's own wave count — and the run time on the left. A large "STAGE N" banner marks each new stage, a smaller "WAVE N" each later
+the current stage's own wave count — the run time on the left, and `APM` on the right
+(every key press and mouse-button press, bound or not — key auto-repeat and mouse movement
+excluded — per minute over a rolling 30s window, divided
+by at least 10s early on; informational only). A large "STAGE N" banner marks each new stage, a smaller "WAVE N" each later
 wave, and "WAVE CLEAR" / "STAGE CLEAR" fills the breather.
 
 ## The kit
 
-| | Cast time | Cooldown | Range | Projectile speed | Damage |
+| | Cast time | Cooldown | Range | Projectile speed | Pips removed |
 | --- | --- | --- | --- | --- | --- |
-| Auto | 175ms windup\* | 700→420ms\* | 260 | 1150 px/s (homing) | 12 |
-| Q | 165ms | 3000ms | 450 | 1250 px/s | 30 |
-| W | 185ms | 6000ms | 450 | 1000 px/s | 0 on contact, **45 on detonation** |
-| E | 210ms | 8000ms | 364 blink / 380 bolt acquisition | 1050 px/s bolt | 38 |
-| F | instant | 20000ms | 325 | — | — |
+| Auto | 175ms windup\* | 700→420ms\* | 260 | 1150 px/s (homing) | 1 |
+| Q | 165ms | 3000ms | 450 | 1250 px/s | 1 |
+| W | 185ms | 6000ms | 450 | 1000 px/s | 0 on contact, **+1 on detonation** |
+| E | 210ms | 8000ms | 310 blink / 380 bolt acquisition | 1050 px/s bolt | 1 |
+| F | instant | 20000ms | 275 | — | — |
 
 \* the auto cooldown is set by the current stage (700ms at Stage 1, 420ms at Stage 10);
 the windup is a quarter of it, and both shrink further as the passive stacks.
@@ -131,8 +137,9 @@ cooldownMs = stageBaseCooldown / (1 + stacks * 0.10)
 **Cooldown refund.** A landed Q takes 750ms off the *remaining* cooldown of Q, W and
 E — never Flash, and never by restarting a cooldown.
 
-**W combo.** W marks on contact and deals nothing. The mark detonates for 45 the next
-time that enemy is hit by an auto, Q or the E bolt, and lapses harmlessly after 4s.
+**W combo.** W marks on contact and removes no pips. The next auto, Q or E bolt hit on
+that enemy removes its own pip plus one more from the detonation (W → Q = 2 pips); an
+unused mark lapses harmlessly after 4s.
 E's bolt prefers a marked target, so W → E cashes the mark in.
 
 ## Attack cycle
@@ -142,31 +149,31 @@ attack command -> [ WINDUP ] -> RELEASE -> [ RECOVERY ] -> next attack
                    rooted,       missile    free to move
                    cancellable   spawns     (the orbwalk window)
                                     |
-                                    +-> missile flies independently -> damage on impact
+                                    +-> missile flies independently -> 1 pip on impact
 ```
 
-| State | HUD | Player looks like |
-| --- | --- | --- |
-| idle | `READY` | neutral blue dart |
-| windup | `WINDUP` (amber) | golden charge ring contracts onto the body, leans at the target |
-| release | — | ring lands, white burst snaps out, cyan bolt leaves, recoil kick |
-| recovery | `RECOVERY` (green) | neutral again, free to move |
+| State | Player looks like |
+| --- | --- |
+| idle | slime breathes gently |
+| windup | gold dotted ring contracts onto the body; the slime hunkers down, narrows its eyes and leans at the target |
+| release | ring lands, slime pops up, flash + sparks at its edge, cyan bolt leaves, recoil kick |
+| recovery | neutral again, free to move |
 
 `windup + recovery == cooldownMs`. A ground move order or `S` during the windup
-cancels the attack (no damage, cooldown refunded). Attack orders — right-clicking an
+cancels the attack (no hit, cooldown refunded). Attack orders — right-clicking an
 enemy, A-click, T — do **not** cancel a swing in progress. After release nothing
-undoes the damage.
+undoes the hit.
 
 Orbwalk loop: `T` (or `A` + click) → auto fires → right-click away → repeat.
 
 ## Enemies
 
-| | Look | HP | Behaviour |
+| | Look | Pips | Behaviour |
 | --- | --- | --- | --- |
-| Basic target | compact red hexagon | 24 (2 autos) | drifts slowly, never attacks |
-| Pursuer | large orange arrowhead | 60 (2.5×) | walks you down at 55% of your speed, melee swing with a 400ms telegraph |
+| Basic target | red slime with glowing eyes and a fanged snarl | 1 / 2 / 3 | drifts slowly, never attacks |
+| Pursuer | larger purple slime with devil horns | basic + 1 | walks you down at 55% of your speed, melee swing with a 400ms telegraph |
 
-HP is multiplied by the current stage's enemy HP value. Pursuers first appear in
+Pips come from the current stage's `enemyPips` row. Pursuers first appear in
 Stage 2. A Pursuer's swing only lands if you are still in reach when it
 resolves — walking or blinking out during the telegraph makes it miss.
 
@@ -176,40 +183,46 @@ resolves — walking or blinking out during the telegraph makes it miss.
 timers, cast windows, cooldowns, mark durations, projectiles, wave breathers and the run
 clock. Nothing fast-forwards on resume.
 
-The menu has Resume, Restart Round, and three settings that write straight into the
-`DEBUG` config: **Attack Range Indicator** (contextual / always / off), **Damage
-Numbers**, **Debug Metrics**. It also lists the full control reference.
+The menu has Resume, Restart Round, and two settings that write straight into the
+`DEBUG` config: **Attack Range Indicator** (contextual / always / off) and **Damage
+Numbers** (the "-1" pip-loss pops). It also lists the full control reference.
 
 ## Reading the field
 
-Friend and foe differ by SHAPE, not just colour:
+Friend and foe differ by silhouette, not just colour. Every unit has a shadow and a
+compact health bar under its feet — a green bar for you, and for enemies a row of red
+pip segments, one per remaining hit (`[■][■][ ]`); units lower on the
+screen draw in front. The ground is low-contrast ash with a few cracks and dim ember
+seams; the handful of basalt rocks and dead shrubs are decoration only — no collision —
+stay out of the HUD strips and always draw beneath combatants.
 
 | Thing | Look |
 | --- | --- |
-| You | blue dart — the point is the facing indicator |
-| Basic target | red hexagon, slowly rotating |
-| Pursuer | large orange arrowhead, points at you |
-| W-marked enemy | violet ring with orbiting ticks |
-| Your auto | thin cyan bolt + streak, homes |
-| Your Q | narrow green bolt, finite range, stops on the first enemy |
-| Your W | fat violet orb |
-| Your E bolt | hot-pink homing bolt |
-| Flash | pale gold starburst |
-| Enemy shot (dodge!) | fat amber circle, heavy dark rim, pulsing core |
-| Move order | pip that collapses inward |
-| Attack-move order | crosshair that blooms outward |
-| Current attack target | rotating green brackets (amber while out of range) |
+| You | friendly blue slime with a smile; its face turns toward where you move or aim |
+| Basic target | red slime, same family: angry brows, glowing yellow eyes, fangs |
+| Pursuer | bigger horned purple slime; rears up with white-hot eyes, flashes `!` and warms the ground red across its reach during the telegraph, then slams flat |
+| W-marked enemy | violet rune bobbing overhead + magenta dotted ring at its feet (blinks as it lapses) |
+| Your auto | small cyan bolt with a short trail, homes |
+| Your Q | sharp teal bolt, finite range, stops on the first enemy |
+| Your W | violet/magenta orb with a heavy trail |
+| Your E bolt | pink/blue arcane bolt |
+| Flash | gold starburst at both ends |
+| Enemy shot (dodge!) | orange-red fireball (bigger at later stages) |
+| Move order | cream diamond that collapses inward |
+| Attack-move order | red crosshair that blooms outward |
+| Current attack target | pixel corner brackets, green (amber while out of range) |
 
 There is deliberately **no line drawn from the player to anything** — facing,
-targeting and destination are communicated by markers and hull orientation. The
-attack-range ring is contextual: it appears while `A` targeting is armed and flashes
-briefly after `T`.
+targeting and destination are communicated by markers and sprite facing. The attack-range ring (dotted) is contextual: it appears while `A` targeting
+is armed and flashes briefly after `T`.
 
 ## Where things live
 
 - `src/config/balance.ts` — gameplay tuning: the run (`RUN`, `STAGES`), ranges, timings, damage, keybinds, debug flags.
-- `src/config/theme.ts` — **the look**: palette, unit/projectile/arena/HUD/cast styling.
-- `src/game/scenes/GameScene.ts` — arena, input wiring, per-frame orchestration, round lifecycle.
+- `src/config/theme.ts` — **the look**: `PALETTE` (raw colours) and `THEME` (sprite scale, depth bands, effect timings, HUD styling). Nothing in it affects gameplay.
+- `src/game/art/` — original pixel sprites as text pixel maps (`sprites.ts`), the 5×7 HUD font (`glyphs.ts`, `font.ts`), and `textures.ts`, which rasterises them once and owns every texture key. Real PNG art can later replace a sprite key-for-key.
+- `src/game/view/` — the read-only view layer: `PlayerView`, `EnemyView` / `PursuerView`, `ProjectileView` + `projectileArt`, `Fx` (pooled particles, dotted rings, damage numbers), `PixelBar` (health bars), `Battlefield` (painted ground + props) and `pixelDraw` helpers.
+- `src/game/scenes/GameScene.ts` — input wiring, per-frame orchestration, round lifecycle.
 - `src/game/scenes/UIScene.ts` — HUD, ability bar, pause menu, end screen (polls GameScene).
 - `src/game/entities/` — `Player`, `Enemy` (abstract base), `Target`, `Pursuer`, `Projectile`, `AutoAttackMissile`.
 - `src/game/systems/` — `GameClock`, `InputController`, `AttackSystem`, `CastSystem`,
@@ -225,6 +238,7 @@ While playtesting, from the browser console:
 __warmup.scene.getScene('GameScene').getHudState()
 __balance.ATTACK.range = 400          // most values apply on the next frame
 __balance.BLINK_E.castTimeMs = 150    // retune a cast window live
+__theme.player.attack.windupLeanPx    // presentation values (read-only look config)
 ```
 
 ## Attack range

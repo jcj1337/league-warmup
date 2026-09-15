@@ -74,20 +74,24 @@ test('kit: W mark + detonation, E blink + bolt priority, Flash, Q cooldown refun
   }, null, { timeout: 4000 });
   const wHit = await G();
   wHit.marked ? pass('W projectile marks the enemy it touches') : fail('W did not mark');
-  wHit.hp0 === 9999 ? pass('W itself deals no damage (mark only)') : fail(`W dealt ${9999 - wHit.hp0} damage on contact`);
+  wHit.hp0 === 9999 ? pass('W alone removes 0 pips (mark only)') : fail(`W removed ${9999 - wHit.hp0} pips on contact`);
   wHit.stacks === 1 ? pass('W landing grants exactly 1 passive stack') : fail(`stacks after W: ${wHit.stacks}`);
 
-  // Auto detonates the mark.
+  // Auto detonates the mark: its own pip plus one from the proc. Sampled on the
+  // frame the mark is consumed, before any later auto can land.
   const beforeAuto = (await G()).hp0;
   await page.mouse.click(900, 360, { button: 'right' });
-  await page.waitForFunction(() => !window.__warmup.scene.getScene('GameScene').director.enemies[0]
-    .isMarked(window.__warmup.scene.getScene('GameScene').clock.now), null, { timeout: 5000 });
-  await page.waitForTimeout(120);
+  const autoDet = await page.waitForFunction(() => {
+    const g = window.__warmup.scene.getScene('GameScene');
+    const e = g.director.enemies[0];
+    return e.isMarked(g.clock.now) ? null : { hp0: e.hp, procs: g.scoring.markProcs, hits: g.scoring.hitsLanded };
+  }, null, { timeout: 5000 }).then((h) => h.jsonValue());
+  await page.keyboard.press('s');
   const afterAuto = await G();
-  const autoTotal = beforeAuto - afterAuto.hp0;
-  autoTotal >= cfg.w.detonationDamage
-    ? pass(`auto detonates the mark (${autoTotal} damage = auto + ${cfg.w.detonationDamage} detonation)`)
-    : fail(`auto+detonation dealt only ${autoTotal}`);
+  const autoTotal = beforeAuto - autoDet.hp0;
+  autoTotal === 2 && autoDet.procs === 1
+    ? pass(`W -> auto removes 2 pips total (auto 1 + mark proc 1; procs ${autoDet.procs})`)
+    : fail(`W -> auto removed ${autoTotal} pips, procs ${autoDet.procs}`);
   !afterAuto.marked ? pass('mark is consumed by the detonation') : fail('mark survived detonation');
   afterAuto.stacks === 1
     ? pass('W detonation grants NO extra passive stack (still 1)')
@@ -105,9 +109,9 @@ test('kit: W mark + detonation, E blink + bolt priority, Flash, Q cooldown refun
   await page.waitForTimeout(120);
   const qDet = await G();
   const qTotal = 9999 - qDet.hp0;
-  qTotal >= cfg.q.damage + cfg.w.detonationDamage
-    ? pass(`Q detonates the mark (${qTotal} = Q ${cfg.q.damage} + detonation ${cfg.w.detonationDamage})`)
-    : fail(`Q+detonation dealt ${qTotal}`);
+  qTotal === 2
+    ? pass('W -> Q removes exactly 2 pips (Q 1 + mark proc 1)')
+    : fail(`W -> Q removed ${qTotal} pips`);
   qDet.stacks === 1 ? pass('Q hit grants 1 stack, detonation adds none') : fail(`stacks: ${qDet.stacks}`);
 
   // A mark left alone expires without damage.
@@ -120,11 +124,17 @@ test('kit: W mark + detonation, E blink + bolt priority, Flash, Q cooldown refun
   await page.waitForTimeout(cfg.w.markDurationMs + 600);
   const afterExpiry = await G();
   !afterExpiry.marked && afterExpiry.hp0 === beforeExpiry
-    ? pass(`unused mark expires after ${cfg.w.markDurationMs}ms with no damage`)
-    : fail(`expiry: marked=${afterExpiry.marked} damage=${beforeExpiry - afterExpiry.hp0}`);
+    ? pass(`unused mark expires after ${cfg.w.markDurationMs}ms with no pip lost`)
+    : fail(`expiry: marked=${afterExpiry.marked} pips lost=${beforeExpiry - afterExpiry.hp0}`);
 
   // === E: blink ==============================================================
   section('E: blink');
+  cfg.e.range === 310 && cfg.e.boltAcquisitionRange === 380
+    ? pass(`E blink range ${cfg.e.range} (was 364), bolt acquisition still ${cfg.e.boltAcquisitionRange}`)
+    : fail(`E range ${cfg.e.range}, acquisition ${cfg.e.boltAcquisitionRange}`);
+  cfg.e.cooldownMs === 8000 && cfg.f.cooldownMs === 20000
+    ? pass('E / Flash cooldowns unchanged (8000 / 20000ms)')
+    : fail(`cooldowns changed: E ${cfg.e.cooldownMs}, F ${cfg.f.cooldownMs}`);
   await setup([{ type: 'basic', x: 200, y: 120 }]);
   await page.mouse.move(760, 360);          // 120px right — inside E range
   await page.keyboard.press('e');
@@ -166,7 +176,7 @@ test('kit: W mark + detonation, E blink + bolt priority, Flash, Q cooldown refun
     : fail('no E bolt spawned');
   await page.waitForTimeout(600);
   const eLanded = await G();
-  eLanded.hp0 < 9999 ? pass(`E bolt damages its target (${9999 - eLanded.hp0})`) : fail('E bolt dealt no damage');
+  eLanded.hp0 === 9998 ? pass('E bolt removes exactly 1 pip') : fail(`E bolt removed ${9999 - eLanded.hp0} pips`);
   eLanded.stacks >= 1 ? pass('E bolt grants a passive stack') : fail('E bolt granted no stack');
 
   // No enemy nearby: blink still works, no bolt.
@@ -235,6 +245,7 @@ test('kit: W mark + detonation, E blink + bolt priority, Flash, Q cooldown refun
 
   // === Flash =================================================================
   section('Flash');
+  cfg.f.range === 275 ? pass(`Flash range ${cfg.f.range} (was 325)`) : fail(`Flash range ${cfg.f.range}`);
   await setup([{ type: 'basic', x: 200, y: 120 }]);
   await page.mouse.move(1270, 360);
   await page.keyboard.press('f');
