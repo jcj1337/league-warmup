@@ -179,6 +179,33 @@ test('kit: W mark + detonation, E blink + bolt priority, Flash, Q cooldown refun
     ? pass('E with nothing in range still blinks, fires no bolt')
     : fail(`lone blink: bolts=${eAlone.bolts}`);
 
+  // Acquisition range boundary, measured from where E lands. The enemy is frozen
+  // so drift cannot carry it across the line during the cast.
+  const acquireAt = async (offset) => {
+    await setup([{ type: 'basic', x: 500 + offset, y: 360 }]);
+    await page.evaluate(() => {
+      const e = window.__warmup.scene.getScene('GameScene').director.enemies[0];
+      e.wanderX = e.x; e.wanderY = e.y; e.nextWanderAt = Number.POSITIVE_INFINITY;
+    });
+    await page.mouse.move(500, 360);          // 140px left — inside E range, lands exactly here
+    await page.keyboard.press('e');
+    return page.waitForFunction(() => {
+      const g = window.__warmup.scene.getScene('GameScene');
+      if (g.cast.isCasting || g.player.x > 600) return null;
+      const e = g.director.enemies[0];
+      return { bolts: g.blink.boltsInFlight, landed: g.player.x, gap: Math.hypot(e.x - g.player.x, e.y - g.player.y) };
+    }, null, { timeout: 3000 }).then((h) => h.jsonValue()).catch(() => null);
+  };
+  const acq = cfg.e.boltAcquisitionRange;
+  const inside = await acquireAt(acq - 20);
+  const outside = await acquireAt(acq + 20);
+  inside && inside.bolts > 0
+    ? pass(`E bolt acquires an enemy ${Math.round(inside.gap)}px from the landing point (boltAcquisitionRange ${acq})`)
+    : fail(`no bolt at ${acq - 20}px inside the ${acq}px acquisition range: ${JSON.stringify(inside)}`);
+  outside && outside.bolts === 0
+    ? pass(`E fires no bolt at an enemy ${Math.round(outside.gap)}px away — beyond the ${acq}px acquisition range`)
+    : fail(`bolt fired at ${acq + 20}px, outside the ${acq}px acquisition range: ${JSON.stringify(outside)}`);
+
   // === E targeting priority: W-marked wins ===================================
   section('E targeting priority: W-marked wins');
   await setup([

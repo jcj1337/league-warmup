@@ -315,8 +315,11 @@ export const BLINK_E = {
   cooldownMs: 8000,
   /** ~1.4x attack range. Real repositioning, well short of Q/W reach. */
   range: 364,
-  /** Post-blink search radius for the bolt. ~1.75x attack range. */
-  boltAcquisitionRange: 455,
+  /**
+   * Post-blink search radius for the bolt, measured from where E lands.
+   * ~1.46x attack range. Provisional — was 455; tune after playtesting.
+   */
+  boltAcquisitionRange: 380,
   boltSpeed: 1050,
   boltRadius: 7,
   /** 1.25x a Q hit. */
@@ -482,30 +485,33 @@ export interface StageDefinition {
  *     the same curve the old time-based difficulty levels used.
  *   - baseAttackCooldownMs: 700ms → 420ms in even steps, the old ramp's endpoints.
  *   - enemyFire: from the calm opening (0) to full strength (1).
- *   - waves: Pursuers arrive in Stage 2; later stages lean on them while keeping
- *     mixed waves, with a single all-Pursuer wave as the finale.
+ *   - waves: short early stages (a single wave each for 1-3), two waves for 4-6,
+ *     three for 7-9, and a four-wave final gauntlet at Stage 10 — 22 in all.
+ *     Wave sizes stay modest early instead of padding the short stages.
+ *     Pursuers arrive in Stage 2; later waves lean on them while staying mixed,
+ *     with a single all-Pursuer wave closing the run.
  */
 export const STAGES: StageDefinition[] = [
   /* 1 */ { enemyHpMultiplier: 1.0, baseAttackCooldownMs: 700, enemyFire: 0,
-    waves: [{ basic: 3 }, { basic: 3 }, { basic: 4 }] },
+    waves: [{ basic: 3 }] },
   /* 2 */ { enemyHpMultiplier: 1.0, baseAttackCooldownMs: 669, enemyFire: 0.1,
-    waves: [{ basic: 3 }, { basic: 3, pursuer: 1 }, { basic: 3, pursuer: 1 }] },
+    waves: [{ basic: 3, pursuer: 1 }] },
   /* 3 */ { enemyHpMultiplier: 1.0, baseAttackCooldownMs: 638, enemyFire: 0.2,
-    waves: [{ basic: 3, pursuer: 1 }, { basic: 2, pursuer: 2 }, { basic: 2, pursuer: 2 }] },
+    waves: [{ basic: 2, pursuer: 2 }] },
   /* 4 */ { enemyHpMultiplier: 1.05, baseAttackCooldownMs: 607, enemyFire: 0.3,
-    waves: [{ basic: 2, pursuer: 1 }, { basic: 2, pursuer: 2 }, { basic: 1, pursuer: 3 }] },
+    waves: [{ basic: 3, pursuer: 1 }, { basic: 2, pursuer: 2 }] },
   /* 5 */ { enemyHpMultiplier: 1.1, baseAttackCooldownMs: 576, enemyFire: 0.4,
-    waves: [{ basic: 3, pursuer: 1 }, { basic: 2, pursuer: 2 }, { basic: 1, pursuer: 3 }] },
+    waves: [{ basic: 2, pursuer: 2 }, { basic: 1, pursuer: 3 }] },
   /* 6 */ { enemyHpMultiplier: 1.15, baseAttackCooldownMs: 544, enemyFire: 0.5,
-    waves: [{ basic: 2, pursuer: 2 }, { basic: 1, pursuer: 3 }, { basic: 2, pursuer: 2 }] },
+    waves: [{ basic: 1, pursuer: 3 }, { basic: 2, pursuer: 2 }] },
   /* 7 */ { enemyHpMultiplier: 1.2, baseAttackCooldownMs: 513, enemyFire: 0.6,
-    waves: [{ basic: 1, pursuer: 2 }, { basic: 1, pursuer: 3 }, { basic: 1, pursuer: 3 }] },
+    waves: [{ basic: 2, pursuer: 2 }, { basic: 1, pursuer: 3 }, { basic: 1, pursuer: 3 }] },
   /* 8 */ { enemyHpMultiplier: 1.25, baseAttackCooldownMs: 482, enemyFire: 0.7,
     waves: [{ basic: 2, pursuer: 2 }, { basic: 1, pursuer: 3 }, { basic: 1, pursuer: 3 }] },
   /* 9 */ { enemyHpMultiplier: 1.3, baseAttackCooldownMs: 451, enemyFire: 0.85,
     waves: [{ basic: 1, pursuer: 3 }, { basic: 2, pursuer: 2 }, { basic: 1, pursuer: 3 }] },
   /* 10 */ { enemyHpMultiplier: 1.35, baseAttackCooldownMs: 420, enemyFire: 1,
-    waves: [{ basic: 2, pursuer: 2 }, { basic: 1, pursuer: 3 }, { pursuer: 4 }] },
+    waves: [{ basic: 2, pursuer: 2 }, { basic: 1, pursuer: 3 }, { basic: 2, pursuer: 2 }, { pursuer: 4 }] },
 ];
 
 /** Stage / wave transition feedback. Presentation only. */

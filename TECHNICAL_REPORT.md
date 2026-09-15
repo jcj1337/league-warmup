@@ -12,7 +12,7 @@ currently in `src/config/balance.ts` and `src/config/theme.ts`.
 ## 1. Overview
 
 A mechanical warm-up trainer for League-style ADC play, structured as a gauntlet
-of 10 stages × 3 authored waves. The player practises positioning,
+of 10 stages of authored waves (1–4 per stage, 22 in all). The player practises positioning,
 kiting/orbwalking, dodging, and an Ezreal-flavoured kit (Q/W/E + Flash) against two
 enemy archetypes. Progression comes from clearing waves, never from elapsed time.
 
@@ -474,7 +474,7 @@ at max range along that direction, clamped to the arena. After the cast window:
 rings + a ~100ms streak → bolt acquisition **from the new position**.
 
 ```
-inRange   = enemies within boltAcquisitionRange (455) of the NEW position
+inRange   = enemies within boltAcquisitionRange (380) of the NEW position
 marked    = inRange.filter(isMarked)
 pool      = marked.length ? marked : inRange
 target    = nearest of pool
@@ -532,7 +532,7 @@ respawns and no refilling slots:
 ```
 spawnWave() ─► fight ─► last enemy killed ─► intermission (GameClock) ─► next wave / stage ─► spawnWave()
                                │
-                               └─ it was Stage 10 Wave 3 ─► 'complete' → the run ends
+                               └─ it was the final stage's last wave ─► 'complete' → the run ends
 ```
 
 - **`spawnWave()`** destroys the previous, fully dead roster and spawns exactly the
@@ -576,18 +576,21 @@ downstream types against `Enemy`.
 
 **The stage table** (`STAGES` in balance.ts; B = basic, P = pursuer):
 
-| Stage | Wave 1 | Wave 2 | Wave 3 | HP × | Base auto | Enemy fire |
-| --- | --- | --- | --- | --- | --- | --- |
-| 1 | 3B | 3B | 4B | 1.00 | 700ms | 0 |
-| 2 | 3B | 3B+1P | 3B+1P | 1.00 | 669ms | 0.10 |
-| 3 | 3B+1P | 2B+2P | 2B+2P | 1.00 | 638ms | 0.20 |
-| 4 | 2B+1P | 2B+2P | 1B+3P | 1.05 | 607ms | 0.30 |
-| 5 | 3B+1P | 2B+2P | 1B+3P | 1.10 | 576ms | 0.40 |
-| 6 | 2B+2P | 1B+3P | 2B+2P | 1.15 | 544ms | 0.50 |
-| 7 | 1B+2P | 1B+3P | 1B+3P | 1.20 | 513ms | 0.60 |
-| 8 | 2B+2P | 1B+3P | 1B+3P | 1.25 | 482ms | 0.70 |
-| 9 | 1B+3P | 2B+2P | 1B+3P | 1.30 | 451ms | 0.85 |
-| 10 | 2B+2P | 1B+3P | 4P | 1.35 | 420ms | 1.00 |
+| Stage | Waves | Wave 1 | Wave 2 | Wave 3 | Wave 4 | HP × | Base auto | Enemy fire |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 1 | 1 | 3B | — | — | — | 1.00 | 700ms | 0 |
+| 2 | 1 | 3B+1P | — | — | — | 1.00 | 669ms | 0.10 |
+| 3 | 1 | 2B+2P | — | — | — | 1.00 | 638ms | 0.20 |
+| 4 | 2 | 3B+1P | 2B+2P | — | — | 1.05 | 607ms | 0.30 |
+| 5 | 2 | 2B+2P | 1B+3P | — | — | 1.10 | 576ms | 0.40 |
+| 6 | 2 | 1B+3P | 2B+2P | — | — | 1.15 | 544ms | 0.50 |
+| 7 | 3 | 2B+2P | 1B+3P | 1B+3P | — | 1.20 | 513ms | 0.60 |
+| 8 | 3 | 2B+2P | 1B+3P | 1B+3P | — | 1.25 | 482ms | 0.70 |
+| 9 | 3 | 1B+3P | 2B+2P | 1B+3P | — | 1.30 | 451ms | 0.85 |
+| 10 | 4 | 2B+2P | 1B+3P | 2B+2P | 4P | 1.35 | 420ms | 1.00 |
+
+The number of waves is simply each row's `waves.length`; the director, HUD
+(`WAVE X / Y`), end screen and tests all read it from there.
 
 **Separation**: overlapping enemies are pushed apart with the share split by radius,
 so a Pursuer shoves a basic target rather than the reverse.
@@ -661,13 +664,15 @@ the `STAGES` row in play sets everything that scales.
 
 | What | Column | Stage 1 → Stage 10 |
 | --- | --- | --- |
+| Stage length | `waves.length` | 1 wave (Stages 1–3) → 4 waves (Stage 10) |
 | Wave rosters | `waves` | basic-only → Pursuer-heavy, mixed waves throughout |
 | Enemy HP | `enemyHpMultiplier` | ×1.00 for 1–3, then +0.05 per stage → ×1.35 |
 | Player base auto cycle | `baseAttackCooldownMs` | 700ms → 420ms |
 | Edge fire | `enemyFire` | 0 → 1 |
 
-A stage lasts exactly as long as the player takes to clear its three waves; the next
-one begins only after a Wave 3 clear plus `interStageDelayMs`. Later stages are
+A stage lasts exactly as long as the player takes to clear its waves — one wave early
+on, four in the final gauntlet; the next one begins only after its last wave is
+cleared plus `interStageDelayMs`. Later stages are
 harder because of what they field — never because transitions arrive faster.
 
 Every enemy-projectile parameter is `lerp(start, end, enemyFire)`:
@@ -818,7 +823,7 @@ Visual-only: `windupLeanPx` 9, `windupScale` 1.18, `releaseKickPx/Ms` 8/120,
 | --- | --- | --- | --- | --- | --- | --- |
 | `SKILLSHOT_Q` | 165 | 3000 | 450 | 1250 | 30 | `hitCooldownReductionMs` 750, radius 7, `boltLength` 26 |
 | `SKILLSHOT_W` | 185 | 6000 | 450 | 1000 | 0 / **45** detonation | `markDurationMs` 4000, radius 12 |
-| `BLINK_E` | 210 | 8000 | 364 | bolt 1050 | 38 | `boltAcquisitionRange` 455, `boltRadius` 7, `blinkStreakMs` 100 |
+| `BLINK_E` | 210 | 8000 | 364 | bolt 1050 | 38 | `boltAcquisitionRange` 380, `boltRadius` 7, `blinkStreakMs` 100 |
 | `FLASH` | — | 20000 | 325 | — | — | `burstMs` 200 |
 
 `PASSIVE`: `maxStacks` 5, `attackSpeedPerStack` 0.10, `durationMs` 6000.
@@ -911,13 +916,13 @@ slots all jump down on the next frame; Flash is untouched.
 
 **Wave clear.** the last living enemy takes lethal damage (auto, Q, E bolt or
 detonation) → `onTargetDamaged` → `director.onEnemyKilled` → no enemy active → phase
-`intermission`, `intermissionEndsAt = now + 800` (1200 after Wave 3) → later that same
+`intermission`, `intermissionEndsAt = now + 800` (1200 after a stage's last wave) → later that same
 frame `enemyProjectiles.update` sees `!isWaveActive` → every hostile shot removed,
 nothing scheduled → the HUD polls `wavePhase` → "WAVE CLEAR" / "STAGE CLEAR" → at the
 deadline `director.update` → `advance()` → `spawnWave()` destroys the dead roster and
 spawns the next authored one → the HUD sees the new wave or stage → "WAVE N" /
-"STAGE N" banner → the first volley follows one spawn interval later. After Stage 10
-Wave 3 the phase becomes `complete` instead, and the frame's end check calls
+"STAGE N" banner → the first volley follows one spawn interval later. After the final
+stage's last wave the phase becomes `complete` instead, and the frame's end check calls
 `endRound('completed')`.
 
 **Player hit.** Spawn on a random edge → aimed at the player's position at spawn ±3° →

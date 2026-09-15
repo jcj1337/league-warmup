@@ -1,8 +1,8 @@
 # Warmup
 
 A browser-based mechanical warm-up trainer for League-style ADC play. A run is a
-gauntlet of 10 stages, each made of 3 authored waves of enemies, built to drill four
-things at once: click-to-move positioning, kiting/orbwalking, dodging non-homing
+gauntlet of 10 stages of authored enemy waves — quick early stages, a four-wave final
+stage — built to drill four things at once: click-to-move positioning, kiting/orbwalking, dodging non-homing
 projectiles, and aiming an Ezreal-flavoured ability kit.
 
 Gray-box by design: every visual is procedural Phaser geometry. No art, no audio,
@@ -45,51 +45,56 @@ the only thing that reads them.
 
 ## The run
 
-A run fights **10 stages of 3 waves** in a fixed arena. Each wave spawns a finite,
-authored group of up to four enemies, each in its own spot. Killed enemies stay dead —
-nothing respawns mid-wave, and a three-enemy wave really does leave the fourth spot
-empty. When the last enemy of a wave dies, the arena clears (hostile shots still in the
-air fizzle), a short breather runs — **800ms** between waves, **1200ms** between
-stages — and the next wave spawns. Clearing Wave 3 moves you to Wave 1 of the next
-stage. You stay in control during the breather.
+A run fights **10 stages** in a fixed arena, and stages differ in length: Stages 1–3
+are a single wave each, 4–6 have two waves, 7–9 three, and Stage 10 is a four-wave
+final gauntlet — 22 waves in all. Each wave spawns a finite, authored group of up to
+four enemies, each in its own spot. Killed enemies stay dead — nothing respawns
+mid-wave, and a three-enemy wave really does leave the fourth spot empty. When the last
+enemy of a wave dies, the arena clears (hostile shots still in the air fizzle), a short
+breather runs — **800ms** between waves, **1200ms** between stages — and the next wave
+spawns. Clearing a stage's last wave moves you to Wave 1 of the next stage. You stay in
+control during the breather.
 
 Progression comes only from clearing enemies: elapsed time never advances a wave or a
 stage. A strong player reaches the hard encounters sooner; a struggling player keeps
 practising the easier ones for longer.
 
-The run ends when you **die**, or when you clear **Stage 10 Wave 3** (run complete).
+The run ends when you **die**, or when you clear **Stage 10's final wave** (run complete).
 The end screen shows the outcome, the stage and wave reached, waves cleared, run time,
 score, kills by type, Q accuracy and the raw mechanical metrics. `R` restarts at
 Stage 1 Wave 1.
 
 Later stages are harder, not faster. Each stage row sets:
 
-- **Wave rosters** — Stage 1 is basic targets only; Pursuers join in Stage 2 and take a
-  growing share of later waves, with mixed waves throughout.
+- **Waves** — how many (one early, four at Stage 10) and each one's roster. Stage 1 is
+  basic targets only; Pursuers join in Stage 2 and take a growing share of later waves,
+  with mixed waves throughout.
 - **Enemy HP** — 100% for Stages 1–3, then +5% per stage (135% at Stage 10).
 - **Enemy fire** — edge projectiles go from the calm opening to full strength at Stage 10.
 - **Your base attack speed** — the auto cycle shortens from 700ms (Stage 1) to 420ms
   (Stage 10). Time spent in a stage never speeds it up.
 
-| Stage | Wave 1 | Wave 2 | Wave 3 | Enemy HP | Base auto cycle |
-| --- | --- | --- | --- | --- | --- |
-| 1 | 3 basic | 3 basic | 4 basic | 100% | 700ms |
-| 2 | 3 basic | 3 basic + 1 pursuer | 3 basic + 1 pursuer | 100% | 669ms |
-| 3 | 3 basic + 1 pursuer | 2 basic + 2 pursuers | 2 basic + 2 pursuers | 100% | 638ms |
-| 4 | 2 basic + 1 pursuer | 2 basic + 2 pursuers | 1 basic + 3 pursuers | 105% | 607ms |
-| 5 | 3 basic + 1 pursuer | 2 basic + 2 pursuers | 1 basic + 3 pursuers | 110% | 576ms |
-| 6 | 2 basic + 2 pursuers | 1 basic + 3 pursuers | 2 basic + 2 pursuers | 115% | 544ms |
-| 7 | 1 basic + 2 pursuers | 1 basic + 3 pursuers | 1 basic + 3 pursuers | 120% | 513ms |
-| 8 | 2 basic + 2 pursuers | 1 basic + 3 pursuers | 1 basic + 3 pursuers | 125% | 482ms |
-| 9 | 1 basic + 3 pursuers | 2 basic + 2 pursuers | 1 basic + 3 pursuers | 130% | 451ms |
-| 10 | 2 basic + 2 pursuers | 1 basic + 3 pursuers | 4 pursuers | 135% | 420ms |
+B = basic target, P = Pursuer.
+
+| Stage | Waves | Wave 1 | Wave 2 | Wave 3 | Wave 4 | Enemy HP | Base auto cycle |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 1 | 1 | 3B | — | — | — | 100% | 700ms |
+| 2 | 1 | 3B + 1P | — | — | — | 100% | 669ms |
+| 3 | 1 | 2B + 2P | — | — | — | 100% | 638ms |
+| 4 | 2 | 3B + 1P | 2B + 2P | — | — | 105% | 607ms |
+| 5 | 2 | 2B + 2P | 1B + 3P | — | — | 110% | 576ms |
+| 6 | 2 | 1B + 3P | 2B + 2P | — | — | 115% | 544ms |
+| 7 | 3 | 2B + 2P | 1B + 3P | 1B + 3P | — | 120% | 513ms |
+| 8 | 3 | 2B + 2P | 1B + 3P | 1B + 3P | — | 125% | 482ms |
+| 9 | 3 | 1B + 3P | 2B + 2P | 1B + 3P | — | 130% | 451ms |
+| 10 | 4 | 2B + 2P | 1B + 3P | 2B + 2P | 4P | 135% | 420ms |
 
 All of it is tuned in one place: `RUN` (enemy cap, breathers) and `STAGES` (per-stage
 waves, HP, attack speed, enemy fire) in [balance.ts](src/config/balance.ts). Add or
 remove waves in a stage by editing its `waves` list.
 
-The HUD shows `STAGE 4 / 10   WAVE 2 / 3   ENEMIES 2` along the top and the run time on
-the left. A large "STAGE N" banner marks each new stage, a smaller "WAVE N" each later
+The HUD shows `STAGE 7 / 10   WAVE 2 / 3   ENEMIES 2` along the top — the wave total is
+the current stage's own wave count — and the run time on the left. A large "STAGE N" banner marks each new stage, a smaller "WAVE N" each later
 wave, and "WAVE CLEAR" / "STAGE CLEAR" fills the breather.
 
 ## The kit
@@ -99,7 +104,7 @@ wave, and "WAVE CLEAR" / "STAGE CLEAR" fills the breather.
 | Auto | 175ms windup\* | 700→420ms\* | 260 | 1150 px/s (homing) | 12 |
 | Q | 165ms | 3000ms | 450 | 1250 px/s | 30 |
 | W | 185ms | 6000ms | 450 | 1000 px/s | 0 on contact, **45 on detonation** |
-| E | 210ms | 8000ms | 364 blink / 455 bolt acquisition | 1050 px/s bolt | 38 |
+| E | 210ms | 8000ms | 364 blink / 380 bolt acquisition | 1050 px/s bolt | 38 |
 | F | instant | 20000ms | 325 | — | — |
 
 \* the auto cooldown is set by the current stage (700ms at Stage 1, 420ms at Stage 10);
@@ -162,7 +167,7 @@ Orbwalk loop: `T` (or `A` + click) → auto fires → right-click away → repea
 | Pursuer | large orange arrowhead | 60 (2.5×) | walks you down at 55% of your speed, melee swing with a 400ms telegraph |
 
 HP is multiplied by the current stage's enemy HP value. Pursuers first appear in
-Stage 2 Wave 2. A Pursuer's swing only lands if you are still in reach when it
+Stage 2. A Pursuer's swing only lands if you are still in reach when it
 resolves — walking or blinking out during the telegraph makes it miss.
 
 ## Pause & settings
