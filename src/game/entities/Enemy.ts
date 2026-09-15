@@ -6,6 +6,17 @@ import type { EnemyView } from '../view/EnemyView';
 /** Identifies an archetype for spawn weighting, scoring and kill tallies. */
 export type EnemyArchetype = 'basic' | 'pursuer';
 
+/**
+ * Where an enemy is in its life, as far as gameplay is concerned.
+ *
+ *   spawning ──(GameClock reaches activeAt)──► active ──(last pip lost)──► dead
+ *
+ * Only an `active` enemy exists for gameplay: it can be targeted, hit, marked,
+ * moves, attacks and counts as a threat. A `spawning` enemy sits on its fixed
+ * spawn spot doing none of that. Nothing ever goes backwards.
+ */
+export type EnemyLifecycle = 'spawning' | 'active' | 'dead';
+
 /** What an enemy's AI is allowed to see and do each frame. */
 export interface EnemyContext {
   player: { x: number; y: number; radius: number };
@@ -36,14 +47,15 @@ export interface EnemyPose {
 }
 
 /**
- * Everything every enemy shares: position, health pips, the W mark and the
- * hit/death lifecycle. Archetypes subclass this, supply their AI in
- * `updateAi()` and build their `view` in their constructor.
+ * Everything every enemy shares: position, health pips, the W mark, the
+ * spawn → active → dead lifecycle and the hit/death flow. Archetypes subclass
+ * this, supply their AI in `updateAi()` and build their `view` in their
+ * constructor.
  *
  * Health is discrete: `hp` / `maxHp` count PIPS, and every hit removes exactly
  * one (see takeHit). There are no damage amounts anywhere in the enemy model.
  *
- * Gameplay state (`hp`, `active`) flips immediately; the view only represents
+ * Gameplay state (`hp`, `lifecycle`) flips immediately; the view only represents
  * it and is told about hits and deaths as they happen. All gameplay timing
  * reads the GameClock, so every enemy freezes correctly when paused.
  */
@@ -61,8 +73,15 @@ export abstract class Enemy {
   /** Health pips at spawn, from the current stage's STAGES row. */
   public readonly maxHp: number;
 
-  /** Killed enemies stay in the list but inactive until the director clears them. */
-  public active = true;
+  /**
+   * Constructed enemies are active at once; the WaveDirector puts wave
+   * arrivals through `beginArrival()` first.
+   */
+  public lifecycle: EnemyLifecycle = 'active';
+  /** GameClock time the arrival began. Only meaningful once beginArrival() ran. */
+  public arrivalStartedAt = 0;
+  /** GameClock time a spawning enemy becomes active. The one activation deadline. */
+  public activeAt = 0;
 
   /**
    * Generational guard captured by in-flight missiles, so a projectile aimed at
@@ -95,6 +114,43 @@ export abstract class Enemy {
     this.hp = opts.maxHp;
   }
 
+  // ------------------------------------------------------------- lifecycle
+
+  /**
+   * Alive and in play: targetable, damageable, moving, attacking. Every combat
+   * system gates on this, so a spawning enemy is invisible to all of them.
+   * Assigning forces the lifecycle (true = active, false = dead).
+   */
+  get active(): boolean {
+    return this.lifecycle === 'active';
+  }
+
+  set active(value: boolean) {
+    this.lifecycle = value ? 'active' : 'dead';
+  }
+
+  get spawning(): boolean {
+    return this.lifecycle === 'spawning';
+  }
+
+  get dead(): boolean {
+    return this.lifecycle === 'dead';
+  }
+
+  /** Hold this enemy in the arrival window until `nowMs + manifestMs`. */
+  beginArrival(nowMs: number, manifestMs: number): void {
+    this.lifecycle = 'spawning';
+    this.arrivalStartedAt = nowMs;
+    this.activeAt = nowMs + manifestMs;
+  }
+
+  /** 0..1 through the arrival window; 1 once active. Read by the view. */
+  arrivalProgress(nowMs: number): number {
+    if (!this.spawning) return 1;
+    const span = this.activeAt - this.arrivalStartedAt;
+    return span > 0 ? Phaser.Math.Clamp((nowMs - this.arrivalStartedAt) / span, 0, 1) : 1;
+  }
+
   // ------------------------------------------------------------------ W mark
 
   /** Apply (or refresh) the W mark. */
@@ -118,7 +174,7 @@ export abstract class Enemy {
 
   /**
    * One hit: removes exactly one pip. Autos, Q, the E bolt and a W detonation
-   * each call this once.
+   * each call this once. Spawning and dead enemies cannot be hit.
    * @returns true if this hit killed the enemy.
    */
   takeHit(): boolean {
@@ -129,7 +185,7 @@ export abstract class Enemy {
 
     if (this.hp === 0) {
       // State flips NOW; the death pop is only decoration.
-      this.active = false;
+      this.lifecycle = 'dead';
       this.clearMark();
       this.view.onDeath();
       return true;
@@ -138,6 +194,8 @@ export abstract class Enemy {
   }
 
   update(deltaSeconds: number, nowMs: number, ctx: EnemyContext): void {
+    // Activation happens at the GameClock deadline — never on an animation.
+    if (this.spawning && nowMs >= this.activeAt) this.lifecycle = 'active';
     if (this.active) this.updateAi(deltaSeconds, nowMs, ctx);
     this.view.sync(nowMs, deltaSeconds);
   }

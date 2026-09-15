@@ -312,16 +312,35 @@ export const PASSIVE = {
   durationMs: 6000,
 } as const;
 
+/**
+ * The basic red slime. It is always aggroed but never attacks: it closes in
+ * from range, then hangs around a pressure band inside your attack range and
+ * shuffles sideways, so it crowds your spacing and target choice without
+ * becoming a second melee threat.
+ */
 export const TARGETS = {
   radius: 18,
   /** Never spawn a target closer than this to the player. */
   minSpawnDistanceFromPlayer: 240,
   /** Keep targets this far from the arena border so they stay reachable. */
   edgeMargin: 60,
-  /** Targets drift slowly so pure standstill kiting doesn't work. 0 = static. */
-  driftSpeed: 45,
-  /** How often a drifting target picks a new wander destination. */
-  driftRetargetMs: 1800,
+  /** Speed while closing in from outside the pressure band. 0 = static. */
+  approachSpeed: 110,
+  /** Slower speed while strafing inside the band, or easing back out of it. */
+  strafeSpeed: 60,
+  /**
+   * Centre-to-centre distance band it holds from the player. Well inside the
+   * player's 260 attack range, well outside melee.
+   */
+  pressureBand: { min: 150, max: 230 },
+  /** While approaching, it re-reads the player's position this often. */
+  approachReplanMs: 250,
+  /** While strafing, it picks a new sidestep point this often. */
+  strafeReplanMs: { min: 600, max: 1000 },
+  /** How far around the player one sidestep swings, in degrees. */
+  strafeArcDegrees: 35,
+  /** Chance a new sidestep reverses the strafe direction. */
+  strafeFlipChance: 0.3,
 } as const;
 
 /**
@@ -332,15 +351,15 @@ export const TARGETS = {
  */
 export const ENEMY_PROJECTILES = {
   /**
-   * Roughly 45% of the old spawn frequency (was 900 -> 220ms) so dodging stays
-   * present but secondary to kiting during this testing stage.
+   * An occasional positioning check, not bullet-hell: the enemies on the field
+   * are the main pressure. (Was 2600 -> 700ms.)
    */
-  spawnIntervalMs: { start: 2600, end: 700 },
+  spawnIntervalMs: { start: 4500, end: 3000 },
   speed: { start: 250, end: 520 },
   radius: { start: 10, end: 16 },
   damage: { start: 8, end: 16 },
-  /** How many shots fire per spawn tick (fractional values are probabilistic). */
-  volleySize: { start: 1, end: 1.5 },
+  /** How many shots fire per spawn tick (fractional values are probabilistic). Always one. */
+  volleySize: { start: 1, end: 1 },
   /**
    * Random aim error in degrees applied to each shot. A little spray keeps you
    * from standing still and reading a perfectly predictable line.
@@ -361,7 +380,8 @@ export const PURSUER = {
   moveSpeedFraction: 0.55,
   /** Centre-to-centre reach for its melee swing (see attackReachTo()). */
   attackRange: 16,
-  attackDamage: 10,
+  /** Flat, not stage-scaled: a landed swing costs a quarter of PLAYER.maxHp. */
+  attackDamage: 25,
   /** Telegraph before the hit lands — your window to walk out. */
   windupMs: 400,
   /** Minimum gap between swings, measured from the START of a swing. */
@@ -375,19 +395,34 @@ export const PURSUER = {
 // ============================================================================
 //
 // A run fights STAGES in order. Each stage is a list of waves; each wave is a
-// finite, authored roster. Killed enemies never respawn: the next wave spawns
-// only after every enemy of the current one is dead and the breather elapses,
-// and clearing a stage's last wave moves to the next stage. Clearing the last
-// wave of the last stage completes the run; dying ends it. Elapsed time never
-// advances anything — progression is kills alone (see WaveDirector).
+// finite, authored roster whose enemies arrive one by one (see RUN.spawn).
+// Killed enemies never respawn: the next wave spawns only after every enemy of
+// the current one has arrived and died and the breather elapses, and clearing a
+// stage's last wave moves to the next stage. Clearing the last wave of the last
+// stage completes the run; dying ends it. Elapsed time never advances a wave or
+// stage — progression is kills alone (see WaveDirector).
 
 export const RUN = {
-  /** Most enemies a wave may field. Every roster in STAGES is validated against this. */
-  maxAliveEnemies: 4,
+  /**
+   * Most enemies a wave may field — and so the most that can ever be alive at
+   * once. Every roster in STAGES is validated against this.
+   */
+  maxAliveEnemies: 6,
   /** Breather after clearing a wave, before the next wave of the same stage spawns. */
   interWaveDelayMs: 800,
   /** Longer breather after a stage's last wave, before the next stage begins. */
   interStageDelayMs: 1200,
+  /**
+   * Staggered arrival. A wave's roster is shuffled; the first enemy begins
+   * arriving the moment the wave starts, each later one a random
+   * `staggerMs` after the previous. An arriving enemy stands on its fixed spawn
+   * spot for `manifestMs` — untargetable, undamageable, inert — and becomes a
+   * normal enemy at that GameClock deadline.
+   */
+  spawn: {
+    staggerMs: { min: 500, max: 900 },
+    manifestMs: 300,
+  },
 } as const;
 
 /** How many of each archetype a wave spawns. Omitted archetypes spawn none. */
@@ -430,9 +465,10 @@ export interface StageDefinition {
  *   - enemyFire: from the calm opening (0) to full strength (1).
  *   - waves: short early stages (a single wave each for 1-3), two waves for 4-6,
  *     three for 7-9, and a four-wave final gauntlet at Stage 10 — 22 in all.
- *     Wave sizes stay modest early instead of padding the short stages.
- *     Pursuers arrive in Stage 2; later waves lean on them while staying mixed,
- *     with a single all-Pursuer wave closing the run.
+ *     Bodies on the field are the main pressure: 3-4 enemies early, 4-5 mid,
+ *     5-6 late. Pursuers arrive in Stage 2 and take a growing share, but late
+ *     waves swing between basic-heavy crowds and Pursuer-heavy brawls rather
+ *     than repeating one mixture.
  */
 export const STAGES: StageDefinition[] = [
   /* 1 */ { enemyPips: { basic: 1, pursuer: 2 }, baseAttackCooldownMs: 700, enemyFire: 0,
@@ -442,19 +478,19 @@ export const STAGES: StageDefinition[] = [
   /* 3 */ { enemyPips: { basic: 1, pursuer: 2 }, baseAttackCooldownMs: 638, enemyFire: 0.2,
     waves: [{ basic: 2, pursuer: 2 }] },
   /* 4 */ { enemyPips: { basic: 2, pursuer: 3 }, baseAttackCooldownMs: 607, enemyFire: 0.3,
-    waves: [{ basic: 3, pursuer: 1 }, { basic: 2, pursuer: 2 }] },
+    waves: [{ basic: 3, pursuer: 1 }, { basic: 3, pursuer: 2 }] },
   /* 5 */ { enemyPips: { basic: 2, pursuer: 3 }, baseAttackCooldownMs: 576, enemyFire: 0.4,
-    waves: [{ basic: 2, pursuer: 2 }, { basic: 1, pursuer: 3 }] },
+    waves: [{ basic: 2, pursuer: 2 }, { basic: 2, pursuer: 3 }] },
   /* 6 */ { enemyPips: { basic: 2, pursuer: 3 }, baseAttackCooldownMs: 544, enemyFire: 0.5,
-    waves: [{ basic: 1, pursuer: 3 }, { basic: 2, pursuer: 2 }] },
+    waves: [{ basic: 4, pursuer: 1 }, { basic: 2, pursuer: 3 }] },
   /* 7 */ { enemyPips: { basic: 3, pursuer: 4 }, baseAttackCooldownMs: 513, enemyFire: 0.6,
-    waves: [{ basic: 2, pursuer: 2 }, { basic: 1, pursuer: 3 }, { basic: 1, pursuer: 3 }] },
+    waves: [{ basic: 3, pursuer: 2 }, { basic: 2, pursuer: 3 }, { basic: 4, pursuer: 2 }] },
   /* 8 */ { enemyPips: { basic: 3, pursuer: 4 }, baseAttackCooldownMs: 482, enemyFire: 0.7,
-    waves: [{ basic: 2, pursuer: 2 }, { basic: 1, pursuer: 3 }, { basic: 1, pursuer: 3 }] },
+    waves: [{ basic: 2, pursuer: 3 }, { basic: 5, pursuer: 1 }, { basic: 3, pursuer: 3 }] },
   /* 9 */ { enemyPips: { basic: 3, pursuer: 4 }, baseAttackCooldownMs: 451, enemyFire: 0.85,
-    waves: [{ basic: 1, pursuer: 3 }, { basic: 2, pursuer: 2 }, { basic: 1, pursuer: 3 }] },
+    waves: [{ basic: 4, pursuer: 2 }, { basic: 2, pursuer: 3 }, { basic: 3, pursuer: 3 }] },
   /* 10 */ { enemyPips: { basic: 3, pursuer: 4 }, baseAttackCooldownMs: 420, enemyFire: 1,
-    waves: [{ basic: 2, pursuer: 2 }, { basic: 1, pursuer: 3 }, { basic: 2, pursuer: 2 }, { pursuer: 4 }] },
+    waves: [{ basic: 4, pursuer: 2 }, { basic: 3, pursuer: 3 }, { basic: 5, pursuer: 1 }, { basic: 2, pursuer: 4 }] },
 ];
 
 export const SCORE = {

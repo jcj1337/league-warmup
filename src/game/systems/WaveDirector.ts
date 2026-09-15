@@ -40,6 +40,13 @@ const ARCHETYPES: Record<EnemyArchetype, ArchetypeSpec> = {
 /** Where the run is: fighting a wave, in the breather after one, or finished. */
 export type WavePhase = 'wave' | 'intermission' | 'complete';
 
+/** A roster entry that has not started arriving yet. */
+interface PendingArrival {
+  archetype: EnemyArchetype;
+  /** GameClock time its arrival begins. */
+  startsAt: number;
+}
+
 /** A roster as a flat list of archetypes, in ARCHETYPES order. */
 function expandRoster(roster: WaveRoster): EnemyArchetype[] {
   const out: EnemyArchetype[] = [];
@@ -74,16 +81,26 @@ function validateStages(): void {
 /**
  * Stage / wave progression, and the enemies of the wave being fought.
  *
- *   spawnWave() ─► fight ─► last enemy killed ─► intermission (GameClock) ─┐
- *        ▲                                                                 │
- *        └──────────── next wave, or Wave 1 of the next stage ◄────────────┘
+ *   spawnWave() ─► staggered arrivals + fight ─► last enemy killed ─► intermission ─┐
+ *        ▲                                                                          │
+ *        └───────────────── next wave, or Wave 1 of the next stage ◄────────────────┘
  *
- * Every wave is a finite, authored roster from STAGES. A killed enemy stays in
- * the roster, inactive, so its death animation plays out — nothing refills it.
- * The next wave spawns only after every enemy of this one is dead AND the
- * breather has elapsed; the old roster is destroyed at that moment. Clearing
- * the last wave of the last stage completes the run. Elapsed time never
- * advances anything: progression is kills alone.
+ * Every wave is a finite, authored roster from STAGES. Its enemies do not all
+ * appear at once: the roster is shuffled into a queue and each entry is
+ *
+ *   pending  ─(startsAt)─►  spawning  ─(activeAt)─►  active  ─(killed)─►  dead
+ *
+ * Pending entries are not objects yet. When one's start time comes it gets a
+ * fixed spawn spot and becomes a `spawning` Enemy in `enemies`, inert until its
+ * GameClock activation deadline (RUN.spawn). The composition never changes —
+ * only the order, timing and spots are random.
+ *
+ * A wave is cleared only by a kill that leaves nothing pending, nothing
+ * spawning and nothing active. A killed enemy stays in the roster, dead, so its
+ * death animation plays out — nothing refills it. The next wave spawns once the
+ * breather elapses; the old roster is destroyed at that moment. Clearing the
+ * last wave of the last stage completes the run. Elapsed time never advances a
+ * wave: progression is kills alone.
  *
  * It is also the one source of stage-scoped tuning for other systems — enemy
  * health pips here, the player's base auto cycle (AttackPacing) and enemy fire
@@ -91,6 +108,8 @@ function validateStages(): void {
  */
 export class WaveDirector implements AttackPacing, EnemyFirePressure {
   private readonly roster: Enemy[] = [];
+  /** The rest of the current wave, soonest first. */
+  private readonly pending: PendingArrival[] = [];
   private stageIndex = 0;
   private waveIndex = 0;
   private currentPhase: WavePhase = 'wave';
@@ -108,7 +127,7 @@ export class WaveDirector implements AttackPacing, EnemyFirePressure {
 
   // ------------------------------------------------------------- read-outs
 
-  /** The current wave's enemies, including ones still playing their death. */
+  /** The current wave's arrived enemies: spawning, active, and dead ones still playing their death. */
   get enemies(): Enemy[] {
     return this.roster;
   }
@@ -143,8 +162,28 @@ export class WaveDirector implements AttackPacing, EnemyFirePressure {
     return this.currentPhase === 'complete';
   }
 
-  get enemiesRemaining(): number {
+  /** Roster entries still waiting to begin arriving. */
+  get pendingCount(): number {
+    return this.pending.length;
+  }
+
+  /** Enemies inside their arrival window: placed, but not yet in play. */
+  get spawningCount(): number {
+    return this.roster.filter((e) => e.spawning).length;
+  }
+
+  /** Enemies in play: targetable, damageable, moving and attacking. */
+  get aliveCount(): number {
     return this.roster.filter((e) => e.active).length;
+  }
+
+  get deadCount(): number {
+    return this.roster.filter((e) => e.dead).length;
+  }
+
+  /** Everything still standing between the player and a wave clear: pending + spawning + alive. */
+  get enemiesRemaining(): number {
+    return this.pending.length + this.roster.filter((e) => !e.dead).length;
   }
 
   /** During a breather, what comes next; null while fighting or once complete. */
@@ -193,25 +232,33 @@ export class WaveDirector implements AttackPacing, EnemyFirePressure {
     return this.waveIndex === this.stageDefinition.waves.length - 1;
   }
 
+  /** Nothing pending, nothing spawning, nothing alive. */
+  private get isRosterExhausted(): boolean {
+    return this.pending.length === 0 && this.roster.every((e) => e.dead);
+  }
+
   // ---------------------------------------------------------------- loop
 
   update(deltaSeconds: number, nowMs: number, ctx: EnemyContext): void {
     if (this.currentPhase === 'intermission' && nowMs >= this.intermissionEndsAt) {
       this.advance();
     }
+    if (this.currentPhase === 'wave') this.beginDueArrivals(nowMs);
 
+    // Each enemy activates itself at its own activeAt before its AI runs.
     for (const enemy of this.roster) enemy.update(deltaSeconds, nowMs, ctx);
     this.separate();
   }
 
   /**
-   * Called by the scene when a kill is registered. Killing the last living
-   * enemy of the wave clears it on the spot: the breather starts now, or the
-   * run completes if that was the final wave.
+   * Called by the scene when a kill is registered. The wave clears on the spot
+   * only if that kill exhausted the roster — enemies still scheduled or
+   * mid-arrival keep it going. Then the breather starts, or the run completes
+   * if that was the final wave.
    */
   onEnemyKilled(enemy: Enemy, nowMs: number): void {
     if (this.currentPhase !== 'wave' || !this.roster.includes(enemy)) return;
-    if (this.roster.some((e) => e.active)) return;
+    if (!this.isRosterExhausted) return;
 
     const finalStage = this.stageIndex === STAGES.length - 1;
     if (this.isLastWaveOfStage && finalStage) {
@@ -222,6 +269,21 @@ export class WaveDirector implements AttackPacing, EnemyFirePressure {
     this.currentPhase = 'intermission';
     this.intermissionEndsAt =
       nowMs + (this.isLastWaveOfStage ? RUN.interStageDelayMs : RUN.interWaveDelayMs);
+  }
+
+  /**
+   * Skip the stagger: start every pending arrival now and activate everything
+   * mid-arrival. The composition and spots are unchanged. Test / debug hook.
+   */
+  arriveAllNow(): void {
+    const now = this.clock.now;
+    for (const entry of this.pending) entry.startsAt = now;
+    this.beginDueArrivals(now);
+    for (const enemy of this.roster) {
+      if (!enemy.spawning) continue;
+      enemy.activeAt = now;
+      enemy.lifecycle = 'active';
+    }
   }
 
   // ------------------------------------------------------------- spawning
@@ -237,25 +299,49 @@ export class WaveDirector implements AttackPacing, EnemyFirePressure {
     this.spawnWave();
   }
 
-  /** Replace the previous (fully dead) roster with the current wave's authored one. */
+  /**
+   * Replace the previous (fully dead) roster with the current wave's authored
+   * one, queued in a shuffled order. The first arrival begins immediately.
+   */
   private spawnWave(): void {
     for (const enemy of this.roster) enemy.destroy();
     this.roster.length = 0;
+    this.pending.length = 0;
 
-    const wave = this.stageDefinition.waves[this.waveIndex];
-    for (const archetype of expandRoster(wave)) {
-      this.roster.push(this.spawnEnemy(archetype));
-    }
+    const { staggerMs } = RUN.spawn;
+    const now = this.clock.now;
+    const order = Phaser.Utils.Array.Shuffle(expandRoster(this.stageDefinition.waves[this.waveIndex]));
+    let startsAt = now;
+    order.forEach((archetype, i) => {
+      if (i > 0) startsAt += Phaser.Math.Between(staggerMs.min, staggerMs.max);
+      this.pending.push({ archetype, startsAt });
+    });
+
     this.currentPhase = 'wave';
+    this.beginDueArrivals(now);
   }
 
-  private spawnEnemy(archetype: EnemyArchetype): Enemy {
+  /** Move every pending entry whose time has come onto the field, mid-arrival. */
+  private beginDueArrivals(nowMs: number): void {
+    while (this.pending.length > 0 && this.pending[0].startsAt <= nowMs) {
+      const { archetype } = this.pending.shift()!;
+      this.roster.push(this.spawnEnemy(archetype, RUN.spawn.manifestMs));
+    }
+  }
+
+  /**
+   * Build one enemy on a spot picked now and fixed for its arrival. With
+   * `manifestMs` 0 it is active immediately.
+   */
+  private spawnEnemy(archetype: EnemyArchetype, manifestMs = 0): Enemy {
     const spec = ARCHETYPES[archetype];
     const spot = this.findSpawnSpot(spec.minSpawnDistance);
-    return spec.create(this.scene, this.clock, spot.x, spot.y, this.pipsFor(archetype));
+    const enemy = spec.create(this.scene, this.clock, spot.x, spot.y, this.pipsFor(archetype));
+    if (manifestMs > 0) enemy.beginArrival(this.clock.now, manifestMs);
+    return enemy;
   }
 
-  /** Rejection sampling: away from the player, and not on top of another enemy. */
+  /** Rejection sampling: away from the player, and not on top of another living or arriving enemy. */
   private findSpawnSpot(minPlayerDistance: number): { x: number; y: number } {
     const margin = ARENA.padding + TARGETS.edgeMargin;
     const minX = margin;
@@ -271,7 +357,7 @@ export class WaveDirector implements AttackPacing, EnemyFirePressure {
       if (Phaser.Math.Distance.Between(x, y, player.x, player.y) < minPlayerDistance) continue;
 
       const crowded = this.roster.some(
-        (e) => e.active && Phaser.Math.Distance.Between(x, y, e.x, e.y) < e.radius * 4,
+        (e) => !e.dead && Phaser.Math.Distance.Between(x, y, e.x, e.y) < e.radius * 4,
       );
       if (crowded) continue;
 
@@ -283,7 +369,8 @@ export class WaveDirector implements AttackPacing, EnemyFirePressure {
 
   /**
    * Soft body-blocking so enemies do not stack into one ambiguous blob.
-   * Heavier enemies shove lighter ones: the push is split by radius.
+   * Heavier enemies shove lighter ones: the push is split by radius. Only
+   * active enemies take part — an arriving enemy never moves.
    */
   private separate(): void {
     const list = this.roster;
@@ -318,5 +405,6 @@ export class WaveDirector implements AttackPacing, EnemyFirePressure {
   destroy(): void {
     for (const enemy of this.roster) enemy.destroy();
     this.roster.length = 0;
+    this.pending.length = 0;
   }
 }

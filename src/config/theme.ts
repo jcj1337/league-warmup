@@ -235,6 +235,11 @@ export const THEME = {
     deathShards: 10,
     damageNumber: P.cream,
     damageNumberRiseMs: 520,
+    /**
+     * Placeholder arrival cue: a dotted ring closing onto the fixed spawn spot
+     * across the gameplay arrival window. Replaced by the real manifest pass.
+     */
+    spawnCue: { color: P.cream, startRadiusScale: 2, alphaStart: 0.25, alphaEnd: 0.8 },
   },
 
   basic: {
@@ -270,8 +275,13 @@ export const THEME = {
 
   /** Segmented enemy health: one cell per pip (see PipBar). */
   pipBar: {
-    cellW: 8,
+    /**
+     * Total inner width, whatever the pip count: more pips add dividers, never
+     * width. 34 splits evenly into 1, 2, 3 or 4 segments (34 / 16 / 10 / 7px).
+     */
+    width: 34,
     cellH: 5,
+    /** Divider between segments. */
     gap: 2,
     border: 1,
     back: P.ink,

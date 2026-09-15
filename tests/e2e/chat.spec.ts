@@ -48,6 +48,7 @@ test('chat: system messages, missions from STAGES, Z light/dark toggle, bottom-e
     g.director.stageIndex = st - 1;
     g.director.waveIndex = wv - 1;
     g.director.spawnWave();
+    g.director.arriveAllNow();      // the whole roster, not just the first staggered arrival
   }, [stage, wave]);
   /** Kill every living enemy through the scene's real hit funnel. */
   const killAll = () => page.evaluate(() => {
@@ -149,7 +150,7 @@ test('chat: system messages, missions from STAGES, Z light/dark toggle, bottom-e
     g.enemies.forEach((t, i) => {
       const spot = i === 0 ? under : i === 1 ? outside : null;
       if (spot) { t.x = spot.x; t.y = spot.y; t.hp = 99; t.active = true; } else { t.active = false; }
-      t.wanderX = t.x; t.wanderY = t.y; t.nextWanderAt = Number.POSITIVE_INFINITY;
+      t.goalX = t.x; t.goalY = t.y; t.nextPlanAt = Number.POSITIVE_INFINITY;
     });
   }, { under, outside });
   const g0 = await game();

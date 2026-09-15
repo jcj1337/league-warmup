@@ -19,7 +19,7 @@ test('feel: windup animation timing, release/impact, cancel, kill feedback + no 
       if (i < spots.length) {
         t.x = spots[i].x; t.y = spots[i].y; t.hp = pips ?? t.maxHp; t.active = true; t.__tag = i + 1;
       } else { t.active = false; t.respawnAt = Number.POSITIVE_INFINITY; }
-      t.wanderX = t.x; t.wanderY = t.y; t.nextWanderAt = Number.POSITIVE_INFINITY;
+      t.goalX = t.x; t.goalY = t.y; t.nextPlanAt = Number.POSITIVE_INFINITY;
     });
   }, { spots, pips });
 
@@ -104,7 +104,11 @@ test('feel: windup animation timing, release/impact, cancel, kill feedback + no 
   const early = windupFrames.slice(0, 2);
   const late = windupFrames.slice(-2);
   const leanGrows = late.length && early.length && late[0].lean > early[0].lean + 2;
-  const windupPose = windupFrames.length > 0 && windupFrames.every((f) => f.pose === 'windup');
+  // The click starts the windup straight from the DOM event, but the view only
+  // re-poses on the next game step. A sample taken in between reads progress 0
+  // (no step yet) with the old pose, so judge the pose from the first step on.
+  const steppedWindup = windupFrames.filter((f) => f.prog > 0);
+  const windupPose = steppedWindup.length > 0 && steppedWindup.every((f) => f.pose === 'windup');
   leanGrows && windupPose
     ? pass(`player leans into the windup in its windup pose (lean ${early[0].lean.toFixed(1)} -> ${late[0].lean.toFixed(1)}px)`)
     : fail(`windup animation flat: lean ${early[0]?.lean} -> ${late[0]?.lean}, poses ${JSON.stringify([...new Set(windupFrames.map((f) => f.pose))])}`);

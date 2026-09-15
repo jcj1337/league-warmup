@@ -48,10 +48,12 @@ the only thing that reads them.
 
 A run fights **10 stages** in a fixed arena, and stages differ in length: Stages 1–3
 are a single wave each, 4–6 have two waves, 7–9 three, and Stage 10 is a four-wave
-final gauntlet — 22 waves in all. Each wave spawns a finite, authored group of up to
-four enemies, each in its own spot. Killed enemies stay dead — nothing respawns
-mid-wave, and a three-enemy wave really does leave the fourth spot empty. When the last
-enemy of a wave dies, the arena clears (hostile shots still in the air fizzle), a short
+final gauntlet — 22 waves in all. Each wave is a finite, authored group of up to
+six enemies that arrive one at a time, in a shuffled order: the first at once, each
+later one 500–900ms after the previous, on a random spot away from you. An arriving
+enemy holds its spot for 300ms — untargetable, undamageable and inert — then joins the
+fight. Killed enemies stay dead — nothing respawns mid-wave. When the last enemy of a
+wave dies and nobody is still due to arrive, the arena clears (hostile shots still in the air fizzle), a short
 breather runs — **800ms** between waves, **1200ms** between stages — and the next wave
 spawns. Clearing a stage's last wave moves you to Wave 1 of the next stage. You stay in
 control during the breather.
@@ -73,7 +75,10 @@ Later stages are harder, not faster. Each stage row sets:
   with mixed waves throughout.
 - **Enemy pips** — how many hits each enemy takes: basic 1 / 2 / 3 pips across Stages
   1–3 / 4–6 / 7–10 (capped at 3), Pursuer always one more (2 / 3 / 4).
-- **Enemy fire** — edge projectiles go from the calm opening to full strength at Stage 10.
+- **Waves** size up: 3–4 enemies early, 4–5 mid, 5–6 late, with late waves swinging
+  between basic-heavy crowds and Pursuer-heavy brawls.
+- **Enemy fire** — edge projectiles are an occasional positioning check, one shot at a
+  time: every 4.5s at Stage 1, tightening to every 3s by Stage 10.
 - **Your base attack speed** — the auto cycle shortens from 700ms (Stage 1) to 420ms
   (Stage 10). Time spent in a stage never speeds it up.
 
@@ -84,20 +89,21 @@ B = basic target, P = Pursuer.
 | 1 | 1 | 3B | — | — | — | 1 / 2 | 700ms |
 | 2 | 1 | 3B + 1P | — | — | — | 1 / 2 | 669ms |
 | 3 | 1 | 2B + 2P | — | — | — | 1 / 2 | 638ms |
-| 4 | 2 | 3B + 1P | 2B + 2P | — | — | 2 / 3 | 607ms |
-| 5 | 2 | 2B + 2P | 1B + 3P | — | — | 2 / 3 | 576ms |
-| 6 | 2 | 1B + 3P | 2B + 2P | — | — | 2 / 3 | 544ms |
-| 7 | 3 | 2B + 2P | 1B + 3P | 1B + 3P | — | 3 / 4 | 513ms |
-| 8 | 3 | 2B + 2P | 1B + 3P | 1B + 3P | — | 3 / 4 | 482ms |
-| 9 | 3 | 1B + 3P | 2B + 2P | 1B + 3P | — | 3 / 4 | 451ms |
-| 10 | 4 | 2B + 2P | 1B + 3P | 2B + 2P | 4P | 3 / 4 | 420ms |
+| 4 | 2 | 3B + 1P | 3B + 2P | — | — | 2 / 3 | 607ms |
+| 5 | 2 | 2B + 2P | 2B + 3P | — | — | 2 / 3 | 576ms |
+| 6 | 2 | 4B + 1P | 2B + 3P | — | — | 2 / 3 | 544ms |
+| 7 | 3 | 3B + 2P | 2B + 3P | 4B + 2P | — | 3 / 4 | 513ms |
+| 8 | 3 | 2B + 3P | 5B + 1P | 3B + 3P | — | 3 / 4 | 482ms |
+| 9 | 3 | 4B + 2P | 2B + 3P | 3B + 3P | — | 3 / 4 | 451ms |
+| 10 | 4 | 4B + 2P | 3B + 3P | 5B + 1P | 2B + 4P | 3 / 4 | 420ms |
 
-All of it is tuned in one place: `RUN` (enemy cap, breathers) and `STAGES` (per-stage
+All of it is tuned in one place: `RUN` (enemy cap, breathers, arrival stagger), `TARGETS` / `PURSUER` (enemy behaviour) and `STAGES` (per-stage
 waves, `enemyPips`, attack speed, enemy fire) in [balance.ts](src/config/balance.ts). Add or
 remove waves in a stage by editing its `waves` list.
 
 The HUD shows `STAGE 7 / 10   WAVE 2 / 3   ENEMIES 2` along the top — the wave total is
-the current stage's own wave count — the run time on the left, and `APM` on the right
+the current stage's own wave count, and ENEMIES counts everything left in the wave,
+including enemies still to arrive — the run time on the left, and `APM` on the right
 (every key press and mouse-button press, bound or not — key auto-repeat and mouse movement
 excluded — per minute over a rolling 30s window, divided
 by at least 10s early on; informational only). A large "STAGE N" banner marks each new stage, a smaller "WAVE N" each later
@@ -178,8 +184,8 @@ Orbwalk loop: `T` (or `A` + click) → auto fires → right-click away → repea
 
 | | Look | Pips | Behaviour |
 | --- | --- | --- | --- |
-| Basic target | red slime with glowing eyes and a fanged snarl | 1 / 2 / 3 | drifts slowly, never attacks |
-| Pursuer | larger purple slime with devil horns | basic + 1 | walks you down at 55% of your speed, melee swing with a 400ms telegraph |
+| Basic target | red slime with glowing eyes and a fanged snarl | 1 / 2 / 3 | always aggroed: walks toward you, then hovers 150–230px away inside your attack range, sidestepping around you; never attacks |
+| Pursuer | larger purple slime with devil horns | basic + 1 | walks you down at 55% of your speed; melee swing for **25** (a quarter of your HP) after a 400ms telegraph |
 
 Pips come from the current stage's `enemyPips` row. Pursuers first appear in
 Stage 2. A Pursuer's swing only lands if you are still in reach when it
@@ -198,8 +204,9 @@ Numbers** (the "-1" pip-loss pops). It also lists the full control reference.
 ## Reading the field
 
 Friend and foe differ by silhouette, not just colour. Every unit has a shadow and a
-compact health bar under its feet — a green bar for you, and for enemies a row of red
-pip segments, one per remaining hit (`[■][■][ ]`); units lower on the
+compact health bar under its feet — a green bar for you, and for enemies a fixed-width
+red bar split into one equal segment per pip (`[███|███|   ]`), so tougher enemies get
+more dividers, not a wider bar; an arriving enemy shows only a closing ring on its spot. Units lower on the
 screen draw in front. The ground is low-contrast ash with a few cracks and dim ember
 seams; the handful of basalt rocks and dead shrubs are decoration only — no collision —
 stay out of the HUD strips and always draw beneath combatants.

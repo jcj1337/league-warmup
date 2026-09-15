@@ -11,7 +11,7 @@ test('attack: ground move, direct attack + chase, windup/recovery, cancel, post-
     s.enemyProjectiles.nextSpawnAt = Number.POSITIVE_INFINITY;
     s.player.hp = 100;
     for (const t of s.enemies) {
-      t.wanderX = t.x; t.wanderY = t.y; t.nextWanderAt = Number.POSITIVE_INFINITY;
+      t.goalX = t.x; t.goalY = t.y; t.nextPlanAt = Number.POSITIVE_INFINITY;
       // Deep pool: targets now die in 3 autos, and this suite needs a live
       // dummy across many attack cycles.
       if (t.active) t.hp = 999;
@@ -87,7 +87,7 @@ test('attack: ground move, direct attack + chase, windup/recovery, cancel, post-
     const s = window.__warmup.scene.getScene('GameScene');
     const t = s.enemies.filter((t) => t.active)
       .reduce((a, b) => (Math.hypot(b.x - spot.x, b.y - spot.y) < Math.hypot(a.x - spot.x, a.y - spot.y) ? b : a));
-    t.x = spot.x; t.y = spot.y; t.wanderX = spot.x; t.wanderY = spot.y;
+    t.x = spot.x; t.y = spot.y; t.goalX = spot.x; t.goalY = spot.y;
   }, farSpot);
   let s = await state();
   const far = s.enemies.reduce((a, b) => (dist(b, farSpot) < dist(a, farSpot) ? b : a));

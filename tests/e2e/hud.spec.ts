@@ -39,7 +39,7 @@ test('hud: contextual range ring, pause freeze + input gate, Q slot, settings me
       if (i < spots.length) {
         t.x = spots[i].x; t.y = spots[i].y; t.hp = opts.hp ?? 9999; t.ghostHp = t.hp; t.active = true; t.__tag = i + 1;
       } else { t.active = false; t.respawnAt = Number.POSITIVE_INFINITY; }
-      t.wanderX = t.x; t.wanderY = t.y; t.nextWanderAt = Number.POSITIVE_INFINITY;
+      t.goalX = t.x; t.goalY = t.y; t.nextPlanAt = Number.POSITIVE_INFINITY;
     });
   }, { spots, opts });
   const rclick = (x, y) => page.mouse.click(x, y, { button: 'right' });
@@ -407,6 +407,7 @@ test('hud: contextual range ring, pause freeze + input gate, Q slot, settings me
     g.director.stageIndex = st - 1;
     g.director.waveIndex = wv - 1;
     g.director.spawnWave();
+    g.director.arriveAllNow();      // the whole roster, not just the first staggered arrival
   }, [stage, wave]);
   /** Kill the current wave through the scene's real hit funnel. */
   const clearWave = () => page.evaluate(() => {

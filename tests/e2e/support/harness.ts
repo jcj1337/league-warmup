@@ -35,7 +35,17 @@ export async function waitForGame(page: Page, settleMs: number): Promise<void> {
   }, settleMs);
 }
 
-export async function startSuite(page: Page, testInfo: TestInfo, settleMs = 400): Promise<Suite> {
+export interface SuiteOptions {
+  /**
+   * Waves arrive one enemy at a time. By default the opening wave is made to
+   * arrive in full before the suite starts (WaveDirector.arriveAllNow), so
+   * suites that stage the Stage 1 roster see all of it. Pass false to play the
+   * real staggered opening.
+   */
+  arriveAll?: boolean;
+}
+
+export async function startSuite(page: Page, testInfo: TestInfo, settleMs = 400, opts: SuiteOptions = {}): Promise<Suite> {
   const log: string[] = [];
   const errors: string[] = [];
   let current = '';
@@ -48,6 +58,9 @@ export async function startSuite(page: Page, testInfo: TestInfo, settleMs = 400)
 
   await page.goto('/', { waitUntil: 'load' });
   await waitForGame(page, settleMs);
+  if (opts.arriveAll ?? true) {
+    await page.evaluate(() => window.__warmup.scene.getScene('GameScene').director.arriveAllNow());
+  }
 
   const pass = (m: string) => {
     log.push('PASS ' + label(m));

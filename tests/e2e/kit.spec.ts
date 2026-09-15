@@ -49,6 +49,8 @@ test('kit: W mark + detonation, E blink + bolt priority, Flash, Q cooldown refun
       for (const s of spots) {
         const e = d.spawnEnemy(s.type);
         e.x = s.x; e.y = s.y; e.hp = hp; e.clearMark();
+        // Basic slimes hold their spot (they now close in on the player); Pursuers still chase.
+        e.goalX = e.x; e.goalY = e.y; e.nextPlanAt = Number.POSITIVE_INFINITY;
         d.enemies.push(e);
       }
       g.enemies = d.enemies;
@@ -195,7 +197,7 @@ test('kit: W mark + detonation, E blink + bolt priority, Flash, Q cooldown refun
     await setup([{ type: 'basic', x: 500 + offset, y: 360 }]);
     await page.evaluate(() => {
       const e = window.__warmup.scene.getScene('GameScene').director.enemies[0];
-      e.wanderX = e.x; e.wanderY = e.y; e.nextWanderAt = Number.POSITIVE_INFINITY;
+      e.goalX = e.x; e.goalY = e.y; e.nextPlanAt = Number.POSITIVE_INFINITY;
     });
     await page.mouse.move(500, 360);          // 140px left — inside E range, lands exactly here
     await page.keyboard.press('e');

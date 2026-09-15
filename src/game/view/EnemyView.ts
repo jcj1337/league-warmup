@@ -83,7 +83,26 @@ export class EnemyView {
     const bx = Math.round(e.x);
     const by = Math.round(e.y);
 
-    if (!e.active) {
+    if (e.spawning) {
+      // Placeholder arrival cue on the fixed spawn spot. It only reads the
+      // gameplay arrival progress; activation never waits on it.
+      const t = e.arrivalProgress(nowMs);
+      const cue = THEME.enemy.spawnCue;
+      this.sprite.setVisible(false);
+      this.shadow.setVisible(false);
+      this.markIcon.setVisible(false);
+      this.hpBar.setVisible(false);
+      this.overlay.clear();
+      dottedRing(
+        this.overlay, bx, by,
+        e.radius * Phaser.Math.Linear(cue.startRadiusScale, 1, t),
+        cue.color, Phaser.Math.Linear(cue.alphaStart, cue.alphaEnd, t), 3,
+      );
+      this.hideExtras();
+      return;
+    }
+
+    if (e.dead) {
       this.deathAge += ms;
       const t = this.deathAge / THEME.enemy.deathAnimMs;
       this.dying = t < 1;

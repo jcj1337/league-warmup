@@ -4,7 +4,7 @@ import { startSuite } from './support/harness';
 // Unlike the other suites, smoke plays the real, unsterilized run: live enemy
 // fire, random spawns and drift, run completion, restart and death.
 test('smoke: movement, attack, Q, enemy fire, context menu, run end + restart, death', async ({ page }, testInfo) => {
-  const { pass, fail, warn, section, finish } = await startSuite(page, testInfo, 600);
+  const { pass, fail, warn, section, finish } = await startSuite(page, testInfo, 600, { arriveAll: false });
 
   const state = () => page.evaluate(() => {
     const s = window.__warmup.scene.getScene('GameScene');
@@ -94,7 +94,7 @@ test('smoke: movement, attack, Q, enemy fire, context menu, run end + restart, d
     s.attacks.cancel();
     p.x = 640; p.y = 360; p.stop();
     t.x = 840; t.y = 360; t.hp = 9999;
-    t.wanderX = t.x; t.wanderY = t.y; t.nextWanderAt = Number.POSITIVE_INFINITY;
+    t.goalX = t.x; t.goalY = t.y; t.nextPlanAt = Number.POSITIVE_INFINITY;
     return { x: t.x, y: t.y };
   });
   if (!qt) fail('no live enemy to aim Q at');
@@ -123,7 +123,13 @@ test('smoke: movement, attack, Q, enemy fire, context menu, run end + restart, d
 
   // --- 4. enemy projectiles ----------------------------------------------------
   section('4. enemy projectiles');
-  await page.waitForTimeout(1500);
+  // Edge fire is occasional now (one shot every few seconds): wait for a shot to
+  // actually be in the air instead of sampling at a fixed moment.
+  await page.waitForFunction(
+    () => window.__warmup.scene.getScene('GameScene').enemyProjectiles.activeCount > 0,
+    null,
+    { timeout: 8000 },
+  ).catch(() => {});
   const proj = await state();
   proj.enemyShots > 0 ? pass(`enemy projectiles spawning (${proj.enemyShots} in flight)`) : fail('no enemy projectiles');
 
@@ -157,6 +163,7 @@ test('smoke: movement, attack, Q, enemy fire, context menu, run end + restart, d
     d.stageIndex = d.stageCount - 1;
     d.waveIndex = d.stageDefinition.waves.length - 1;
     d.spawnWave();
+    d.arriveAllNow();
     for (const e of d.enemies) {
       while (e.active) g.onTargetHit(e, e.takeHit());
     }

@@ -35,7 +35,7 @@ test('orbwalk: movement, direct attack, attack-move, targeting, cancel, post-fir
     s.enemyProjectiles.clear();
     s.enemyProjectiles.nextSpawnAt = Number.POSITIVE_INFINITY;
     s.player.hp = 100;
-    for (const t of s.enemies) { t.wanderX = t.x; t.wanderY = t.y; t.nextWanderAt = Number.POSITIVE_INFINITY; }
+    for (const t of s.enemies) { t.goalX = t.x; t.goalY = t.y; t.nextPlanAt = Number.POSITIVE_INFINITY; }
   });
 
   // Teleport targets to exact spots so target-selection tests are deterministic.
@@ -45,7 +45,7 @@ test('orbwalk: movement, direct attack, attack-move, targeting, cancel, post-fir
     s.enemies.forEach((t, i) => {
       if (i < spots.length) {
         t.x = spots[i].x; t.y = spots[i].y; t.hp = 100; t.active = true;
-        t.wanderX = t.x; t.wanderY = t.y; t.nextWanderAt = Number.POSITIVE_INFINITY;
+        t.goalX = t.x; t.goalY = t.y; t.nextPlanAt = Number.POSITIVE_INFINITY;
       } else {
         t.active = false; t.hp = 0; t.respawnAt = Number.POSITIVE_INFINITY;
       }

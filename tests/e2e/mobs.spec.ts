@@ -37,12 +37,16 @@ test('mobs: passive stacks, Q cooldown refund, Pursuer AI, stage pips + segmente
     d.enemies.length = 0;
     const e = d.spawnEnemy(type);
     e.x = x; e.y = y;
+    // A basic slime holds its spot (it now closes in on the player); a Pursuer still chases.
+    e.goalX = x; e.goalY = y; e.nextPlanAt = Number.POSITIVE_INFINITY;
     if (hp) { e.hp = hp; }
     e.__tag = 1;
     d.enemies.push(e);
     g.enemies = d.enemies;
     g.attacks.cancel(); g.attacks.state = 'idle'; g.attacks.clearMissiles(); g.skillshot.clear();
     g.player.x = 640; g.player.y = 360; g.player.stop();
+    // Pursuer swings cost 25: start each placement healthy so earlier sections can't kill the run.
+    g.player.hp = 100;
     return { type: e.archetype, hp: e.hp, maxHp: e.maxHp, r: e.radius };
   }, { type, x, y, hp });
   const cfg = await page.evaluate(() => ({
@@ -287,7 +291,7 @@ test('mobs: passive stacks, Q cooldown refund, Pursuer AI, stage pips + segmente
   await page.evaluate(() => {
     const g = window.__warmup.scene.getScene('GameScene');
     g.cooldowns.reduce(999999, ['q']); g.passive.reset();
-    g.player.x = 640; g.player.y = 360;
+    g.player.x = 640; g.player.y = 360; g.player.hp = 100;
     const e = g.director.enemies[0]; e.x = 900; e.y = 360;
   });
   const beforeQ = (await G()).enemies[0].hp;
@@ -352,8 +356,18 @@ test('mobs: passive stacks, Q cooldown refund, Pursuer AI, stage pips + segmente
   section('Segmented health bars');
   const bar = () => page.evaluate(() => {
     const e = window.__warmup.scene.getScene('GameScene').director.enemies[0];
-    return { pips: e.hp, max: e.maxHp, segments: e.view.hpBar.segments, filled: e.view.hpBar.filled, visible: e.view.hpBar.visible };
+    const b = e.view.hpBar;
+    return { pips: e.hp, max: e.maxHp, segments: b.segments, filled: b.filled, visible: b.visible, width: b.width, cells: b.cells.map((c) => ({ ...c })) };
   });
+  const barTheme = await page.evaluate(() => window.__theme.pipBar);
+  /** Cells tile the constant width exactly: first at 0, last ending at width, dividers of `gap`, widths within 1px. */
+  const tiles = (b) => {
+    const ws = b.cells.map((c) => c.w);
+    return b.cells.length === b.segments && b.width === barTheme.width
+      && b.cells[0].x === 0 && b.cells[b.cells.length - 1].x + b.cells[b.cells.length - 1].w === b.width
+      && b.cells.every((c, i) => i === 0 || c.x === b.cells[i - 1].x + b.cells[i - 1].w + barTheme.gap)
+      && Math.max(...ws) - Math.min(...ws) <= 1;
+  };
   await page.evaluate(() => { window.__warmup.scene.getScene('GameScene').director.stageIndex = 6; });
   await placeOne('basic', 1000, 200);
   await page.waitForTimeout(80);
@@ -372,12 +386,54 @@ test('mobs: passive stacks, Q cooldown refund, Pursuer AI, stage pips + segmente
   hit.pips === 2 && hit.segments === 3 && hit.filled === 2
     ? pass('after one hit: 3 segments, 2 filled [#][#][ ]')
     : fail(`bar after one hit: ${JSON.stringify(hit)}`);
+  hit.cells.map((c) => c.filled).join() === 'true,true,false' && tiles(hit)
+    && hit.cells[2].w === hit.cells[0].w
+    ? pass(`the hit emptied exactly one equal-width segment (${hit.cells.map((c) => `${c.w}px${c.filled ? '#' : ' '}`).join(' | ')})`)
+    : fail(`segments after one hit: ${JSON.stringify(hit)}`);
   await placeOne('pursuer', 1000, 200);
   await page.waitForTimeout(80);
   const pBar = await bar();
   pBar.segments === 4 && pBar.filled === 4
     ? pass('Stage 7 pursuer shows 4 segments')
     : fail(`pursuer bar: ${JSON.stringify(pBar)}`);
+
+  // Constant physical width: more pips add dividers, never width.
+  const widths = [];
+  for (const [stageIndex, type] of [[0, 'basic'], [0, 'pursuer'], [3, 'basic'], [6, 'basic'], [6, 'pursuer']] as const) {
+    await page.evaluate((s) => { window.__warmup.scene.getScene('GameScene').director.stageIndex = s; }, stageIndex);
+    await placeOne(type, 1000, 200);
+    await page.waitForTimeout(80);
+    widths.push({ stage: stageIndex + 1, type, ...(await bar()) });
+  }
+  widths.map((w) => w.max).join('/') === '1/2/2/3/4' && widths.every((w) => w.segments === w.max && w.filled === w.max)
+    ? pass(`live bars show one segment per max pip across stages (${widths.map((w) => `S${w.stage} ${w.type} ${w.segments}`).join(', ')})`)
+    : fail(`segment counts: ${JSON.stringify(widths.map((w) => ({ stage: w.stage, type: w.type, max: w.max, segments: w.segments })))}`);
+  widths.every((w) => w.width === barTheme.width && tiles(w))
+    ? pass(`every bar is ${barTheme.width}px wide whatever its pips: ${widths.map((w) => `[${w.cells.map((c) => c.w).join('|')}]`).join(' ')}`)
+    : fail(`bar widths: ${JSON.stringify(widths.map((w) => ({ max: w.max, width: w.width, cells: w.cells })))}`);
+  widths[0].cells.length === 1 && widths[0].cells[0].w === barTheme.width
+    && widths.filter((w) => w.max <= 4).every((w) => w.cells.every((c) => c.w === w.cells[0].w))
+    ? pass('1 pip fills the whole bar; 2, 3 and 4 pips split it into exactly equal segments')
+    : fail(`even split: ${JSON.stringify(widths.map((w) => w.cells.map((c) => c.w)))}`);
+
+  // The renderer is generic: any pip count tiles the same width, each segment one remaining pip.
+  const generic = await page.evaluate(() => {
+    const e = window.__warmup.scene.getScene('GameScene').director.enemies[0];
+    const b = e.view.hpBar;
+    const out = [];
+    for (let max = 1; max <= 9; max++) {
+      for (let pips = 0; pips <= max; pips++) {
+        b.update(500, 100, pips, max, 0);
+        out.push({ max, pips, segments: b.segments, filled: b.filled, width: b.width, cells: b.cells.map((c) => ({ ...c })) });
+      }
+    }
+    return out;
+  });
+  const badGeneric = generic.find((r) => r.segments !== r.max || r.filled !== r.pips || !tiles(r)
+    || r.cells.some((c, i) => c.filled !== i < r.pips));
+  !badGeneric
+    ? pass(`1-9 pips at every fill level: ${barTheme.width}px wide, segments within 1px, filled cells == remaining pips`)
+    : fail(`generic bar: ${JSON.stringify(badGeneric)}`);
   await page.evaluate(() => { window.__warmup.scene.getScene('GameScene').director.stageIndex = 0; });
 
   // === Stage composition =====================================================

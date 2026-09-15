@@ -8,6 +8,9 @@ test('waves: stage/wave progression, variable waves per stage, finite rosters, b
     run: window.__balance.RUN,
     stages: window.__balance.STAGES,
   }));
+  // Progression is under test here, not survival: Pursuer swings land for 0, so
+  // banner and arrival waits beside a live Pursuer can never kill the player.
+  await page.evaluate(() => { window.__balance.PURSUER.attackDamage = 0; });
   // Every count below comes from the stage table — nothing assumes a fixed number of waves.
   const waveCounts: number[] = cfg.stages.map((s) => s.waves.length);
   const wavesTotal = waveCounts.reduce((sum, n) => sum + n, 0);
@@ -82,6 +85,7 @@ test('waves: stage/wave progression, variable waves per stage, finite rosters, b
     d.stageIndex = st - 1;
     d.waveIndex = wv - 1;
     d.spawnWave();
+    d.arriveAllNow();                   // the whole roster, not just the first staggered arrival
   }, [stage, wave]);
 
   /**
@@ -125,6 +129,11 @@ test('waves: stage/wave progression, variable waves per stage, finite rosters, b
     const h = window.__warmup.scene.getScene('GameScene').getHudState();
     return h.stage === s && h.wave === w && h.wavePhase === 'wave';
   }, [stage, wave]);
+  /** A wave's enemies arrive staggered: wait until nothing is pending or mid-arrival. */
+  const waitForArrivals = () => waitFor(() => {
+    const d = window.__warmup.scene.getScene('GameScene').director;
+    return d.phase === 'wave' && d.pendingCount === 0 && d.spawningCount === 0;
+  }, null, 8000);
 
   const countTypes = (roster) =>
     roster.reduce((acc, e) => { acc[e.type] = (acc[e.type] ?? 0) + 1; return acc; }, {});
@@ -247,6 +256,9 @@ test('waves: stage/wave progression, variable waves per stage, finite rosters, b
     ? pass(`"${c4.next.clearText}" shows during the breather, then "${c4.next.banner}"`)
     : fail(`banners: ${JSON.stringify([...new Set(c4.frames.map((f) => f.banner))])}`);
 
+  // The new wave arrives one enemy at a time; judge its roster once all of it is here.
+  await waitForArrivals();
+  await calm();
   const n4 = await S();
   n4.stage === c4.next.stage && n4.wave === c4.next.wave && matches(n4.roster, rosterOf(c4.next.stage, c4.next.wave))
     && n4.roster.every((e) => e.active && !c4Ids.includes(e.id)) && n4.wavesInStage === waveCounts[c4.next.stage - 1]
@@ -281,6 +293,7 @@ test('waves: stage/wave progression, variable waves per stage, finite rosters, b
     const fought = [];
     for (let w = 1; w <= n; w++) {
       if (w > 1) await waitForWave(multi, w);
+      await waitForArrivals();
       await calm();
       const here = await S();
       fought.push({ stage: here.stage, wave: here.wave, of: here.wavesInStage, roster: matches(here.roster, rosterOf(multi, w)) });
@@ -305,6 +318,7 @@ test('waves: stage/wave progression, variable waves per stage, finite rosters, b
     fought.length === n && fought.every((f, i) => f.stage === multi && f.wave === i + 1 && f.of === n && f.roster)
       ? pass(`Stage ${multi} fought exactly its ${n} waves in order, each with its authored roster, HUD WAVE k / ${n}`)
       : fail(`Stage ${multi} waves fought: ${JSON.stringify(fought)}`);
+    await waitForArrivals();
     const after = await S();
     after.stage === multi + 1 && after.wave === 1 && matches(after.roster, rosterOf(multi + 1, 1))
       && after.baseCd === cfg.stages[multi].baseAttackCooldownMs && after.wavesInStage === waveCounts[multi]
@@ -348,6 +362,7 @@ test('waves: stage/wave progression, variable waves per stage, finite rosters, b
       for (let w = 0; w < window.__balance.STAGES[s].waves.length; w++) {
         d.stageIndex = s; d.waveIndex = w;
         d.spawnWave();
+        d.arriveAllNow();
         const hud = g.getHudState();
         out.push({
           s, w, stage: hud.stage, wave: hud.wave, of: hud.wavesInStage, phase: hud.wavePhase, baseCd: g.attacks.baseCooldownMs,
@@ -419,10 +434,15 @@ test('waves: stage/wave progression, variable waves per stage, finite rosters, b
   restarted && again.stage === 1 && again.wave === 1 && again.phase === 'wave' && again.result === null && again.hp === 100
     ? pass('restart: Stage 1 Wave 1, fighting, full HP, no result')
     : fail(`after restart: ${JSON.stringify({ stage: again.stage, wave: again.wave, phase: again.phase, hp: again.hp, result: again.result })}`);
-  matches(again.roster, rosterOf(1, 1)) && again.roster.every((e) => e.active && !oldIds.includes(e.id))
+  again.remaining === sizeOf(rosterOf(1, 1)) && again.roster.every((e) => !oldIds.includes(e.id))
     && again.shots === 0 && again.banner === null && again.runTime < 1
-    ? pass('restart leaves no old enemies, shots, breather or banner behind')
-    : fail(`restart leftovers: roster ${JSON.stringify(again.roster.map((e) => e.id))}, shots ${again.shots}, banner ${again.banner}, runTime ${again.runTime}`);
+    ? pass(`restart leaves no old enemies, shots, breather or banner behind; all ${again.remaining} of Stage 1 Wave 1 still to come`)
+    : fail(`restart leftovers: remaining ${again.remaining}, roster ${JSON.stringify(again.roster.map((e) => e.id))}, shots ${again.shots}, banner ${again.banner}, runTime ${again.runTime}`);
+  await waitForArrivals();
+  const arrivedAgain = await S();
+  matches(arrivedAgain.roster, rosterOf(1, 1)) && arrivedAgain.roster.every((e) => e.active && !oldIds.includes(e.id))
+    ? pass(`the new run's Stage 1 Wave 1 arrives in full: ${JSON.stringify(countTypes(arrivedAgain.roster))}`)
+    : fail(`restarted roster after arrivals: ${JSON.stringify(arrivedAgain.roster.map((e) => ({ id: e.id, type: e.type, active: e.active })))}`);
 
   // === 10. Player death still ends the run ====================================
   section('10. Player death still ends the run');

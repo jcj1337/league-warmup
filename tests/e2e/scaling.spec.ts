@@ -25,7 +25,7 @@ test('scaling: stage-based attack speed, measured cycle, passive on top, cancel 
       if (i < spots.length) {
         t.x = spots[i].x; t.y = spots[i].y; t.hp = hp ?? t.maxHp; t.active = true; t.__tag = i + 1;
       } else { t.active = false; t.respawnAt = Number.POSITIVE_INFINITY; }
-      t.wanderX = t.x; t.wanderY = t.y; t.nextWanderAt = Number.POSITIVE_INFINITY;
+      t.goalX = t.x; t.goalY = t.y; t.nextPlanAt = Number.POSITIVE_INFINITY;
     });
   }, { spots, hp });
   const atk = () => page.evaluate(() => {

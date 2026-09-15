@@ -25,6 +25,8 @@ test('cast: Q/W/E cast windows, committed aim, buffered orders, lockout, Flash, 
       for (const s of spots) {
         const e = d.spawnEnemy(s.type);
         e.x = s.x; e.y = s.y; e.hp = hp; e.clearMark();
+        // Basic slimes hold their spot (they now close in on the player); Pursuers still chase.
+        e.goalX = e.x; e.goalY = e.y; e.nextPlanAt = Number.POSITIVE_INFINITY;
         d.enemies.push(e);
       }
       g.enemies = d.enemies;
