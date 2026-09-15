@@ -103,6 +103,14 @@ excluded — per minute over a rolling 30s window, divided
 by at least 10s early on; informational only). A large "STAGE N" banner marks each new stage, a smaller "WAVE N" each later
 wave, and "WAVE CLEAR" / "STAGE CLEAR" fills the breather.
 
+A small system-message feed sits bottom-left, above the HP plate. A run opens with
+"Welcome to qwer's Backyard!" and "Mission 1: Clear 1 wave."; each new stage is briefed as
+a Mission using its configured wave count (the last is the "Final mission"), and clearing
+a stage's last wave posts "Mission N complete!". Nothing else is announced. `Z` toggles
+the feed between light (translucent) and dark (near-opaque) mode instantly; left-drag its
+bottom border to move it anywhere on screen. Clicks on it never reach the game. Position
+and mode survive restarts; messages start fresh.
+
 ## The kit
 
 | | Cast time | Cooldown | Range | Projectile speed | Pips removed |

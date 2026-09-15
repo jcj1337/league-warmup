@@ -115,7 +115,7 @@ test('hud: contextual range ring, pause freeze + input gate, Q slot, settings me
     g.enemyProjectiles.nextSpawnAt = 0;      // let a volley spawn
     g.enemyProjectiles.spawnVolley();
   });
-  await rclick(400, 500);                    // and the player moving
+  await rclick(400, 420);                    // and the player moving
   await page.waitForTimeout(60);
   await page.keyboard.press('Escape');
   await page.waitForTimeout(60);
@@ -316,7 +316,7 @@ test('hud: contextual range ring, pause freeze + input gate, Q slot, settings me
 
   // Clicks count even when they issue nothing meaningful: empty-ground left click
   // (no A pending, no enemy) and a right click on the far edge of the field.
-  await page.mouse.click(300, 600);
+  await page.mouse.click(300, 420);
   await rclick(1200, 650);
   await page.waitForTimeout(40);
   const a1 = await apm();

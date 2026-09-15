@@ -71,7 +71,7 @@ test('orbwalk: movement, direct attack, attack-move, targeting, cancel, post-fir
   section('1. Normal movement');
   await placeTargets([{ x: 1100, y: 150 }]);
   let a = await G();
-  await rclick(300, 550);
+  await rclick(300, 420);
   await page.waitForTimeout(400);
   let b = await G();
   d(a.p, b.p) > 80 ? pass('1. right-click ground moves the player') : fail('1. no movement');

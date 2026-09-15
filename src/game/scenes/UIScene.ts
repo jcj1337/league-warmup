@@ -4,6 +4,8 @@ import { THEME } from '../../config/theme';
 import { pixelText, setPixelScale } from '../art/font';
 import { ensureArt } from '../art/textures';
 import { AbilityBar } from '../ui/AbilityBar';
+import { ChatBox } from '../ui/ChatBox';
+import { missionBriefing, missionComplete, welcomeMessage } from '../ui/missionMessages';
 import { PassiveDisplay } from '../ui/PassiveDisplay';
 import { PauseMenu } from '../ui/PauseMenu';
 import { PixelBar } from '../view/PixelBar';
@@ -41,6 +43,12 @@ export class UIScene extends Phaser.Scene {
   private bannerUntil = 0;
   /** The GameScene round (HudState.round) this HUD last polled. */
   private observedRound = 0;
+
+  /** Bottom-left system messages. Built once, so its dragged position and light/dark mode outlive restarts. */
+  private chat!: ChatBox;
+  /** Stage the chat last briefed, and the stage it last announced as cleared. Round-scoped. */
+  private chatStage = 0;
+  private chatClearedStage = 0;
 
   private hpBar!: PixelBar;
   private hpText!: Phaser.GameObjects.BitmapText;
@@ -83,6 +91,14 @@ export class UIScene extends Phaser.Scene {
     pixelText(this, M + 14, vitalsTop + 12, 'HP', 2, THEME.ui.dim).setDepth(101);
     this.hpBar = new PixelBar(this, HP_BAR_WIDTH, { top: THEME.ui.hpTop, bottom: THEME.ui.hpBottom }, 102, 10, 2);
     this.hpText = pixelText(this, M + 14 + 36, vitalsTop + 12, '', 2).setDepth(101);
+
+    // ---- bottom-left, above vitals: system messages ------------------------
+    this.chat = new ChatBox(this);
+    // Z toggles the feed's light/dark mode, once per physical press. Raw-input
+    // APM counts the press on its own.
+    this.input.keyboard?.on('keydown-Z', (event: KeyboardEvent) => {
+      if (!event.repeat) this.chat.toggleMode();
+    });
 
     // Pending-command banner, sat just above the ability bar where the eyes already are.
     this.modeText = pixelText(this, ARENA.width / 2, ARENA.height - 150, '', 2, THEME.ui.danger)
@@ -217,6 +233,13 @@ export class UIScene extends Phaser.Scene {
     this.bannerText = '';
     this.bannerIsStage = false;
     this.bannerUntil = 0;
+
+    // A new run gets a fresh history; the panel stays wherever it was dragged.
+    this.chat.reset();
+    this.chat.push(welcomeMessage(), 'welcome');
+    this.chatStage = hud.stage;
+    this.chatClearedStage = 0;
+    this.chat.push(missionBriefing(hud.stage, hud.wavesInStage, hud.stage === hud.stageCount), 'mission');
   }
 
   override update(): void {
@@ -263,6 +286,8 @@ export class UIScene extends Phaser.Scene {
 
     this.passiveDisplay.update(hud.passiveStacks, hud.passiveFraction);
     this.updateStageBanner(hud);
+    this.updateChat(hud);
+    this.chat.update();
 
     this.pauseMenu.setVisible(this.game_.isPaused);
 
@@ -307,6 +332,30 @@ export class UIScene extends Phaser.Scene {
     }
 
     this.stageText.setVisible(false);
+  }
+
+  /**
+   * Mission messages, derived purely from the polled snapshot (the same state
+   * the stage banner reads — no gameplay events):
+   *   hud.stage changes            → "Mission N: Clear W waves." (W = hud.wavesInStage,
+   *                                  i.e. the live STAGES row; final stage worded as such)
+   *   the stage's last wave clears → "Mission N complete!" — the breather before the
+   *                                  next stage, or the run completing
+   * Kills, hits and ordinary wave clears say nothing.
+   */
+  private updateChat(hud: Hud): void {
+    if (hud.stage !== this.chatStage) {
+      this.chatStage = hud.stage;
+      this.chatClearedStage = 0;
+      this.chat.push(missionBriefing(hud.stage, hud.wavesInStage, hud.stage === hud.stageCount), 'mission');
+    }
+
+    const stageCleared =
+      (hud.wavePhase === 'intermission' && hud.nextTransition === 'stage') || hud.wavePhase === 'complete';
+    if (stageCleared && this.chatClearedStage !== hud.stage) {
+      this.chatClearedStage = hud.stage;
+      this.chat.push(missionComplete(hud.stage), 'complete');
+    }
   }
 
   private syncOverlay(): void {

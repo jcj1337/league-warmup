@@ -8,10 +8,12 @@ test('smoke: movement, attack, Q, enemy fire, context menu, run end + restart, d
 
   const state = () => page.evaluate(() => {
     const s = window.__warmup.scene.getScene('GameScene');
+    const chat = window.__warmup.scene.getScene('UIScene').chat;
     return {
       hud: s.getHudState(),
       player: { x: s.player.x, y: s.player.y, rooted: s.player.isRooted },
-      enemies: s.enemies.filter((t) => t.active).map((t) => ({ x: t.x, y: t.y, hp: t.hp })),
+      // Clicks on the chat panel never reach the game, so spawns under it are not clickable.
+      enemies: s.enemies.filter((t) => t.active).map((t) => ({ x: t.x, y: t.y, hp: t.hp, underChat: chat.contains(t.x, t.y, 80) })),
       enemyShots: s.enemyProjectiles.activeCount,
       qFired: s.skillshot.shotsFired,
       qHit: s.skillshot.shotsHit,
@@ -35,7 +37,7 @@ test('smoke: movement, attack, Q, enemy fire, context menu, run end + restart, d
   // destination override mid-move
   await rclick(1000, 600);
   await page.waitForTimeout(200);
-  await rclick(200, 600);
+  await rclick(200, 380);
   await page.waitForTimeout(900);
   const c = await state();
   c.player.x < 400 ? pass('re-issued move order overrides destination') : fail('destination override, x=' + c.player.x.toFixed(0));
@@ -53,13 +55,14 @@ test('smoke: movement, attack, Q, enemy fire, context menu, run end + restart, d
   section('2. basic attack');
   let s = await state();
   if (!s.enemies.length) fail('no active targets');
-  const tgt = s.enemies[0];
+  const tgt = s.enemies.find((t) => !t.underChat) ?? s.enemies[0];
   const beforeScore = s.hud.score;
   // Walk toward the target, then click it.
   await rclick(tgt.x - 60, tgt.y);
   await page.waitForTimeout(1600);
   s = await state();
-  const near = s.enemies.reduce((best, t) =>
+  const clickable = s.enemies.filter((t) => !t.underChat);
+  const near = (clickable.length ? clickable : s.enemies).reduce((best, t) =>
     Math.hypot(t.x - s.player.x, t.y - s.player.y) < Math.hypot(best.x - s.player.x, best.y - s.player.y) ? t : best);
   await lclick(near.x, near.y);
   let sawWindup = false;
@@ -181,7 +184,7 @@ test('smoke: movement, attack, Q, enemy fire, context menu, run end + restart, d
   const p0 = await state();
   const moveTarget = await page.evaluate(() => {
     const g = window.__warmup.scene.getScene('GameScene');
-    const candidates = [{ x: 900, y: 200 }, { x: 380, y: 560 }, { x: 900, y: 560 }, { x: 380, y: 160 }];
+    const candidates = [{ x: 900, y: 200 }, { x: 460, y: 440 }, { x: 900, y: 560 }, { x: 380, y: 160 }];
     const isEmpty = (c) => g.director.enemies.every((e) => !e.active || Math.hypot(e.x - c.x, e.y - c.y) > e.radius + 60);
     return candidates.find(isEmpty) ?? candidates[0];
   });

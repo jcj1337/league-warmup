@@ -280,7 +280,7 @@ test('controls: Q quick-cast, T attack-move-click, targeting modes, T orbwalk, T
 
   // === No tether reintroduced =================================================
   section('No tether reintroduced');
-  await rclick(400, 500);
+  await rclick(400, 420);
   await page.waitForTimeout(100);
   const tethers = await page.evaluate(() => {
     const g = window.__warmup.scene.getScene('GameScene');

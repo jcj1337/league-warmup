@@ -340,7 +340,7 @@ test('cast: Q/W/E cast windows, committed aim, buffered orders, lockout, Flash, 
   await page.mouse.move(640, 80);
   await page.waitForTimeout(60);
   const stopMove = await castWithInputs('w', [
-    () => page.mouse.click(300, 600, { button: 'right' }),
+    () => page.mouse.click(300, 380, { button: 'right' }),
     () => page.keyboard.press('s'),
   ]);
   const stopMoveAfter = afterResolve(stopMove).frames;

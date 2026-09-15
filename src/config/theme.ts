@@ -369,6 +369,35 @@ export const THEME = {
     scrim: P.ink,
   },
 
+  /** Bottom-left system-message feed (ChatBox). Presentation only. */
+  chat: {
+    width: 360,
+    height: 112,
+    /** Default spot: the HUD's left margin, just above the vitals plate. */
+    margin: 40,
+    bottomGap: 108,
+    depth: 100,
+    padding: 10,
+    textScale: 2,
+    messageGap: 4,
+    maxMessages: 8,
+    /** Older messages fade by this much per step back, down to oldestAlpha. */
+    fadePerMessage: 0.2,
+    oldestAlpha: 0.4,
+    /** Light mode (default): translucent, for normal play. Dark mode (Z): near-opaque plate, full-strength frame and text. */
+    lightFillAlpha: 0.45,
+    lightFrameAlpha: 0.7,
+    lightTextAlpha: 0.8,
+    darkFillAlpha: 0.97,
+    darkFrameAlpha: 1,
+    darkTextAlpha: 1,
+    /** Drag handle: a hit strip this tall over the bottom border, reaching handleOverhang px below the panel. */
+    handleHitHeight: 10,
+    handleOverhang: 4,
+    handleHoverAlpha: 0.55,
+    colors: { welcome: P.gold, mission: P.cream, complete: P.good } as Record<string, number>,
+  },
+
   /** Stage / wave transition banners. Presentation only. */
   banners: {
     stageMs: 1500,

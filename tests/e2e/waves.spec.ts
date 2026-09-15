@@ -267,7 +267,13 @@ test('waves: stage/wave progression, variable waves per stage, finite rosters, b
     await calm();
     await jumpTo(multi, 1);
     // The jump itself is a stage change, so the UI raises its "STAGE N" banner.
-    // Let that finish first: an in-progress banner outranks "WAVE CLEAR".
+    // Let that finish first: an in-progress banner outranks "WAVE CLEAR". Wait
+    // for it to appear before waiting for it to go — polled straight after the
+    // jump, the UI may not have raised it yet, and "not visible" would pass early.
+    await waitFor((text) => {
+      const ui = window.__warmup.scene.getScene('UIScene');
+      return ui.stageText.visible && ui.stageText.text === text;
+    }, `STAGE ${multi}`, 2000);
     await waitFor((text) => {
       const ui = window.__warmup.scene.getScene('UIScene');
       return !(ui.stageText.visible && ui.stageText.text === text);

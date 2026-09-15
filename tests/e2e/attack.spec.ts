@@ -20,6 +20,7 @@ test('attack: ground move, direct attack + chase, windup/recovery, cancel, post-
 
   const state = () => page.evaluate(() => {
     const s = window.__warmup.scene.getScene('GameScene');
+    const chat = window.__warmup.scene.getScene('UIScene').chat;
     const p = s.player;
     const t = s.attacks.currentTarget;
     return {
@@ -32,10 +33,15 @@ test('attack: ground move, direct attack + chase, windup/recovery, cancel, post-
         targetHp: t ? t.hp : null,
         markerVisible: s.attacks.targetMarker.visible,
       },
-      enemies: s.enemies.filter((t) => t.active).map((t) => ({ x: t.x, y: t.y, hp: t.hp, r: t.radius })),
+      // Clicks on the chat panel never reach the game, so spawns under it are not clickable.
+      enemies: s.enemies.filter((t) => t.active).map((t) => ({ x: t.x, y: t.y, hp: t.hp, r: t.radius, underChat: chat.contains(t.x, t.y, 30) })),
       range: 260,
     };
   });
+  const clickable = (list) => {
+    const ok = list.filter((t) => !t.underChat);
+    return ok.length ? ok : list;
+  };
 
   const rclick = (x, y) => page.mouse.click(x, y, { button: 'right' });
   const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
@@ -45,7 +51,7 @@ test('attack: ground move, direct attack + chase, windup/recovery, cancel, post-
   // --- 1. right-click ground moves --------------------------------------------
   section('1. right-click ground moves');
   let s0 = await state();
-  await rclick(320, 520);
+  await rclick(320, 380);
   await page.waitForTimeout(400);
   let s1 = await state();
   dist(s0.player, s1.player) > 40 ? pass('right-click ground issues a move order')
@@ -172,7 +178,7 @@ test('attack: ground move, direct attack + chase, windup/recovery, cancel, post-
   // Re-acquire a live target (the previous one may have died) and tag it.
   {
     const st = await state();
-    const near = st.enemies.reduce((a, b) => (dist(b, st.player) < dist(a, st.player) ? b : a));
+    const near = clickable(st.enemies).reduce((a, b) => (dist(b, st.player) < dist(a, st.player) ? b : a));
     await rclick(near.x, near.y);
     await page.waitForTimeout(1800); // let the chase + first autos settle
     await page.evaluate(() => {
@@ -240,7 +246,7 @@ test('attack: ground move, direct attack + chase, windup/recovery, cancel, post-
   let target0 = null;
   {
     const s = await state();
-    target0 = s.enemies.reduce((a, b) => (dist(b, s.player) < dist(a, s.player) ? b : a));
+    target0 = clickable(s.enemies).reduce((a, b) => (dist(b, s.player) < dist(a, s.player) ? b : a));
     await rclick(target0.x, target0.y);
   }
   // Wait for the transition into recovery (attack has fired).
