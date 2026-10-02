@@ -1,10 +1,11 @@
 import Phaser from 'phaser';
 import { SKILLSHOT_W } from '../../config/balance';
 import type { GameClock } from '../systems/GameClock';
+import type { HostileSpellSink } from '../systems/HostileSpellSystem';
 import type { EnemyView } from '../view/EnemyView';
 
 /** Identifies an archetype for spawn weighting, scoring and kill tallies. */
-export type EnemyArchetype = 'basic' | 'pursuer';
+export type EnemyArchetype = 'basic' | 'pursuer' | 'magus';
 
 /**
  * Where an enemy is in its life, as far as gameplay is concerned.
@@ -19,9 +20,25 @@ export type EnemyLifecycle = 'spawning' | 'active' | 'dead';
 
 /** What an enemy's AI is allowed to see and do each frame. */
 export interface EnemyContext {
-  player: { x: number; y: number; radius: number };
+  player: {
+    x: number;
+    y: number;
+    radius: number;
+    /** Current velocity in px/s, for enemies that lead their aim. */
+    vx: number;
+    vy: number;
+    /** True while the player is stunned and cannot act. */
+    stunned: boolean;
+  };
   /** Apply damage to the player. Routed through the scene's i-frame logic. */
   damagePlayer(amount: number): void;
+  /**
+   * Cast hostile spells (ground zones, the Magus orb). The spell system owns
+   * them, so a spell already placed still lands after its caster dies.
+   */
+  spells: HostileSpellSink;
+  /** Enemies still between the player and a wave clear (pending + arriving + alive), the caller included. */
+  enemiesRemaining: number;
 }
 
 export interface EnemyOptions {

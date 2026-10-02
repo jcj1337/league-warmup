@@ -388,7 +388,7 @@ export class UIScene extends Phaser.Scene {
         row('SCORE', `${result.score}`),
         row(
           'KILLS',
-          `${result.targetsKilled}   (basic ${result.killsByType.basic ?? 0}, pursuer ${result.killsByType.pursuer ?? 0})`,
+          `${result.targetsKilled}   (basic ${result.killsByType.basic ?? 0}, pursuer ${result.killsByType.pursuer ?? 0}, magus ${result.killsByType.magus ?? 0})`,
         ),
         row('HITS LANDED', `${result.hitsLanded}   (mark procs ${result.markProcs})`),
         row('PROJECTILES HIT BY', `${result.projectileHitsTaken}`),

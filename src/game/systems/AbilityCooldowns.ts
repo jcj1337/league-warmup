@@ -58,6 +58,11 @@ export class AbilityCooldowns {
     }
   }
 
+  /** Make an ability ready again: its cast was interrupted before it happened. */
+  refund(id: AbilityId): void {
+    this.readyAt[id] = this.now;
+  }
+
   reset(): void {
     this.readyAt.q = 0;
     this.readyAt.w = 0;

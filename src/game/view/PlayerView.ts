@@ -28,10 +28,13 @@ export interface PlayerViewState {
   maxHp: number;
   /** Drawn attack-range radius (attackReach for the standard target). */
   rangeRadius: number;
+  /** Crowd control from hostile spells. */
+  stunned: boolean;
+  slowed: boolean;
 }
 
 export type CastKind = 'q' | 'w' | 'e';
-export type PlayerPose = 'idle' | 'walk' | 'windup' | 'release' | 'cast';
+export type PlayerPose = 'idle' | 'walk' | 'windup' | 'release' | 'cast' | 'stunned';
 
 /** Plain readouts of the dotted rings, so they can be inspected without touching Graphics. */
 export interface RingReadout {
@@ -176,13 +179,16 @@ export class PlayerView {
     const desired = this.aimAngle ?? this.castAngle ?? this.moveAngle(s);
     if (desired !== null && Math.abs(Math.cos(desired)) > 0.15) this.facing = Math.cos(desired) >= 0 ? 1 : -1;
 
-    this.pose = this.castKind !== null ? 'cast'
+    this.pose = s.stunned ? 'stunned'
+      : this.castKind !== null ? 'cast'
       : this.windup > 0 ? 'windup'
       : this.msSinceRelease < A.releasePoseMs ? 'release'
       : s.moving ? 'walk'
       : 'idle';
 
-    const frame = this.pose === 'cast' ? TEX.player.cast
+    // Stunned: slumped in the squash frame, no breathing, until it wears off.
+    const frame = this.pose === 'stunned' ? TEX.player.idle[1]
+      : this.pose === 'cast' ? TEX.player.cast
       : this.pose === 'windup' ? TEX.player.charge
       : this.pose === 'release' ? TEX.player.release
       : this.pose === 'walk' ? TEX.player.walk[Math.floor(this.visualMs / P.walkFrameMs) % 2]
@@ -238,6 +244,11 @@ export class PlayerView {
     }
     this.rangeRing.radius = s.rangeRadius;
 
+    if (s.slowed) {
+      const S = THEME.player.slow;
+      dottedRing(g, s.x, s.y + 8, s.radius + 4, S.color, S.alpha, 3);
+    }
+
     if (this.passiveMaxed) {
       const pulse = Math.sin(this.visualMs * 0.006) * 1.5;
       dottedRing(g, s.x, s.y + 6, s.radius + 8 + pulse, THEME.passive.maxStackColor, 0.75, 3);
@@ -270,6 +281,8 @@ export class PlayerView {
     }
 
     if (this.castKind !== null && this.castProgress > 0) this.drawCast(g, s, bx, by, hand);
+
+    if (s.stunned) this.drawStun(g, bx, by);
 
     if (this.castReleaseAge < THEME.cast.releaseFlashMs) {
       const t = this.castReleaseAge / THEME.cast.releaseFlashMs;
@@ -315,6 +328,25 @@ export class PlayerView {
     dottedRing(g, bx, by, s.radius + pad, f.color, 0.4 + 0.6 * t, 3);
     dottedRing(g, bx, by, s.radius + pad + 6, f.blue, 0.25 + 0.4 * t, 3);
     pixelDisc(g, tipX, tipY, 3 + 3 * t, f.core, 0.8, 3);
+  }
+
+  /** Little arcane stars circling over the head while stunned. */
+  private drawStun(g: Phaser.GameObjects.Graphics, bx: number, by: number): void {
+    const S = THEME.player.stun;
+    const spin = (this.visualMs / S.spinMs) * Math.PI * 2;
+    for (let i = 0; i < S.stars; i++) {
+      const a = spin + (i * Math.PI * 2) / S.stars;
+      const x = Math.round(bx + Math.cos(a) * S.orbitPx);
+      const y = Math.round(by - S.liftPx + Math.sin(a) * 4);
+      // A 3x3-pixel plus: core in the middle, arms around it.
+      g.fillStyle(S.color, 1);
+      g.fillRect(x - 4, y - 1, 3, 3);
+      g.fillRect(x + 2, y - 1, 3, 3);
+      g.fillRect(x - 1, y - 4, 3, 3);
+      g.fillRect(x - 1, y + 2, 3, 3);
+      g.fillStyle(S.core, 1);
+      g.fillRect(x - 1, y - 1, 3, 3);
+    }
   }
 
   // --------------------------------------------------------------- helpers

@@ -6,7 +6,8 @@
  * Style target: a top-down pixel-art slime skirmish on a dark, quiet volcanic
  * waste. Chunky 3× pixels and dark ink outlines. The ground stays low-contrast
  * ash so everything that matters pops: a friendly blue slime hero, a hostile
- * slime family (red basic, horned purple Pursuer), orange-red enemy fire, and
+ * slime family (red basic, horned purple Pursuer, brass-masked Magus),
+ * orange-red enemy fire, pale arcane-gold Magus spells, and
  * one strong colour identity per ability:
  *   auto = sky cyan · Q = teal · W = violet/magenta · E = pink/blue · F = gold
  *
@@ -70,6 +71,20 @@ export const PALETTE = {
   purpleLight: 0xb58af0,
   purpleShine: 0xefe0ff,
   eyeOrange: 0xff9a2e,
+
+  // ---- magus: slate-green slime in brass, crackling with storm-gold arcana ------
+  magusDeep: 0x1a2624,
+  magusDark: 0x2a3d38,
+  magus: 0x456258,
+  magusLight: 0x76998a,
+  magusShine: 0xd8f0e2,
+  brassDark: 0x8a5a1c,
+  brass: 0xd9a03a,
+  brassLight: 0xffd97a,
+  /** Magus spell energy: paler and whiter than the orange-red edge fire. */
+  arcaneDeep: 0x7a5410,
+  arcane: 0xfff27a,
+  arcaneCore: 0xfffdf0,
 
   // ---- player combat colours ----------------------------------------------
   autoDeep: 0x2f8fd8,
@@ -225,6 +240,9 @@ export const THEME = {
       pending: P.danger,
     },
     moveMarker: P.cream,
+    /** Stunned: little arcane stars circling over the head. Slowed: a dotted ring at the feet. */
+    stun: { color: P.arcane, core: P.arcaneCore, stars: 3, orbitPx: 12, liftPx: 30, spinMs: 650 },
+    slow: { color: P.arcane, alpha: 0.6 },
   },
 
   // -------------------------------------------------------------- enemies
@@ -261,6 +279,36 @@ export const THEME = {
     /** Telegraph: the ground under its real reach warms up across the windup. */
     telegraph: { color: P.warning, fillAlphaStart: 0.1, fillAlphaEnd: 0.28, alertAt: 0.55 },
     slashColor: P.purpleShine,
+  },
+
+  magus: {
+    originY: 0.62,
+    shadowOffsetY: 18,
+    frameMs: 320,
+    hpBarOffsetY: 26,
+    burst: [P.magus, P.brass, P.arcane],
+    /** Two brass rune tablets float at its sides, bobbing out of step; mid-cast they rise, draw in and flare. */
+    runes: { sidePx: 27, liftPx: 8, bobPx: 3, bobMs: 900, castRisePx: 10, castPull: 0.8 },
+    /** Energy gathering over its crest while it casts. */
+    castGlow: { color: P.arcane, core: P.arcaneCore, liftPx: 40, radius: 7 },
+    /** Lance charge: a dotted line that tracks you and reaches full length as the charge completes. */
+    lanceCharge: { color: P.arcane, alphaStart: 0.25, alphaEnd: 0.75 },
+  },
+
+  /**
+   * Hostile ground zones (Magus Lance / Eye / Rite). The same language as the
+   * Pursuer telegraph — red ground hurts — edged in the Magus's arcane gold.
+   */
+  spellZone: {
+    fill: P.warning,
+    fillAlphaStart: 0.07,
+    fillAlphaEnd: 0.26,
+    edge: P.arcane,
+    edgeAlphaStart: 0.5,
+    edgeAlphaEnd: 1,
+    /** The Eye's sweet spot. */
+    centre: P.arcaneCore,
+    strike: { color: P.arcane, core: P.arcaneCore, deep: P.arcaneDeep, ms: 240 },
   },
 
   /** Compact pixel health bars under each unit. */
@@ -324,6 +372,7 @@ export const THEME = {
       w: { color: P.wHot, spacing: 12, life: 240, size: 6 },
       e: { color: P.e, spacing: 10, life: 160, size: 3 },
       hostile: { color: P.fireOrange, spacing: 16, life: 220, size: 6 },
+      orb: { color: P.arcane, spacing: 10, life: 200, size: 4 },
     },
   },
 

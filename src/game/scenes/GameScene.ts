@@ -7,6 +7,7 @@ import type { Enemy } from '../entities/Enemy';
 import { AttackSystem } from '../systems/AttackSystem';
 import { SkillshotSystem } from '../systems/SkillshotSystem';
 import { EnemyProjectileSystem } from '../systems/EnemyProjectileSystem';
+import { HostileSpellSystem } from '../systems/HostileSpellSystem';
 import { ScoreSystem } from '../systems/ScoreSystem';
 import { KitingMetrics } from '../systems/KitingMetrics';
 import { ApmTracker } from '../systems/ApmTracker';
@@ -104,6 +105,9 @@ export class GameScene extends Phaser.Scene {
   private attacks!: AttackSystem;
   private skillshot!: SkillshotSystem;
   private enemyProjectiles!: EnemyProjectileSystem;
+  private hostileSpells!: HostileSpellSystem;
+  /** A move / attack / attack-move order issued while stunned, replayed when the stun ends. */
+  private stunBuffered: (() => void) | null = null;
   private scoring!: ScoreSystem;
   private metrics!: KitingMetrics;
   private apm!: ApmTracker;
@@ -151,6 +155,7 @@ export class GameScene extends Phaser.Scene {
     this.lastCancelShownAt = -Infinity;
     this.lastReleaseShownAt = -Infinity;
     this.rangeHintUntil = -Infinity;
+    this.stunBuffered = null;
     this.paused = false;
     this.clock = new GameClock();
 
@@ -208,6 +213,13 @@ export class GameScene extends Phaser.Scene {
       onPlayerHit: (damage) => this.onPlayerHit(damage),
     });
 
+    // Magus spells: placed zones and orbs live here, so they outlive their caster.
+    this.hostileSpells = new HostileSpellSystem(this, this.player, this.director, {
+      onPlayerHit: (damage) => this.onPlayerHit(damage),
+      onPlayerStunned: (ms) => this.stunPlayer(ms),
+      onPlayerSlowed: (fraction, ms) => this.player.slow(this.clock.now, fraction, ms),
+    });
+
     // Cast windows for Q, W and E. The timer here is authoritative; the player's
     // charge animation only reads its progress.
     this.cast = new CastSystem(this.player, {
@@ -227,60 +239,42 @@ export class GameScene extends Phaser.Scene {
   private commandHandler(): CommandHandler {
     return {
       commandMove: (x, y) => {
-        // Mid-cast the order is buffered, not dropped: the ping shows instantly
-        // so the input feels received, and the move starts the moment the cast
-        // resolves. See CastSystem.bufferCommand().
+        // The ping shows instantly so the input feels received, even when the
+        // move itself has to wait for a cast or a stun (see issueOrder).
         this.ping(x, y, 'move');
-        if (this.cast.isCasting) {
-          this.cast.bufferCommand(() => {
-            this.attacks.onMoveOrder();
-            this.player.moveTo(x, y);
-          });
-          return;
-        }
-        this.attacks.onMoveOrder();
-        this.player.moveTo(x, y);
+        this.issueOrder(() => {
+          this.attacks.onMoveOrder();
+          this.player.moveTo(x, y);
+        });
       },
 
+      // Direct order: commits to this exact enemy, ignoring A-move selection.
+      // Held like a move while casting or stunned, so no auto can start then.
       commandAttackTarget: (target) => {
-        // Direct order: commits to this exact enemy, ignoring A-move selection.
-        // Mid-cast it is buffered like a move, so no auto can start during a
-        // Q/W/E window — the attack begins the moment the cast resolves.
-        if (this.cast.isCasting) {
-          this.cast.bufferCommand(() => this.attacks.commandAttack(target));
-          return;
-        }
-        this.attacks.commandAttack(target);
+        this.issueOrder(() => this.attacks.commandAttack(target));
       },
 
+      // Identical order for A-click and T; `showRangeHint` is purely visual
+      // and is only set by the instant (T) path, which has no targeting mode
+      // to keep the ring up for it.
       commandAttackMove: (x, y, opts) => {
-        if (this.cast.isCasting) {
-          this.ping(x, y, 'attack-move');
-          this.cast.bufferCommand(() => this.attacks.commandAttackMove(x, y));
-          if (opts?.showRangeHint) this.rangeHintUntil = this.clock.now + THEME.rangeHint.holdMs;
-          return;
-        }
-        // Identical order for A-click and T; `showRangeHint` is purely visual
-        // and is only set by the instant (T) path, which has no targeting mode
-        // to keep the ring up for it.
-        this.attacks.commandAttackMove(x, y);
         this.ping(x, y, 'attack-move');
-        if (opts?.showRangeHint) {
-          this.rangeHintUntil = this.clock.now + THEME.rangeHint.holdMs;
-        }
+        if (opts?.showRangeHint) this.rangeHintUntil = this.clock.now + THEME.rangeHint.holdMs;
+        this.issueOrder(() => this.attacks.commandAttackMove(x, y));
       },
 
-      // Stop cannot cancel a committed cast, but it discards any order buffered
-      // behind it, so nothing replays when the cast resolves.
+      // Stop cannot cancel a committed cast or a stun, but it discards any
+      // order held behind them, so nothing replays when they end.
       commandStop: () => {
-        if (this.cast.isCasting) this.cast.clearBufferedCommand();
+        this.cast.clearBufferedCommand();
+        this.stunBuffered = null;
         this.attacks.onStop();
       },
 
       // All three kit abilities commit for a short window anchored to the auto
       // windup, so weaving them between attacks keeps one rhythm.
       castSkillshot: (x, y) => {
-        if (this.cast.isCasting || !this.skillshot.canCast('q')) return;
+        if (!this.canAct || !this.skillshot.canCast('q')) return;
         this.attacks.onMoveOrder();
         this.cooldowns.start('q');
         this.beginCastOrResolve('q', { x, y }, SKILLSHOT_Q.castTimeMs);
@@ -290,13 +284,13 @@ export class GameScene extends Phaser.Scene {
       // it), the aim/destination is frozen NOW, and the effect happens when the
       // cast timer elapses.
       castMark: (x, y) => {
-        if (this.cast.isCasting || !this.skillshot.canCast('w')) return;
+        if (!this.canAct || !this.skillshot.canCast('w')) return;
         this.attacks.onMoveOrder();
         this.cooldowns.start('w');
         this.beginCastOrResolve('w', { x, y }, SKILLSHOT_W.castTimeMs);
       },
       castBlink: (x, y) => {
-        if (this.cast.isCasting || !this.blink.canBlink()) return;
+        if (!this.canAct || !this.blink.canBlink()) return;
         this.attacks.onMoveOrder();
         // Destination is committed here, not when the cast lands.
         const dest = this.blink.blinkDestination(x, y);
@@ -305,8 +299,9 @@ export class GameScene extends Phaser.Scene {
       },
 
       // Flash stays instant, deliberately: it should feel more immediate than E.
+      // It cannot break a stun — dodging the orb is the counterplay.
       castFlash: (x, y) => {
-        if (this.cast.isCasting) return;
+        if (!this.canAct) return;
         this.blink.castFlash(x, y);
       },
 
@@ -318,6 +313,41 @@ export class GameScene extends Phaser.Scene {
       togglePause: () => this.setPaused(!this.paused),
       restartRound: () => this.restartRound(),
     };
+  }
+
+  /** Free to start an ability: not mid-cast and not stunned. */
+  private get canAct(): boolean {
+    return !this.cast.isCasting && !this.player.isStunned;
+  }
+
+  /**
+   * Run a move / attack / attack-move order now, or hold it while the player
+   * cannot act: mid-cast it is buffered in the CastSystem (see
+   * CastSystem.bufferCommand), and while stunned it waits here. Either way
+   * only the latest order survives, and it replays the instant the player is
+   * free — committed, never unresponsive.
+   */
+  private issueOrder(run: () => void): void {
+    if (this.cast.isCasting) this.cast.bufferCommand(run);
+    else if (this.player.isStunned) this.stunBuffered = run;
+    else run();
+  }
+
+  /**
+   * A Magus orb connected. Stunned: no movement, no attacks, no abilities
+   * (Flash included). Whatever the player was committing to is interrupted
+   * with nothing lost but time — an uncommitted auto windup and a cast window
+   * both refund their cooldown — and the order queued behind the cast is kept
+   * to replay when the stun ends.
+   */
+  private stunPlayer(ms: number): void {
+    this.player.stun(this.clock.now, ms);
+    this.attacks.interrupt();
+    const interrupted = this.cast.interrupt();
+    if (interrupted) {
+      this.cooldowns.refund(interrupted.ability);
+      if (interrupted.buffered) this.stunBuffered = interrupted.buffered;
+    }
   }
 
   /**
@@ -417,6 +447,7 @@ export class GameScene extends Phaser.Scene {
     this.skillshot.clear();
     this.blink.clear();
     this.enemyProjectiles.clear();
+    this.hostileSpells.clear();
     this.scene.restart();
   }
 
@@ -434,6 +465,13 @@ export class GameScene extends Phaser.Scene {
     const now = this.clock.now;
 
     this.scoring.tickSurvival(dt);
+    this.player.tickStatus(now);
+    // A stun just wore off: replay the order issued during it.
+    if (this.stunBuffered && !this.player.isStunned) {
+      const run = this.stunBuffered;
+      this.stunBuffered = null;
+      run();
+    }
     this.passive.update(now);
     this.cooldowns.update(now);
     this.cast.update(now);
@@ -500,14 +538,24 @@ export class GameScene extends Phaser.Scene {
 
     // The director owns the run: breather → next wave/stage, enemy AI, spacing.
     this.director.update(dt, now, {
-      player: { x: this.player.x, y: this.player.y, radius: this.player.radius },
+      player: {
+        x: this.player.x,
+        y: this.player.y,
+        radius: this.player.radius,
+        vx: this.player.vx,
+        vy: this.player.vy,
+        stunned: this.player.isStunned,
+      },
       damagePlayer: (amount) => this.onPlayerHit(amount),
+      spells: this.hostileSpells,
+      enemiesRemaining: this.director.enemiesRemaining,
     });
     this.enemies = this.director.enemies;
 
     this.skillshot.update(dt, now, this.enemies);
     this.blink.update(dt);
     this.enemyProjectiles.update(dt, now);
+    this.hostileSpells.update(dt, now);
 
     // Decoration last: it reads what this frame decided and changes nothing.
     this.fx.update(dt);

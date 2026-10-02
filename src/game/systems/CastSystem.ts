@@ -136,11 +136,21 @@ export class CastSystem {
     buffered?.();
   }
 
-  /** Abort without resolving (round end, death). */
-  cancel(): void {
-    if (!this.pending) return;
+  /**
+   * Abort without resolving (a stun). Returns what was interrupted, so the
+   * caller can refund its cooldown and keep the order queued behind it.
+   */
+  interrupt(): { ability: CastAbility; buffered: (() => void) | null } | null {
+    if (!this.pending) return null;
+    const interrupted = { ability: this.pending.ability, buffered: this.buffered };
     this.pending = null;
     this.buffered = null;
     this.player.releaseRoot();
+    return interrupted;
+  }
+
+  /** Abort without resolving (round end, death). */
+  cancel(): void {
+    this.interrupt();
   }
 }

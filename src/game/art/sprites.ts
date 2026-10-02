@@ -98,6 +98,37 @@ const PURPLE_BODY = [
 ];
 const PURSUER_H = 18;
 
+// ---- magus: tall slate slime in a brass crest and mask ------------------------------
+// The caster of the family: taller than it is wide, a pointed brass crest, a
+// face-plate with burning eye slits and an arcane core glowing through its body.
+// Two brass rune tablets (magus_rune) float around it, drawn by MagusView.
+//   G brass · B brass light · g brass dark · y eye / core glow · o arcane
+
+const MAGUS_PAL = {
+  k: P.ink, m: P.magus, L: P.magusLight, w: P.magusShine, d: P.magusDark, D: P.magusDeep,
+  G: P.brass, B: P.brassLight, g: P.brassDark, y: P.arcaneCore, o: P.arcane,
+};
+
+const MAGUS_BODY = [
+  '......kk......',
+  '.....kBGk.....',
+  '....kBGGgk....',
+  '...kkBGGgkk...',
+  '..kmwkkkkkmk..',
+  '.kmwwLmmmmmmk.',
+  '.kmwLmmmmmmmk.',
+  'kmmLmmmmmmmmmk',
+  'kmgGGGGGGGGGgk',
+  'kmgGGyyGGyyGgk',
+  'kmmgggggggggmk',
+  'kdmmmmmmmmmmdk',
+  'kdmmmmmoommmdk',
+  'kddmmmmmmmmddk',
+  '.kDddddddddDk.',
+  '..kkkkkkkkkk..',
+];
+const MAGUS_H = 18;
+
 export const SPRITES: Record<string, PixelSprite> = {
   // ---- utility -------------------------------------------------------------
   px: { rows: ['w'], pal: { w: P.white } },
@@ -138,6 +169,16 @@ export const SPRITES: Record<string, PixelSprite> = {
   pursuer_windup: { rows: frame(doubled(PURPLE_BODY, 6), PURSUER_H), pal: { ...PURPLE_PAL, y: P.eyeHot } },
   /** Swing resolved: flattened slam. */
   pursuer_slam: { rows: frame(without(PURPLE_BODY, 6, 10), PURSUER_H), pal: PURPLE_PAL },
+  // ---- magus -----------------------------------------------------------------
+  magus_0: { rows: frame(MAGUS_BODY, MAGUS_H), pal: MAGUS_PAL },
+  magus_1: { rows: frame(without(MAGUS_BODY, 11), MAGUS_H), pal: MAGUS_PAL },
+  /** Casting: drawn up tall, eye slits and core white-hot. */
+  magus_cast: { rows: frame(doubled(MAGUS_BODY, 6), MAGUS_H), pal: { ...MAGUS_PAL, y: P.white, o: P.arcaneCore } },
+  magus_rune: {
+    rows: ['.kkk.', 'kBGgk', 'kGygk', 'kGGgk', 'kGygk', 'kgggk', '.kkk.'],
+    pal: { k: P.ink, B: P.brassLight, G: P.brass, g: P.brassDark, y: P.arcane },
+  },
+
   fx_alert: {
     rows: ['.k.', 'kwk', 'kwk', 'kwk', 'kwk', '.k.', 'kwk', '.k.'],
     pal: { k: P.ink, w: P.warning },
@@ -177,6 +218,16 @@ export const SPRITES: Record<string, PixelSprite> = {
   proj_hostile_1: {
     rows: ['..kkk..', '.korok.', 'koryrok', 'kryyyrk', 'koryrok', '.korok.', '..kkk..'],
     pal: { k: P.fireDark, r: P.fire, o: P.fireOrange, y: P.fireCore },
+  },
+
+  /** Magus orb: a crackling white-gold sphere — paler and spikier than the edge fireball. */
+  proj_orb_0: {
+    rows: ['...a...', '..kak..', '.kaWak.', 'aaWWWaa', '.kaWak.', '..kak..', '...a...'],
+    pal: { k: P.arcaneDeep, a: P.arcane, W: P.arcaneCore },
+  },
+  proj_orb_1: {
+    rows: ['a.....a', '.akkka.', '.kaWak.', '.kWWWk.', '.kaWak.', '.akkka.', 'a.....a'],
+    pal: { k: P.arcaneDeep, a: P.arcane, W: P.arcaneCore },
   },
 
   // ---- effects -----------------------------------------------------------------

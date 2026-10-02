@@ -120,7 +120,9 @@ object, and an event-wired HUD kept breaking across restarts).
 ### Entities
 
 - **`Player.ts`** — authoritative `x`, `y`, `hp`, move order, `rootCount`
-  (reference-counted movement lock), `lastHitAt`. Rendering lives in its
+  (reference-counted movement lock), `lastHitAt`, crowd control (`stunnedUntil`,
+  `slowUntil` / `slowFraction`, read through `isStunned` / `moveSpeed`) and the
+  frame's velocity `vx` / `vy`. Rendering lives in its
   `PlayerView` (`player.view`); the visual entry points (`applyAttackVisual`,
   `setCastVisual`, `setRangeRingState`, `playReleaseBurst`, `playCastRelease`,
   `showCancelTag`, `playPassivePulse`) only forward state to it — none can change
@@ -133,6 +135,9 @@ object, and an event-wired HUD kept breaking across restarts).
 - **`Target.ts`** — basic enemy (red slime): wanders, never attacks.
 - **`Pursuer.ts`** — melee brute (horned purple slime) with a two-state AI (§9); tells its `PursuerView`
   when a swing resolves and whether it landed.
+- **`Magus.ts`** — artillery caster (brass-masked slate slime) with a Xerath-style kit (§9).
+  Owns spacing, spell choice and charge states; the spells it places belong to
+  `HostileSpellSystem`.
 - **`AutoAttackMissile.ts`** — homing missile, spec-driven (speed, art, impact effect)
   so autos and the E bolt share one class. Carries a `targetSpawnId` guard.
 - **`Projectile.ts`** — straight-line projectile shared by Q, W and enemy fire.
@@ -153,6 +158,7 @@ object, and an event-wired HUD kept breaking across restarts).
 | `PassiveSystem.ts` | Stack count, shared expiry, attack-speed multiplier |
 | `WaveDirector.ts` | Stages, waves, finite rosters, breathers, stage tuning (HP / attack speed / fire), separation |
 | `EnemyProjectileSystem.ts` | Dodge pressure — fires only during a wave, cleared when a wave is cleared |
+| `HostileSpellSystem.ts` | Magus zones (line / circle) and orbs: resolves them at their deadlines, applies damage, stun and slow; cleared when a wave is cleared |
 | `ScoreSystem.ts` | Score, damage, kills by archetype |
 | `KitingMetrics.ts` | Six raw mechanical counters |
 
@@ -201,6 +207,7 @@ dt = min(delta, 50) / 1000
 clock.advance(dt * 1000);  now = clock.now
 
 scoring.tickSurvival(dt)       +5 pts/sec
+player.tickStatus(now)         stun / slow clock; a stun that just ended replays its held order
 passive.update(now)            expire stacks
 cooldowns.update(now)          refresh "now"
 cast.update(now)               ← resolves a Q/W/E cast, then replays buffered order
@@ -225,6 +232,7 @@ director.update(dt, now, ctx)      breather over → next wave/stage spawns; ene
 skillshot.update(dt, now, enemies) Q + W projectiles and collisions
 blink.update(dt)                   E bolts
 enemyProjectiles.update(dt, now)   wave cleared → clear all shots; else spawn, fly, collide
+hostileSpells.update(dt, now)      wave cleared → clear all; else resolve due zones, fly orbs
 
 end conditions → endRound('defeated' | 'completed')
 ```
@@ -662,6 +670,44 @@ WINDUP  rooted, telegraph ring contracts, 400ms
 Walking or blinking out during the telegraph makes the swing miss — that is the
 intended counterplay, and it is why E/Flash have a cast window at all.
 
+### Magus AI and hostile spells
+
+Six states; everything but `reposition` is a cast, and it never moves while casting.
+
+```
+REPOSITION  hold 360-480px from the player (re-planned every 220ms): walk in beyond
+            the band, back off inside it at 50% of player speed (fanning along a wall
+            if straight back is blocked), otherwise stand still
+            now >= nextCastAt → tryCast():
+              1. Rite  — enemiesRemaining === 1 and not used this life
+              2. Orb   — player within 300px
+              3. random among ready spells whose reach covers the player
+            a cast start sets nextCastAt = now + 1400ms and that spell's cooldown
+LANCE       900ms charge, aim tracks the player → castLine(), enter LOCK
+LOCK        rooted 450ms while the placed line counts down
+EYE         castCircle() on the player at once, then a 300ms cast pose
+ORB         300ms windup, aim tracks → fireOrb()
+RITE        rooted; 3 circles at 500 / 1300 / 2100ms, each landing 600ms later
+```
+
+Aim is the player's position plus `vx/vy × aimLeadMs` (0 by default).
+
+`HostileSpellSystem` owns every placed zone and orb, so a zone outlives its caster;
+only a spell still being charged (LANCE, ORB windup, remaining Rite shots) dies with
+it. A zone resolves exactly at its GameClock deadline: line = player centre within
+`halfWidth + radius` of the segment; circle = within `radius + player radius`, sweet
+spot = player centre within `centre.radius`. Orb stun =
+`lerp(250, 750, travelled / range)`. Like edge fire, everything pending is dropped
+the frame after a wave clear.
+
+**Crowd control.** `GameScene.stunPlayer()` stuns the player, cancels an uncommitted
+auto windup (`AttackSystem.interrupt()`, orders kept) and interrupts a cast window
+(`CastSystem.interrupt()`, cooldown refunded via `AbilityCooldowns.refund()`; its
+buffered order moves to the stun buffer). While stunned, `issueOrder()` holds
+move / attack / attack-move orders (latest wins), `canAct` blocks Q/W/E and Flash,
+`AttackSystem` starts no windup, and the Pursuer starts no swing. A slow only scales
+`Player.moveSpeed`.
+
 ### Enemy projectiles
 
 Spawned on a random arena edge, aimed at the player's position **at spawn**, with ±3°
@@ -885,6 +931,10 @@ edgeMargin 60. (Hit flash / death pop timings: `THEME.enemy`.)
 `PURSUER`: `baseHpMultiplier` 2.5, radius 26, `moveSpeedFraction` 0.55,
 `attackRange` 16, `attackDamage` 10, `windupMs` 400, `attackCooldownMs` 1200,
 `scoreMultiplier` 2.25.
+
+`MAGUS`: radius 20, `scoreMultiplier` 1.5, `moveSpeedFraction` 0.5, `spacing` 360-480,
+`spellGapMs` 1400, `aimLeadMs` 0; `lance` / `eye` / `orb` / `rite` blocks hold each
+spell's timings, sizes, damage and cooldown (see §9).
 
 `ENEMY_PROJECTILES` ramps (position set by `STAGES[n].enemyFire`): interval
 2600→700, speed 250→520, radius 10→16, damage 8→16, volley 1→1.5,

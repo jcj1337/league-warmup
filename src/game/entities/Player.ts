@@ -30,6 +30,20 @@ export class Player {
 
   private lastHitAt = -Infinity;
 
+  /**
+   * Crowd control, as GameClock deadlines. Only hostile spells apply it.
+   * A stun freezes movement and blocks every action (see GameScene); a slow
+   * scales move speed down.
+   */
+  private now = 0;
+  private stunnedUntil = 0;
+  private slowUntil = 0;
+  private slowFraction = 0;
+
+  /** Velocity this frame in px/s (0 while standing, rooted or stunned). Read by enemies that lead their aim. */
+  public vx = 0;
+  public vy = 0;
+
   readonly view: PlayerView;
   private readonly viewState: PlayerViewState;
 
@@ -39,7 +53,7 @@ export class Player {
     this.view = new PlayerView(scene, x, y);
     this.viewState = {
       x, y, radius: this.radius, moving: false, destX: null, destY: null,
-      hp: this.hp, maxHp: this.maxHp, rangeRadius: this.attackRingRadius(),
+      hp: this.hp, maxHp: this.maxHp, rangeRadius: this.attackRingRadius(), stunned: false, slowed: false,
     };
   }
 
@@ -48,7 +62,41 @@ export class Player {
   }
 
   get isMoving(): boolean {
-    return this.destX !== null && !this.isRooted;
+    return this.destX !== null && !this.isRooted && !this.isStunned;
+  }
+
+  get isStunned(): boolean {
+    return this.now < this.stunnedUntil;
+  }
+
+  get isSlowed(): boolean {
+    return this.now < this.slowUntil;
+  }
+
+  /** Base move speed, scaled down while slowed. */
+  get moveSpeed(): number {
+    return PLAYER.moveSpeed * (this.isSlowed ? 1 - this.slowFraction : 1);
+  }
+
+  /** Bring the status timers up to this frame. Called before anything reads them. */
+  tickStatus(nowMs: number): void {
+    this.now = nowMs;
+  }
+
+  /**
+   * Stun for `ms` from now. Overlapping stuns never shorten one another. The
+   * move order is kept: you resume walking when it ends.
+   */
+  stun(nowMs: number, ms: number): void {
+    this.now = nowMs;
+    this.stunnedUntil = Math.max(this.stunnedUntil, nowMs + ms);
+  }
+
+  /** Slow by `fraction` (0.4 = 40% slower) for `ms`. A weaker slow never overrides a stronger live one. */
+  slow(nowMs: number, fraction: number, ms: number): void {
+    this.now = nowMs;
+    if (!this.isSlowed || fraction >= this.slowFraction) this.slowFraction = fraction;
+    this.slowUntil = Math.max(this.slowUntil, nowMs + ms);
   }
 
   get isAlive(): boolean {
@@ -96,11 +144,14 @@ export class Player {
   }
 
   update(deltaSeconds: number): void {
-    if (!this.isRooted && this.destX !== null && this.destY !== null) {
+    this.vx = 0;
+    this.vy = 0;
+    if (this.isMoving && this.destX !== null && this.destY !== null) {
       const dx = this.destX - this.x;
       const dy = this.destY - this.y;
       const dist = Math.hypot(dx, dy);
-      const step = PLAYER.moveSpeed * deltaSeconds;
+      const speed = this.moveSpeed;
+      const step = speed * deltaSeconds;
 
       if (dist <= Math.max(step, PLAYER.arriveEpsilon)) {
         // Snap and clear the order so we come to a clean stop.
@@ -110,6 +161,8 @@ export class Player {
       } else {
         this.x += (dx / dist) * step;
         this.y += (dy / dist) * step;
+        this.vx = (dx / dist) * speed;
+        this.vy = (dy / dist) * speed;
       }
     }
 
@@ -120,6 +173,8 @@ export class Player {
     s.destX = this.destX;
     s.destY = this.destY;
     s.hp = this.hp;
+    s.stunned = this.isStunned;
+    s.slowed = this.isSlowed;
     // Re-read every frame so live-tuning ATTACK.range updates the ring.
     s.rangeRadius = this.attackRingRadius();
     this.view.sync(s, deltaSeconds);

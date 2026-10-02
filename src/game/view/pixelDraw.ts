@@ -31,6 +31,29 @@ export function dottedRing(
   }
 }
 
+/** A straight line of square pixel dots, `spacing` px apart, snapped to whole pixels. */
+export function dottedLine(
+  g: Phaser.GameObjects.Graphics,
+  x1: number,
+  y1: number,
+  x2: number,
+  y2: number,
+  color: number,
+  alpha: number,
+  dot = 3,
+  spacing = 8,
+): void {
+  const len = Math.hypot(x2 - x1, y2 - y1);
+  if (len <= 0 || alpha <= 0) return;
+  const n = Math.max(1, Math.floor(len / spacing));
+  const half = dot / 2;
+  g.fillStyle(color, Math.min(1, alpha));
+  for (let i = 0; i <= n; i++) {
+    const t = (i * spacing) / len;
+    g.fillRect(Math.round(x1 + (x2 - x1) * t - half), Math.round(y1 + (y2 - y1) * t - half), dot, dot);
+  }
+}
+
 /** A filled disc built from `cell`-sized squares — a chunky pixel orb. */
 export function pixelDisc(
   g: Phaser.GameObjects.Graphics,

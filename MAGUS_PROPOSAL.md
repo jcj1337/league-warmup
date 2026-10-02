@@ -1,6 +1,11 @@
 # Magus (Xerath-style Artillery Enemy) Proposal
 
-Status: **for discussion**. Written 2026-10-02. Nothing here is implemented yet.
+Status: **implemented** 2026-10-02 (see the README's Enemies section). The open questions
+were settled as: a real stun; an interrupted cast refunds its cooldown; `aimLeadMs` ships at
+0 (tunable live); edge fire unchanged on Magus waves; the Rite stays on "last enemy
+standing"; and a Pursuer can't start a swing on a stunned player. One change from the text
+below: the Orb is also in the random pool at range (not only inside 300px), so long-range
+stuns actually happen.
 
 ## Summary
 

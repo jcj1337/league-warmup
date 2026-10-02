@@ -228,6 +228,15 @@ export class AttackSystem {
     this.player.stop();
   }
 
+  /**
+   * Crowd control (stun). An uncommitted windup is lost and its cooldown
+   * refunded, like a move-cancel — but the orders survive, so attacking
+   * resumes the moment the stun ends.
+   */
+  interrupt(): void {
+    if (this.state === 'windup') this.cancelWindup();
+  }
+
   /** Hard cancel (round end, death). */
   cancel(): void {
     if (this.state === 'windup') this.cancelWindup();
@@ -299,7 +308,7 @@ export class AttackSystem {
         this.player.stop();
         this.chasing = false;
       }
-      if (this.state === 'idle') {
+      if (this.state === 'idle' && !this.player.isStunned) {
         this.beginWindup(target, nowMs);
       }
     } else if (this.state !== 'windup') {

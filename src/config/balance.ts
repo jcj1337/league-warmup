@@ -390,6 +390,66 @@ export const PURSUER = {
   scoreMultiplier: 2.25,
 } as const;
 
+/**
+ * The Magus: a fragile artillery caster with a Xerath-style kit. It keeps its
+ * distance and never moves while casting, and every spell is a telegraph you
+ * can read and walk out of. Its health is the basic enemy's (see STAGES), so
+ * once you reach it, it dies fast. Damage is flat, not stage-scaled, like
+ * PURSUER.attackDamage.
+ */
+export const MAGUS = {
+  radius: 20,
+  /** Kill score relative to a basic target. */
+  scoreMultiplier: 1.5,
+  /** Fraction of PLAYER.moveSpeed. Below 1, so you can always run it down. */
+  moveSpeedFraction: 0.5,
+  /**
+   * Centre-to-centre distance it holds from the player: just outside your autos,
+   * at the edge of your Q. It backs off inside `min` and walks in beyond `max`.
+   */
+  spacing: { min: 360, max: 480 },
+  /** How often it re-reads where to stand, so it reacts with a short, readable delay. */
+  replanMs: 220,
+  /** Quiet time after it arrives, before its first spell. */
+  openingDelayMs: 900,
+  /** Minimum gap between spell STARTS — one spell at a time, so zones never stack. */
+  spellGapMs: 1400,
+  /**
+   * Aim lead: it aims where you will be this many ms from now at your current
+   * velocity. 0 = where you are. Try 100-200 live (__balance.MAGUS.aimLeadMs)
+   * to make it punish running in straight lines.
+   */
+  aimLeadMs: 0,
+
+  /**
+   * Q — Lance. Rooted, it charges a line that tracks you, then LOCKS; the line
+   * lands `lockMs` later. The lock is your cue to sidestep.
+   */
+  lance: { chargeMs: 900, lockMs: 450, length: 520, halfWidth: 22, damage: 18, cooldownMs: 4500 },
+  /**
+   * W — Eye. A circle placed on you that lands after `delayMs`. Its centre
+   * (your centre inside `centreRadius`) hits harder and slows you.
+   */
+  eye: {
+    castMs: 300, delayMs: 700, range: 560, radius: 80, centreRadius: 26,
+    damage: 10, centreDamage: 18, slowFraction: 0.4, slowMs: 1000, cooldownMs: 6000,
+  },
+  /**
+   * E — Orb. A visible projectile that stuns the player on contact, longer the
+   * farther it flew (stunMinMs point-blank → stunMaxMs at full range). Inside
+   * `triggerRange` it is the Magus's first answer to being dived.
+   */
+  orb: {
+    windupMs: 300, triggerRange: 300, speed: 650, radius: 12, range: 520,
+    damage: 8, stunMinMs: 250, stunMaxMs: 750, cooldownMs: 7000,
+  },
+  /**
+   * R — Rite. Once per life, when it is the last enemy left in the wave: it
+   * roots itself and calls `shots` delayed circles onto you, one after another.
+   */
+  rite: { leadInMs: 500, shots: 3, intervalMs: 800, delayMs: 600, radius: 70, damage: 15 },
+} as const;
+
 // ============================================================================
 // THE RUN — stages and waves. Every progression knob lives in RUN and STAGES.
 // ============================================================================
@@ -429,6 +489,7 @@ export const RUN = {
 export interface WaveRoster {
   basic?: number;
   pursuer?: number;
+  magus?: number;
 }
 
 /**
@@ -438,6 +499,7 @@ export interface WaveRoster {
 export interface EnemyPips {
   basic: number;
   pursuer: number;
+  magus: number;
 }
 
 export interface StageDefinition {
@@ -460,7 +522,8 @@ export interface StageDefinition {
 /**
  * The stage table. A provisional first balance pass:
  *   - enemyPips: basic 1 / 2 / 3 pips across Stages 1-3 / 4-6 / 7-10 (capped at
- *     3), Pursuer always one more (2 / 3 / 4).
+ *     3), Pursuer always one more (2 / 3 / 4), Magus the same as basic — it is
+ *     dangerous at range and fragile once reached.
  *   - baseAttackCooldownMs: 700ms → 420ms in even steps, the old ramp's endpoints.
  *   - enemyFire: from the calm opening (0) to full strength (1).
  *   - waves: short early stages (a single wave each for 1-3), two waves for 4-6,
@@ -468,29 +531,33 @@ export interface StageDefinition {
  *     Bodies on the field are the main pressure: 3-4 enemies early, 4-5 mid,
  *     5-6 late. Pursuers arrive in Stage 2 and take a growing share, but late
  *     waves swing between basic-heavy crowds and Pursuer-heavy brawls rather
- *     than repeating one mixture.
+ *     than repeating one mixture. The Magus joins at Stage 5, at most one per
+ *     wave, taking a body's place so wave sizes are unchanged.
  */
 export const STAGES: StageDefinition[] = [
-  /* 1 */ { enemyPips: { basic: 1, pursuer: 2 }, baseAttackCooldownMs: 700, enemyFire: 0,
+  /* 1 */ { enemyPips: { basic: 1, pursuer: 2, magus: 1 }, baseAttackCooldownMs: 700, enemyFire: 0,
     waves: [{ basic: 3 }] },
-  /* 2 */ { enemyPips: { basic: 1, pursuer: 2 }, baseAttackCooldownMs: 669, enemyFire: 0.1,
+  /* 2 */ { enemyPips: { basic: 1, pursuer: 2, magus: 1 }, baseAttackCooldownMs: 669, enemyFire: 0.1,
     waves: [{ basic: 3, pursuer: 1 }] },
-  /* 3 */ { enemyPips: { basic: 1, pursuer: 2 }, baseAttackCooldownMs: 638, enemyFire: 0.2,
+  /* 3 */ { enemyPips: { basic: 1, pursuer: 2, magus: 1 }, baseAttackCooldownMs: 638, enemyFire: 0.2,
     waves: [{ basic: 2, pursuer: 2 }] },
-  /* 4 */ { enemyPips: { basic: 2, pursuer: 3 }, baseAttackCooldownMs: 607, enemyFire: 0.3,
+  /* 4 */ { enemyPips: { basic: 2, pursuer: 3, magus: 2 }, baseAttackCooldownMs: 607, enemyFire: 0.3,
     waves: [{ basic: 3, pursuer: 1 }, { basic: 3, pursuer: 2 }] },
-  /* 5 */ { enemyPips: { basic: 2, pursuer: 3 }, baseAttackCooldownMs: 576, enemyFire: 0.4,
-    waves: [{ basic: 2, pursuer: 2 }, { basic: 2, pursuer: 3 }] },
-  /* 6 */ { enemyPips: { basic: 2, pursuer: 3 }, baseAttackCooldownMs: 544, enemyFire: 0.5,
-    waves: [{ basic: 4, pursuer: 1 }, { basic: 2, pursuer: 3 }] },
-  /* 7 */ { enemyPips: { basic: 3, pursuer: 4 }, baseAttackCooldownMs: 513, enemyFire: 0.6,
-    waves: [{ basic: 3, pursuer: 2 }, { basic: 2, pursuer: 3 }, { basic: 4, pursuer: 2 }] },
-  /* 8 */ { enemyPips: { basic: 3, pursuer: 4 }, baseAttackCooldownMs: 482, enemyFire: 0.7,
-    waves: [{ basic: 2, pursuer: 3 }, { basic: 5, pursuer: 1 }, { basic: 3, pursuer: 3 }] },
-  /* 9 */ { enemyPips: { basic: 3, pursuer: 4 }, baseAttackCooldownMs: 451, enemyFire: 0.85,
-    waves: [{ basic: 4, pursuer: 2 }, { basic: 2, pursuer: 3 }, { basic: 3, pursuer: 3 }] },
-  /* 10 */ { enemyPips: { basic: 3, pursuer: 4 }, baseAttackCooldownMs: 420, enemyFire: 1,
-    waves: [{ basic: 4, pursuer: 2 }, { basic: 3, pursuer: 3 }, { basic: 5, pursuer: 1 }, { basic: 2, pursuer: 4 }] },
+  /* 5 */ { enemyPips: { basic: 2, pursuer: 3, magus: 2 }, baseAttackCooldownMs: 576, enemyFire: 0.4,
+    waves: [{ basic: 2, pursuer: 1, magus: 1 }, { basic: 2, pursuer: 3 }] },
+  /* 6 */ { enemyPips: { basic: 2, pursuer: 3, magus: 2 }, baseAttackCooldownMs: 544, enemyFire: 0.5,
+    waves: [{ basic: 4, pursuer: 1 }, { basic: 2, pursuer: 2, magus: 1 }] },
+  /* 7 */ { enemyPips: { basic: 3, pursuer: 4, magus: 3 }, baseAttackCooldownMs: 513, enemyFire: 0.6,
+    waves: [{ basic: 3, pursuer: 1, magus: 1 }, { basic: 2, pursuer: 3 }, { basic: 3, pursuer: 2, magus: 1 }] },
+  /* 8 */ { enemyPips: { basic: 3, pursuer: 4, magus: 3 }, baseAttackCooldownMs: 482, enemyFire: 0.7,
+    waves: [{ basic: 2, pursuer: 3 }, { basic: 4, pursuer: 1, magus: 1 }, { basic: 2, pursuer: 3, magus: 1 }] },
+  /* 9 */ { enemyPips: { basic: 3, pursuer: 4, magus: 3 }, baseAttackCooldownMs: 451, enemyFire: 0.85,
+    waves: [{ basic: 3, pursuer: 2, magus: 1 }, { basic: 2, pursuer: 3 }, { basic: 2, pursuer: 3, magus: 1 }] },
+  /* 10 */ { enemyPips: { basic: 3, pursuer: 4, magus: 3 }, baseAttackCooldownMs: 420, enemyFire: 1,
+    waves: [
+      { basic: 4, pursuer: 1, magus: 1 }, { basic: 3, pursuer: 3 },
+      { basic: 4, pursuer: 1, magus: 1 }, { basic: 2, pursuer: 3, magus: 1 },
+    ] },
 ];
 
 export const SCORE = {

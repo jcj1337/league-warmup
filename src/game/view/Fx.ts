@@ -280,6 +280,34 @@ export class Fx {
     this.ring(x, y, reach * 0.4, reach * 0.8, 180, THEME.pursuer.telegraph.color, 0.9, 3, angle - 0.8, angle + 0.8);
   }
 
+  /** A Magus Lance landing: a bright beam of pixel motes along the whole line. */
+  arcaneBeam(x: number, y: number, angle: number, length: number): void {
+    const f = THEME.spellZone.strike;
+    const steps = Math.floor(length / 14);
+    for (let i = 0; i <= steps; i++) {
+      const d = (i / steps) * length;
+      this.particle(TEX.px, x + Math.cos(angle) * d, y + Math.sin(angle) * d, {
+        life: f.ms * (0.7 + 0.3 * (i / steps)),
+        scale: 9,
+        scaleTo: 3,
+        alpha: 1,
+        alphaTo: 0,
+        tint: i % 2 ? f.color : f.core,
+      });
+    }
+    const endX = x + Math.cos(angle) * length;
+    const endY = y + Math.sin(angle) * length;
+    this.sparks(endX, endY, [f.core, f.color, f.deep], 8, 220, f.ms * 1.3, 3, angle, 1.4);
+  }
+
+  /** A Magus Eye / Rite circle landing. */
+  arcaneBurst(x: number, y: number, radius: number): void {
+    const f = THEME.spellZone.strike;
+    this.ring(x, y, radius * 0.3, radius, f.ms, f.core, 1, 6);
+    this.ring(x, y, radius * 0.8, radius * 1.15, f.ms * 1.2, f.color, 0.9, 3);
+    this.sparks(x, y, [f.core, f.color, f.deep], 12, 260, f.ms * 1.4, 3);
+  }
+
   trail(x: number, y: number, style: { color: number; life: number; size: number }): void {
     this.particle(TEX.px, x, y, {
       life: style.life,

@@ -13,9 +13,9 @@ test('pressure: wave sizes, staggered arrival + activation window, no premature 
     targets: window.__balance.TARGETS,
     playerRadius: window.__balance.PLAYER.radius,
   }));
-  const sizeOf = (w): number => (w.basic ?? 0) + (w.pursuer ?? 0);
+  const sizeOf = (w): number => (w.basic ?? 0) + (w.pursuer ?? 0) + (w.magus ?? 0);
   const countTypes = (list) => list.reduce((acc, t) => { acc[t] = (acc[t] ?? 0) + 1; return acc; }, {});
-  const sameCounts = (got, want) => ['basic', 'pursuer'].every((k) => (got[k] ?? 0) === (want[k] ?? 0));
+  const sameCounts = (got, want) => ['basic', 'pursuer', 'magus'].every((k) => (got[k] ?? 0) === (want[k] ?? 0));
   const waitFor = (fn, arg: any = null, timeout = 5000) =>
     page.waitForFunction(fn, arg, { timeout }).then(() => true).catch(() => false);
 
@@ -73,7 +73,7 @@ test('pressure: wave sizes, staggered arrival + activation window, no premature 
   inBand(0, 3, 3, 4) && inBand(3, 6, 4, 5) && inBand(6, 10, 5, 6)
     ? pass('early stages field 3-4 enemies, mid 4-5, late 5-6')
     : fail(`size bands: ${JSON.stringify(sizes)}`);
-  const lateMixes = new Set(cfg.stages.slice(6).flatMap((s) => s.waves.map((w) => `${w.basic ?? 0}B${w.pursuer ?? 0}P`)));
+  const lateMixes = new Set(cfg.stages.slice(6).flatMap((s) => s.waves.map((w) => `${w.basic ?? 0}B${w.pursuer ?? 0}P${w.magus ?? 0}M`)));
   lateMixes.size >= 3
     ? pass(`late waves vary their mixture (${[...lateMixes].join(', ')})`)
     : fail(`late waves repeat one mixture: ${[...lateMixes].join(', ')}`);

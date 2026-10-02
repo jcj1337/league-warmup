@@ -72,9 +72,10 @@ Later stages are harder, not faster. Each stage row sets:
 
 - **Waves** — how many (one early, four at Stage 10) and each one's roster. Stage 1 is
   basic targets only; Pursuers join in Stage 2 and take a growing share of later waves,
-  with mixed waves throughout.
+  with mixed waves throughout. The Magus joins in Stage 5, at most one per wave.
 - **Enemy pips** — how many hits each enemy takes: basic 1 / 2 / 3 pips across Stages
-  1–3 / 4–6 / 7–10 (capped at 3), Pursuer always one more (2 / 3 / 4).
+  1–3 / 4–6 / 7–10 (capped at 3), Pursuer always one more (2 / 3 / 4), Magus the same as
+  basic.
 - **Waves** size up: 3–4 enemies early, 4–5 mid, 5–6 late, with late waves swinging
   between basic-heavy crowds and Pursuer-heavy brawls.
 - **Enemy fire** — edge projectiles are an occasional positioning check, one shot at a
@@ -82,22 +83,22 @@ Later stages are harder, not faster. Each stage row sets:
 - **Your base attack speed** — the auto cycle shortens from 700ms (Stage 1) to 420ms
   (Stage 10). Time spent in a stage never speeds it up.
 
-B = basic target, P = Pursuer.
+B = basic target, P = Pursuer, M = Magus.
 
-| Stage | Waves | Wave 1 | Wave 2 | Wave 3 | Wave 4 | Pips (B / P) | Base auto cycle |
+| Stage | Waves | Wave 1 | Wave 2 | Wave 3 | Wave 4 | Pips (B / P / M) | Base auto cycle |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| 1 | 1 | 3B | — | — | — | 1 / 2 | 700ms |
-| 2 | 1 | 3B + 1P | — | — | — | 1 / 2 | 669ms |
-| 3 | 1 | 2B + 2P | — | — | — | 1 / 2 | 638ms |
-| 4 | 2 | 3B + 1P | 3B + 2P | — | — | 2 / 3 | 607ms |
-| 5 | 2 | 2B + 2P | 2B + 3P | — | — | 2 / 3 | 576ms |
-| 6 | 2 | 4B + 1P | 2B + 3P | — | — | 2 / 3 | 544ms |
-| 7 | 3 | 3B + 2P | 2B + 3P | 4B + 2P | — | 3 / 4 | 513ms |
-| 8 | 3 | 2B + 3P | 5B + 1P | 3B + 3P | — | 3 / 4 | 482ms |
-| 9 | 3 | 4B + 2P | 2B + 3P | 3B + 3P | — | 3 / 4 | 451ms |
-| 10 | 4 | 4B + 2P | 3B + 3P | 5B + 1P | 2B + 4P | 3 / 4 | 420ms |
+| 1 | 1 | 3B | — | — | — | 1 / 2 / 1 | 700ms |
+| 2 | 1 | 3B + 1P | — | — | — | 1 / 2 / 1 | 669ms |
+| 3 | 1 | 2B + 2P | — | — | — | 1 / 2 / 1 | 638ms |
+| 4 | 2 | 3B + 1P | 3B + 2P | — | — | 2 / 3 / 2 | 607ms |
+| 5 | 2 | 2B + 1P + 1M | 2B + 3P | — | — | 2 / 3 / 2 | 576ms |
+| 6 | 2 | 4B + 1P | 2B + 2P + 1M | — | — | 2 / 3 / 2 | 544ms |
+| 7 | 3 | 3B + 1P + 1M | 2B + 3P | 3B + 2P + 1M | — | 3 / 4 / 3 | 513ms |
+| 8 | 3 | 2B + 3P | 4B + 1P + 1M | 2B + 3P + 1M | — | 3 / 4 / 3 | 482ms |
+| 9 | 3 | 3B + 2P + 1M | 2B + 3P | 2B + 3P + 1M | — | 3 / 4 / 3 | 451ms |
+| 10 | 4 | 4B + 1P + 1M | 3B + 3P | 4B + 1P + 1M | 2B + 3P + 1M | 3 / 4 / 3 | 420ms |
 
-All of it is tuned in one place: `RUN` (enemy cap, breathers, arrival stagger), `TARGETS` / `PURSUER` (enemy behaviour) and `STAGES` (per-stage
+All of it is tuned in one place: `RUN` (enemy cap, breathers, arrival stagger), `TARGETS` / `PURSUER` / `MAGUS` (enemy behaviour) and `STAGES` (per-stage
 waves, `enemyPips`, attack speed, enemy fire) in [balance.ts](src/config/balance.ts). Add or
 remove waves in a stage by editing its `waves` list.
 
@@ -186,10 +187,36 @@ Orbwalk loop: `T` (or `A` + click) → auto fires → right-click away → repea
 | --- | --- | --- | --- |
 | Basic target | red slime with glowing eyes and a fanged snarl | 1 / 2 / 3 | always aggroed: walks toward you, then hovers 150–230px away inside your attack range, sidestepping around you; never attacks |
 | Pursuer | larger purple slime with devil horns | basic + 1 | walks you down at 55% of your speed; melee swing for **25** (a quarter of your HP) after a 400ms telegraph |
+| Magus | tall slate slime in a brass crest and mask, rune tablets floating at its sides | same as basic | artillery caster with a Xerath-style kit (below); holds 360–480px from you, backs off at 50% of your speed, never moves while casting |
 
 Pips come from the current stage's `enemyPips` row. Pursuers first appear in
-Stage 2. A Pursuer's swing only lands if you are still in reach when it
-resolves — walking or blinking out during the telegraph makes it miss.
+Stage 2, the Magus in Stage 5. A Pursuer's swing only lands if you are still in reach when it
+resolves — walking or blinking out during the telegraph makes it miss. A Pursuer
+never starts a swing while you are stunned.
+
+### The Magus
+
+One spell at a time, at least 1.4s apart. Every spell is a telegraph: a zone hits
+only if you are inside it at the instant it lands.
+
+| Spell | Telegraph | Hit |
+| --- | --- | --- |
+| Lance (Q) | rooted, it charges for 900ms while a dotted line tracks you; the line then **locks** as a red strip and lands 450ms later | 18 |
+| Eye (W) | a red circle placed on you, landing after 700ms | 10 on the edge; **18 + 40% slow for 1s** if your centre is in the white sweet spot |
+| Orb (E) | a 300ms windup, then a visible white-gold orb | 8 + a **stun** of 250ms (point-blank) to 750ms (full range) |
+| Rite (R) | once per life, when it is the **last enemy left in the wave**: rooted, it calls three 70px circles onto you, 800ms apart | 15 each |
+
+Inside 300px it answers with the Orb first. Otherwise it picks at random among the
+spells whose reach covers you. Spells it has already placed still land if it dies;
+a Lance still charging dies with it. Clearing the wave fizzles everything pending.
+All of it is tuned in `MAGUS` in [balance.ts](src/config/balance.ts), including
+`aimLeadMs` (0 = it aims where you are; raise it to make it lead your movement).
+
+**Stunned** means: no movement, no autos, no Q/W/E, and no Flash. An uncommitted
+auto windup is cancelled and a Q/W/E cast window is interrupted, both with their
+cooldowns refunded. Move / attack / attack-move orders issued while stunned are
+held (latest wins) and replay the instant it ends; `S` discards a held order. Your
+current move or attack order resumes afterwards.
 
 ## Pause & settings
 
@@ -216,6 +243,10 @@ stay out of the HUD strips and always draw beneath combatants.
 | You | friendly blue slime with a smile; its face turns toward where you move or aim |
 | Basic target | red slime, same family: angry brows, glowing yellow eyes, fangs |
 | Pursuer | bigger horned purple slime; rears up with white-hot eyes, flashes `!` and warms the ground red across its reach during the telegraph, then slams flat |
+| Magus | tall slate slime, brass crest and mask with burning eye slits, two brass rune tablets bobbing at its sides; casting, it draws up tall, the tablets rise and flare, and energy gathers over its crest |
+| Magus zones | red ground edged in gold dots: a strip filling from the Magus outward (Lance), a disc with a ring closing inward and a white sweet spot (Eye / Rite) |
+| Magus orb | white-gold crackling spark with a gold trail |
+| Stunned / slowed | gold stars circling over your head / a gold dotted ring at your feet |
 | W-marked enemy | violet rune bobbing overhead + magenta dotted ring at its feet (blinks as it lapses) |
 | Your auto | small cyan bolt with a short trail, homes |
 | Your Q | sharp teal bolt, finite range, stops on the first enemy |
@@ -236,13 +267,14 @@ is armed and flashes briefly after `T`.
 - `src/config/balance.ts` — gameplay tuning: the run (`RUN`, `STAGES`), ranges, timings, damage, keybinds, debug flags.
 - `src/config/theme.ts` — **the look**: `PALETTE` (raw colours) and `THEME` (sprite scale, depth bands, effect timings, HUD styling). Nothing in it affects gameplay.
 - `src/game/art/` — original pixel sprites as text pixel maps (`sprites.ts`), the 5×7 HUD font (`glyphs.ts`, `font.ts`), and `textures.ts`, which rasterises them once and owns every texture key. Real PNG art can later replace a sprite key-for-key.
-- `src/game/view/` — the read-only view layer: `PlayerView`, `EnemyView` / `PursuerView`, `ProjectileView` + `projectileArt`, `Fx` (pooled particles, dotted rings, damage numbers), `PixelBar` (health bars), `Battlefield` (painted ground + props) and `pixelDraw` helpers.
+- `src/game/view/` — the read-only view layer: `PlayerView`, `EnemyView` / `PursuerView`, `MagusView`, `HostileSpellView` (Magus zones), `ProjectileView` + `projectileArt`, `Fx` (pooled particles, dotted rings, damage numbers), `PixelBar` (health bars), `Battlefield` (painted ground + props) and `pixelDraw` helpers.
 - `src/game/scenes/GameScene.ts` — input wiring, per-frame orchestration, round lifecycle.
 - `src/game/scenes/UIScene.ts` — HUD, ability bar, pause menu, end screen (polls GameScene).
-- `src/game/entities/` — `Player`, `Enemy` (abstract base), `Target`, `Pursuer`, `Projectile`, `AutoAttackMissile`.
+- `src/game/entities/` — `Player` (incl. stun / slow status), `Enemy` (abstract base), `Target`, `Pursuer`, `Magus`, `Projectile`, `AutoAttackMissile`.
 - `src/game/systems/` — `GameClock`, `InputController`, `AttackSystem`, `CastSystem`,
   `AbilityCooldowns`, `SkillshotSystem` (Q+W), `BlinkSystem` (E+Flash), `PassiveSystem`,
-  `WaveDirector` (stages, waves, breathers), `EnemyProjectileSystem`, `ScoreSystem`, `KitingMetrics`.
+  `WaveDirector` (stages, waves, breathers), `EnemyProjectileSystem`, `HostileSpellSystem`
+  (Magus zones and orbs), `ScoreSystem`, `KitingMetrics`.
 - `src/game/ui/` — `AbilityBar`, `PassiveDisplay`, `PauseMenu`.
 
 See [TECHNICAL_REPORT.md](TECHNICAL_REPORT.md) for how the systems actually work.

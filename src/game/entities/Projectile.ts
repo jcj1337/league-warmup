@@ -54,6 +54,11 @@ export class Projectile {
     this.view = new ProjectileView(scene, cfg.art, cfg.x, cfg.y, cfg.angle, cfg.artScale ?? THEME.art.scale);
   }
 
+  /** How far it has flown so far. */
+  get distanceTravelled(): number {
+    return this.travelled;
+  }
+
   update(deltaSeconds: number): void {
     if (!this.alive) return;
 

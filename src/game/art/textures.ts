@@ -25,6 +25,11 @@ export const TEX = {
     slam: 'pursuer_slam',
     alert: 'fx_alert',
   },
+  magus: {
+    idle: ['magus_0', 'magus_1'],
+    cast: 'magus_cast',
+    rune: 'magus_rune',
+  },
   mark: 'fx_mark',
   proj: {
     auto: 'proj_auto',
@@ -32,6 +37,7 @@ export const TEX = {
     w: 'proj_w',
     e: 'proj_e',
     hostile: ['proj_hostile_0', 'proj_hostile_1'],
+    orb: ['proj_orb_0', 'proj_orb_1'],
   },
   fx: {
     flashStar: 'fx_flash_star',

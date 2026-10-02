@@ -10,6 +10,7 @@ import {
 import { Enemy, type EnemyArchetype, type EnemyContext } from '../entities/Enemy';
 import { Target } from '../entities/Target';
 import { Pursuer } from '../entities/Pursuer';
+import { Magus } from '../entities/Magus';
 import type { GameClock } from './GameClock';
 import type { AttackPacing } from './AttackSystem';
 import type { EnemyFirePressure } from './EnemyProjectileSystem';
@@ -34,6 +35,11 @@ const ARCHETYPES: Record<EnemyArchetype, ArchetypeSpec> = {
     create: (scene, clock, x, y, pips) => new Pursuer(scene, clock, x, y, pips),
     // Pursuers walk you down, so they get a wider berth on spawn.
     minSpawnDistance: TARGETS.minSpawnDistanceFromPlayer + 120,
+  },
+  magus: {
+    create: (scene, clock, x, y, pips) => new Magus(scene, clock, x, y, pips),
+    // An artillery caster: it arrives roughly where it wants to stand.
+    minSpawnDistance: TARGETS.minSpawnDistanceFromPlayer + 160,
   },
 };
 

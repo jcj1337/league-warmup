@@ -89,7 +89,9 @@ export class Pursuer extends Enemy {
       const m = ARENA.padding + this.radius;
       this.x = Phaser.Math.Clamp(this.x, m, ARENA.width - m);
       this.y = Phaser.Math.Clamp(this.y, m, ARENA.height - m);
-    } else if (nowMs >= this.nextAttackAt) {
+    } else if (nowMs >= this.nextAttackAt && !ctx.player.stunned) {
+      // Never starts a swing on a stunned player: a Magus stun must not turn
+      // into a guaranteed hit you had no way to walk out of.
       this.beginSwing(nowMs);
       this.publishPose(nowMs, reach, false);
     }
