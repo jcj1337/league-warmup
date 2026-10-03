@@ -207,6 +207,17 @@ test('magus: roster + pips, spacing, Lance / Eye / Orb / Rite, stun rules, zones
   await page.mouse.click(640, 200, { button: 'right' });
   const out = (await watch(cfg.magus.eye.delayMs + 100)).at(-1);
   out.hp === 100 ? pass('walking out of the circle in time takes nothing') : fail(`walked out, hp ${out.hp}`);
+  // Reactable: dead centre when it goes down, a human reaction (250ms) later you start walking, and you're out.
+  await calm();
+  await place([{ type: 'magus', x: 1040, y: 360 }]);
+  await castNow('eye');
+  await page.waitForFunction(() => window.__warmup.scene.getScene('GameScene').hostileSpells.zones.length > 0, null, { timeout: 3000 });
+  await watch(250);
+  await page.mouse.click(640, 120, { button: 'right' });
+  const reacted = (await watch(cfg.magus.eye.delayMs)).at(-1);
+  reacted.hp === 100
+    ? pass(`reactable: from dead centre, starting to walk 250ms after it goes down still clears it (${cfg.magus.eye.delayMs}ms delay)`)
+    : fail(`reacted late from the centre: hp ${reacted.hp}`);
 
   // === 5. Orb and the stun ===================================================
   // === 4b. It aims where you are heading =====================================
@@ -321,6 +332,45 @@ test('magus: roster + pips, spacing, Lance / Eye / Orb / Rite, stun rules, zones
       ? pass(`it connects: ${cfg.magus.orb.damage} damage and a stun`)
       : fail(`orb hit: ${JSON.stringify(hit ?? orb.at(-1))}`);
   }
+  // The aim line: dotted while it tracks, a locked strip for the last lockMs.
+  await calm(640, 250);
+  await place([{ type: 'magus', x: 900, y: 360 }]);
+  /** Run down the arena; at the lock, optionally reverse. Reports the aim line and whether the orb hit. */
+  const orbRun = (reverse) => page.evaluate((reverse) => new Promise<any>((res) => {
+    const g = window.__warmup.scene.getScene('GameScene');
+    const m = g.director.enemies[0];
+    g.player.moveTo(640, 700);
+    m.readyAt.lance = m.readyAt.eye = Number.POSITIVE_INFINITY;
+    m.readyAt.orb = 0; m.nextCastAt = 0;
+    const tracking = []; const locked = []; let reversed = false; let fired = false;
+    const t0 = g.clock.now;
+    const tick = () => {
+      const v = m.view.orbAim;
+      if (m.state === 'orb' && v.visible) (v.locked ? locked : tracking).push(v.angle);
+      if (reverse && v.locked && !reversed) { reversed = true; g.player.moveTo(640, 60); }
+      if (g.hostileSpells.orbCount > 0) fired = true;
+      const done = g.player.isStunned || (fired && g.hostileSpells.orbCount === 0) || g.clock.now - t0 > 3000;
+      if (done) res({ tracking, locked, stunned: g.player.isStunned, fired });
+      else requestAnimationFrame(tick);
+    };
+    tick();
+  }), reverse);
+  const straight = await orbRun(false);
+  {
+    const lockFrames = straight.locked.length;
+    new Set(straight.tracking.map((a) => a.toFixed(4))).size > 1 && lockFrames > 3 && new Set(straight.locked.map((a) => a.toFixed(6))).size === 1
+      ? pass(`the Orb windup shows an aim line that tracks a runner, then holds still for the lock (${lockFrames} locked frames)`)
+      : fail(`orb aim: ${JSON.stringify({ tracking: straight.tracking.length, locked: straight.locked })}`);
+    straight.stunned
+      ? pass('keep running straight through the lock and the Orb catches you')
+      : fail(`straight runner not hit: ${JSON.stringify(straight)}`);
+  }
+  await calm(640, 250);
+  await place([{ type: 'magus', x: 900, y: 360 }]);
+  const juke = await orbRun(true);
+  juke.fired && !juke.stunned
+    ? pass('reverse when the aim locks and the Orb misses: reactable, not a guess')
+    : fail(`orb juke: ${JSON.stringify({ fired: juke.fired, stunned: juke.stunned })}`);
   const stunLen = orb.find((f) => f.stunned)?.stunLeft ?? 0;
   {
     // Fired from ~240px out: about a third of the way up the stun ramp.

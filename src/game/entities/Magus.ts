@@ -17,7 +17,7 @@ import type { GameClock } from '../systems/GameClock';
  *   lance      — charging: the line tracks you
  *   lock       — the line is placed and about to land; still rooted
  *   eye        — targeting: a reticle tracks where the circle will land, then it goes down
- *   orb        — windup; the orb leaves at the end
+ *   orb        — windup: an aim line tracks you, locks for the last MAGUS.orb.lockMs, then the orb leaves
  *   rite       — the last stand: rooted, calling circles down one after another
  */
 export type MagusState = 'reposition' | 'lance' | 'lock' | 'eye' | 'orb' | 'rite';
@@ -122,8 +122,13 @@ export class Magus extends Caster {
       }
 
       case 'orb': {
-        const aim = this.aimPoint(ctx, this.orbFlightMs(ctx));
-        this.aimAngle = Math.atan2(aim.y - this.y, aim.x - this.x);
+        // The aim tracks where you're heading, then holds still for the lock.
+        // It leads by the time to impact: the rest of the windup plus the flight.
+        if (!this.orbLocked(nowMs)) {
+          const untilFire = Math.max(0, this.stateEndsAt - nowMs);
+          const aim = this.aimPoint(ctx, untilFire + this.orbFlightMs(ctx, untilFire), MAGUS.orb.aimLead);
+          this.aimAngle = Math.atan2(aim.y - this.y, aim.x - this.x);
+        }
         if (nowMs >= this.stateEndsAt) {
           const O = MAGUS.orb;
           ctx.spells.fireOrb({
@@ -252,6 +257,11 @@ export class Magus extends Caster {
     this.stateEndsAt = nowMs + durationMs;
   }
 
+  /** True through the last MAGUS.orb.lockMs of the Orb windup: its aim no longer moves. Read by the view. */
+  orbLocked(nowMs: number): boolean {
+    return this.state === 'orb' && this.stateEndsAt - nowMs <= MAGUS.orb.lockMs;
+  }
+
   /** Where the Eye would go down now: led by its delay, clamped to its reach. */
   private eyeSpot(ctx: EnemyContext): { x: number; y: number } {
     const E = MAGUS.eye;
@@ -261,10 +271,13 @@ export class Magus extends Caster {
     return { x: this.x + Math.cos(angle) * reach, y: this.y + Math.sin(angle) * reach };
   }
 
-  /** How long the Orb would take to reach the player (one refinement toward where they're heading). */
-  private orbFlightMs(ctx: EnemyContext): number {
+  /**
+   * How long the Orb, fired `afterMs` from now, would take to reach the player
+   * (one refinement toward where they're heading).
+   */
+  private orbFlightMs(ctx: EnemyContext, afterMs = 0): number {
     const first = (Math.hypot(ctx.player.x - this.x, ctx.player.y - this.y) / this.orbSpeed) * 1000;
-    const ahead = this.aimPoint(ctx, first);
+    const ahead = this.aimPoint(ctx, afterMs + first, MAGUS.orb.aimLead);
     return (Math.hypot(ahead.x - this.x, ahead.y - this.y) / this.orbSpeed) * 1000;
   }
 }

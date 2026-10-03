@@ -298,16 +298,18 @@ above). Tuned in `TARGETS.spit`, `PURSUER.dash` and `DIFFICULTY` in
 One spell at a time, at least 1.4s apart. Every spell is a telegraph: a zone hits
 only if you are inside it at the instant it lands. Like a real Xerath, it **aims where
 you're heading**: where you'd be when the spell lands at your current velocity
-(`MAGUS.aimLead`, 85% of the way). Running in a straight line walks you into it; change
-direction or stop to dodge. Each cast also aims at a **random spot near** that point
+(`MAGUS.aimLead`, 85% of the way; the Orb leads all the way). Running in a straight line
+walks you into it; change direction or stop to dodge. The Eye and the Orb are built to be
+**reacted to**: each shows you where it will land with enough time to step out once you
+see it, so you don't have to dodge pre-emptively. Each cast also aims at a **random spot near** that point
 (within 50px, or 20px for the Orb; `MAGUS.aimSpreadPx`), rolled once per cast so the
 Lance line and the Eye reticle still show exactly where it will land.
 
 | Spell | Telegraph | Hit |
 | --- | --- | --- |
 | Lance (Q) | rooted, it charges for 900ms while a dotted line tracks where you're heading; the line then **locks** as a red strip (60px wide) and lands 450ms later | 18 |
-| Eye (W) | rooted for 400ms while a reticle tracks where you're heading; then a red circle (radius 95) goes down there, landing after 700ms | 10 on the edge; **18 + 40% slow for 1s** if your centre is in the white sweet spot (radius 32) |
-| Orb (E) | a 300ms windup, then a visible white-gold orb (520px/s, 420px range) | 8 + a **stun** of 250ms (point-blank) to 750ms (full range) |
+| Eye (W) | rooted for 550ms while a reticle tracks where you're heading; then a red circle (radius 95) goes down there, landing after **1s**, with its ring closing in over that second | 10 on the edge; **18 + 40% slow for 1s** if your centre is in the white sweet spot (radius 32) |
+| Orb (E) | a 650ms windup: a dotted aim line (the orb's full range) tracks where you're heading, then **locks** as a red strip for the last 250ms; then a visible white-gold orb (520px/s, 420px range) flies down it | 8 + a **stun** of 250ms (point-blank) to 750ms (full range) |
 | Rite (R) | once per life, when it is the **last enemy left in the wave**: rooted, it calls three 70px circles onto you, 800ms apart | 15 each |
 
 Inside 300px it answers with the Orb first. Otherwise it picks at random among the
@@ -372,7 +374,7 @@ stay out of the HUD strips and always draw beneath combatants.
 | Pursuer dash | crouches low with white-hot eyes while a red strip shows its locked path, then lunges trailing purple afterimages |
 | Magus | tall slate slime, brass crest and mask with burning eye slits, two brass rune tablets bobbing at its sides; casting, it draws up tall, the tablets rise and flare, and energy gathers over its crest |
 | Magus zones | red ground edged in gold dots: a strip filling from the Magus outward (Lance), a disc with a ring closing inward and a white sweet spot (Eye / Rite) |
-| Magus orb | white-gold crackling spark with a gold trail |
+| Magus orb | windup: a gold dotted aim line, turning into a red strip with white dotted edges when it locks; in flight, a white-gold crackling spark with a gold trail |
 | Sovereign | indigo slime, silver diadem with a tall spike, pale lavender eyes, two dark orbs circling; casting, she draws up tall and the orbs spin fast |
 | Dark Sphere | a near-black orb with a pale rim on the ground, gently pulsing; it flickers through its last second |
 | Scatter | a red wedge from her edged in lavender, plus a red strip from each sphere it will fling |

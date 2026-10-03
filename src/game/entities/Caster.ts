@@ -42,8 +42,8 @@ export abstract class Caster extends Enemy {
    * current velocity, `aimLead` of the way, plus this cast's random offset,
    * kept in the arena.
    */
-  protected aimPoint(ctx: EnemyContext, impactMs: number): { x: number; y: number } {
-    const lead = (this.tuning.aimLead * impactMs) / 1000;
+  protected aimPoint(ctx: EnemyContext, impactMs: number, leadFraction = this.tuning.aimLead): { x: number; y: number } {
+    const lead = (leadFraction * impactMs) / 1000;
     const m = ARENA.padding + ctx.player.radius;
     return {
       x: Phaser.Math.Clamp(ctx.player.x + ctx.player.vx * lead + this.aimOffset.x, m, ARENA.width - m),

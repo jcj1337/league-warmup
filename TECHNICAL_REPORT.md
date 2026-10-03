@@ -712,8 +712,9 @@ REPOSITION  hold 360-480px from the player (re-planned every 220ms): walk in bey
             a cast start sets nextCastAt = now + 1400ms and that spell's cooldown
 LANCE       900ms charge, aim tracks (led by the 450ms lock) → castLine(), enter LOCK
 LOCK        rooted 450ms while the placed line counts down
-EYE         400ms targeting: eyeTarget (led by the 700ms delay) tracks, then castCircle() there
-ORB         300ms windup, aim tracks (led by the orb's flight time) → fireOrb()
+EYE         550ms targeting: eyeTarget (led by the 1000ms delay) tracks, then castCircle() there
+ORB         650ms windup, aim tracks (led fully, orb.aimLead 1, by the rest of the windup +
+            the flight time); frozen for the last 250ms (orbLocked) → fireOrb()
 RITE        rooted; 3 circles at 500 / 1300 / 2100ms, each led by its 600ms delay
 ```
 

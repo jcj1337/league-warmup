@@ -310,6 +310,11 @@ export const THEME = {
     castGlow: { color: P.arcane, core: P.arcaneCore, liftPx: 40, radius: 7 },
     /** Lance charge: a dotted line that tracks you and reaches full length as the charge completes. */
     lanceCharge: { color: P.arcane, alphaStart: 0.25, alphaEnd: 0.75 },
+    /**
+     * Orb windup: a dotted aim line (orb range long) that tracks you, then turns
+     * into a red strip with bright edges when it locks.
+     */
+    orbAim: { color: P.arcane, alphaStart: 0.25, alphaEnd: 0.6, lockFill: P.warning, lockFillAlpha: 0.22, lockEdge: P.arcaneCore },
   },
 
   sovereign: {

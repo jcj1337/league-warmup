@@ -16,6 +16,8 @@ import { dottedLine, dottedRing, pixelDisc } from './pixelDraw';
  *   - the Lance charge: a dotted line that tracks you and stretches to full
  *     length as the charge completes (the locked line is drawn by the
  *     HostileSpellView once it is placed)
+ *   - the Orb windup: a dotted aim line that tracks you, then a red strip
+ *     once the aim locks
  *
  * Reads the entity only; never changes gameplay.
  */
@@ -26,6 +28,8 @@ export class MagusView extends EnemyView {
   readonly charge = { visible: false, length: 0, angle: 0 };
   /** Plain readout of the Eye targeting reticle, for inspection. */
   readonly reticle = { visible: false, x: 0, y: 0 };
+  /** Plain readout of the Orb aim line, for inspection. */
+  readonly orbAim = { visible: false, locked: false, angle: 0 };
 
   constructor(scene: Phaser.Scene, private readonly magus: Magus, art: EnemyArt) {
     super(scene, magus, art);
@@ -60,6 +64,7 @@ export class MagusView extends EnemyView {
     if (!casting) {
       this.charge.visible = false;
       this.reticle.visible = false;
+      this.orbAim.visible = false;
       return;
     }
 
@@ -95,6 +100,35 @@ export class MagusView extends EnemyView {
     } else {
       this.charge.visible = false;
     }
+
+    // Orb windup: the aim line tracks you, then locks into a red strip.
+    if (m.state === 'orb') {
+      const A = T.orbAim;
+      const O = MAGUS.orb;
+      const locked = m.orbLocked(nowMs);
+      const dx = Math.cos(m.aimAngle);
+      const dy = Math.sin(m.aimAngle);
+      const sx = m.x + dx * m.radius;
+      const sy = m.y + dy * m.radius;
+      const ex = sx + dx * O.range;
+      const ey = sy + dy * O.range;
+      if (locked) {
+        const nx = -dy * O.radius;
+        const ny = dx * O.radius;
+        this.overlay.fillStyle(A.lockFill, A.lockFillAlpha);
+        this.overlay.fillPoints([
+          { x: sx + nx, y: sy + ny }, { x: ex + nx, y: ey + ny },
+          { x: ex - nx, y: ey - ny }, { x: sx - nx, y: sy - ny },
+        ], true);
+        dottedLine(this.overlay, sx + nx, sy + ny, ex + nx, ey + ny, A.lockEdge, 0.9);
+        dottedLine(this.overlay, sx - nx, sy - ny, ex - nx, ey - ny, A.lockEdge, 0.9);
+      } else {
+        dottedLine(this.overlay, sx, sy, ex, ey, A.color, Phaser.Math.Linear(A.alphaStart, A.alphaEnd, progress), 3, 10);
+      }
+      Object.assign(this.orbAim, { visible: true, locked, angle: m.aimAngle });
+    } else {
+      this.orbAim.visible = false;
+    }
   }
 
   protected override hideExtras(): void {
@@ -102,6 +136,7 @@ export class MagusView extends EnemyView {
     this.over.clear();
     this.charge.visible = false;
     this.reticle.visible = false;
+    this.orbAim.visible = false;
   }
 
   override destroy(): void {

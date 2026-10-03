@@ -498,19 +498,24 @@ export const MAGUS = {
   /**
    * W — Eye. Rooted for `castMs`, a reticle tracks where it will land; then the
    * circle goes down there and lands `delayMs` later. Its centre (your centre
-   * inside `centreRadius`) hits harder and slows you.
+   * inside `centreRadius`) hits harder and slows you. The delay is long enough
+   * to walk out after seeing it go down (≈ radius / your speed + reaction time):
+   * a reaction check, not a guess.
    */
   eye: {
-    castMs: 400, delayMs: 700, range: 560, radius: 95, centreRadius: 32,
+    castMs: 550, delayMs: 1000, range: 560, radius: 95, centreRadius: 32,
     damage: 10, centreDamage: 18, slowFraction: 0.4, slowMs: 1000, cooldownMs: 6000,
   },
   /**
    * E — Orb. A visible projectile that stuns the player on contact, longer the
    * farther it flew (stunMinMs point-blank → stunMaxMs at full range). Inside
-   * `triggerRange` it is the Magus's first answer to being dived.
+   * `triggerRange` it is the Magus's first answer to being dived. Through the
+   * `windupMs` an aim line tracks where you're heading; it LOCKS for the last
+   * `lockMs` — sidestep then, as with the Lance. A thin shot, so it leads fully
+   * (`aimLead` 1, not the Magus's 0.85): keep running straight and it hits.
    */
   orb: {
-    windupMs: 300, triggerRange: 300, speed: 520, radius: 12, range: 420,
+    windupMs: 650, lockMs: 250, aimLead: 1, triggerRange: 300, speed: 520, radius: 12, range: 420,
     damage: 8, stunMinMs: 250, stunMaxMs: 750, cooldownMs: 7000,
   },
   /**
@@ -661,7 +666,7 @@ export const DIFFICULTY = {
  * Bumped whenever tuning changes how hard a run is. The run log tags each run
  * with it, and its summary only compares runs from the same version.
  */
-export const BALANCE_VERSION = 9;
+export const BALANCE_VERSION = 10;
 
 /**
  * The player's level, League style: kills give XP (ENEMIES[id].xp) and each
