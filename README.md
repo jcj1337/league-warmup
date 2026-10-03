@@ -265,7 +265,7 @@ Orbwalk loop: `T` (or `A` + click) → auto fires → right-click away → repea
 | --- | --- | --- | --- |
 | Basic target | red slime with glowing eyes and a fanged snarl | 1 / 2 / 3 | always aggroed: walks toward you, then hovers 150–230px away inside your attack range, sidestepping around you. From Stage 2 it **spits** (below) |
 | Pursuer | larger purple slime with devil horns | basic + 1 | walks you down at 55% of your speed; melee swing for **25** (a quarter of your HP) after a 400ms telegraph. From Stage 4 it **dashes** (below) |
-| Magus | tall slate slime in a brass crest and mask, rune tablets floating at its sides | same as basic | artillery caster with a Xerath-style kit (below); holds 360–480px from you, backs off at 50% of your speed, never moves while casting |
+| Magus | tall slate slime in a brass crest and mask, rune tablets floating at its sides | same as basic | artillery caster with a Xerath-style kit (below); holds 360–480px from you, backs off at 60% of your speed, never moves while casting |
 
 Pips follow each mob's `ENEMIES` pip ramp (see above). Pursuers first appear in
 Stage 2, the Magus in Stage 5. A Pursuer's swing only lands if you are still in reach when it
@@ -283,8 +283,8 @@ that many are ever winding up at once and a crowd takes turns. A basic killed
 mid-windup frees its token.
 
 **Dash** (Pursuers, Stage 4+). From 110–240px away (outside its swing reach), never
-at a stunned player: it crouches for 350ms while its path — **locked** at the start —
-glows red on the ground, then lunges 170px in 140ms, stopping early once you are in
+at a stunned player: it crouches for 450ms while its path — **locked** at the start —
+glows red on the ground, then lunges 160px over 280ms, stopping early once you are in
 reach. The dash deals no damage; it closes the gap so the normal 400ms swing becomes a
 threat. Sidestep the strip and it lunges past you. Cooldown 5s from the start of a dash.
 
@@ -295,12 +295,15 @@ above). Tuned in `TARGETS.spit`, `PURSUER.dash` and `DIFFICULTY` in
 ### The Magus
 
 One spell at a time, at least 1.4s apart. Every spell is a telegraph: a zone hits
-only if you are inside it at the instant it lands.
+only if you are inside it at the instant it lands. Like a real Xerath, it **aims where
+you're heading**: where you'd be when the spell lands at your current velocity
+(`MAGUS.aimLead`, 85% of the way). Running in a straight line walks you into it; change
+direction or stop to dodge.
 
 | Spell | Telegraph | Hit |
 | --- | --- | --- |
-| Lance (Q) | rooted, it charges for 900ms while a dotted line tracks you; the line then **locks** as a red strip and lands 450ms later | 18 |
-| Eye (W) | a red circle placed on you, landing after 700ms | 10 on the edge; **18 + 40% slow for 1s** if your centre is in the white sweet spot |
+| Lance (Q) | rooted, it charges for 900ms while a dotted line tracks where you're heading; the line then **locks** as a red strip (60px wide) and lands 450ms later | 18 |
+| Eye (W) | rooted for 400ms while a reticle tracks where you're heading; then a red circle (radius 95) goes down there, landing after 700ms | 10 on the edge; **18 + 40% slow for 1s** if your centre is in the white sweet spot (radius 32) |
 | Orb (E) | a 300ms windup, then a visible white-gold orb | 8 + a **stun** of 250ms (point-blank) to 750ms (full range) |
 | Rite (R) | once per life, when it is the **last enemy left in the wave**: rooted, it calls three 70px circles onto you, 800ms apart | 15 each |
 
@@ -308,7 +311,7 @@ Inside 300px it answers with the Orb first. Otherwise it picks at random among t
 spells whose reach covers you. Spells it has already placed still land if it dies;
 a Lance still charging dies with it. Clearing the wave fizzles everything pending.
 All of it is tuned in `MAGUS` in [balance.ts](src/config/balance.ts), including
-`aimLeadMs` (0 = it aims where you are; raise it to make it lead your movement).
+`aimLead` (0 = it aims where you are now; 1 = exactly where you'll be).
 
 **Stunned** means: no movement, no autos, no Q/W/E, and no Flash. An uncommitted
 auto windup is cancelled and a Q/W/E cast window is interrupted, both with their

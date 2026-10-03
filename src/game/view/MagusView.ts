@@ -4,7 +4,7 @@ import { THEME, actorDepth } from '../../config/theme';
 import { TEX } from '../art/textures';
 import type { Magus } from '../entities/Magus';
 import { EnemyView, type EnemyArt } from './EnemyView';
-import { dottedLine, pixelDisc } from './pixelDraw';
+import { dottedLine, dottedRing, pixelDisc } from './pixelDraw';
 
 /**
  * The Magus (brass-masked slate slime). On top of the shared enemy view it
@@ -24,6 +24,8 @@ export class MagusView extends EnemyView {
   private readonly over: Phaser.GameObjects.Graphics;
   /** Plain readout of the Lance charge line, for inspection. */
   readonly charge = { visible: false, length: 0, angle: 0 };
+  /** Plain readout of the Eye targeting reticle, for inspection. */
+  readonly reticle = { visible: false, x: 0, y: 0 };
 
   constructor(scene: Phaser.Scene, private readonly magus: Magus, art: EnemyArt) {
     super(scene, magus, art);
@@ -57,7 +59,22 @@ export class MagusView extends EnemyView {
     this.over.clear();
     if (!casting) {
       this.charge.visible = false;
+      this.reticle.visible = false;
       return;
+    }
+
+    // Eye targeting: a reticle closing onto where the circle will go down.
+    if (m.state === 'eye' && m.eyeTarget) {
+      const C = T.lanceCharge;
+      const { x, y } = m.eyeTarget;
+      const r = MAGUS.eye.radius * Phaser.Math.Linear(1.35, 1, progress);
+      const alpha = Phaser.Math.Linear(C.alphaStart, C.alphaEnd, progress);
+      dottedRing(this.overlay, x, y, r, C.color, alpha, 3);
+      dottedLine(this.overlay, x - 10, y, x + 10, y, C.color, alpha, 3, 5);
+      dottedLine(this.overlay, x, y - 10, x, y + 10, C.color, alpha, 3, 5);
+      Object.assign(this.reticle, { visible: true, x, y });
+    } else {
+      this.reticle.visible = false;
     }
 
     // Energy gathering over the crest.
@@ -84,6 +101,7 @@ export class MagusView extends EnemyView {
     for (const rune of this.runes) rune.setVisible(false);
     this.over.clear();
     this.charge.visible = false;
+    this.reticle.visible = false;
   }
 
   override destroy(): void {

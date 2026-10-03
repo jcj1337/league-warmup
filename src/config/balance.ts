@@ -19,8 +19,11 @@ export const ARENA = {
 export const PLAYER = {
   radius: 14,
   maxHp: 100,
-  /** League-ish move speed (a marksman is ~330 units/s). */
-  moveSpeed: 340,
+  /**
+   * Move speed. Lowered from 340 so fights read closer to League's pace;
+   * Pursuers move at a fraction of this, so they slowed with it.
+   */
+  moveSpeed: 280,
   /** Snap to the destination when this close, so we never jitter around it. */
   arriveEpsilon: 3,
   /** Brief i-frames after taking a hit so one projectile can't multi-tick. */
@@ -435,9 +438,9 @@ export const PURSUER = {
     /** Only dashes from this centre-to-centre distance band, and never at a stunned player. */
     minRange: 110,
     maxRange: 240,
-    windupMs: 350,
-    distance: 170,
-    durationMs: 140,
+    windupMs: 450,
+    distance: 160,
+    durationMs: 280,
     /** Measured from the start of one dash to the next. */
     cooldownMs: 5000,
   },
@@ -454,8 +457,8 @@ export const MAGUS = {
   radius: 20,
   /** Kill score relative to a basic target. */
   scoreMultiplier: 1.5,
-  /** Fraction of PLAYER.moveSpeed. Below 1, so you can always run it down. */
-  moveSpeedFraction: 0.5,
+  /** Fraction of PLAYER.moveSpeed (≈168px/s). Below 1, so you can always run it down. */
+  moveSpeedFraction: 0.6,
   /**
    * Centre-to-centre distance it holds from the player: just outside your autos,
    * at the edge of your Q. It backs off inside `min` and walks in beyond `max`.
@@ -468,27 +471,30 @@ export const MAGUS = {
   /** Minimum gap between spell STARTS — one spell at a time, so zones never stack. */
   spellGapMs: 1400,
   /**
-   * Aim lead: it aims where you will be this many ms from now at your current
-   * velocity. 0 = where you are. Try 100-200 live (__balance.MAGUS.aimLeadMs)
-   * to make it punish running in straight lines.
+   * Aim lead, like a real Xerath: it aims where you will be when the spell
+   * lands — this share of the way, at your current velocity, over the time
+   * until impact (the Lance's lock, the Eye's delay, the Orb's flight, a Rite
+   * circle's delay). 0 = where you are now. Keep running in a straight line and
+   * you run into it; change direction or stop to dodge.
    */
-  aimLeadMs: 0,
+  aimLead: 0.85,
   /** Per-stage scaling of its own stats (see DIFFICULTY). Movement and orb speed scale globally. */
   scaling: {
     spellGapMs: { k: -0.3, min: 700 } as Curve,
   },
 
   /**
-   * Q — Lance. Rooted, it charges a line that tracks you, then LOCKS; the line
-   * lands `lockMs` later. The lock is your cue to sidestep.
+   * Q — Lance. Rooted, it charges a line that tracks where you are heading,
+   * then LOCKS; the line lands `lockMs` later. The lock is your cue to sidestep.
    */
-  lance: { chargeMs: 900, lockMs: 450, length: 520, halfWidth: 22, damage: 18, cooldownMs: 4500 },
+  lance: { chargeMs: 900, lockMs: 450, length: 520, halfWidth: 30, damage: 18, cooldownMs: 4500 },
   /**
-   * W — Eye. A circle placed on you that lands after `delayMs`. Its centre
-   * (your centre inside `centreRadius`) hits harder and slows you.
+   * W — Eye. Rooted for `castMs`, a reticle tracks where it will land; then the
+   * circle goes down there and lands `delayMs` later. Its centre (your centre
+   * inside `centreRadius`) hits harder and slows you.
    */
   eye: {
-    castMs: 300, delayMs: 700, range: 560, radius: 80, centreRadius: 26,
+    castMs: 400, delayMs: 700, range: 560, radius: 95, centreRadius: 32,
     damage: 10, centreDamage: 18, slowFraction: 0.4, slowMs: 1000, cooldownMs: 6000,
   },
   /**
@@ -591,7 +597,7 @@ export const DIFFICULTY = {
  * Bumped whenever tuning changes how hard a run is. The run log tags each run
  * with it, and its summary only compares runs from the same version.
  */
-export const BALANCE_VERSION = 4;
+export const BALANCE_VERSION = 5;
 
 /**
  * The player's level, League style: kills give XP (ENEMIES[id].xp) and each

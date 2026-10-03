@@ -325,15 +325,15 @@ private rootCount = 0;                 // >0 blocks movement entirely
 ```
 if (!rooted && dest != null):
     dist = |dest - position|
-    step = PLAYER.moveSpeed * dt            // 340 px/s
+    step = player.moveSpeed * dt            // 280 px/s (PLAYER.moveSpeed, × slow)
     if dist <= max(step, arriveEpsilon):    // 3px
         position = dest; stop()             // snap, clear the order
     else:
         position += normalize(dest - position) * step
 ```
 
-`max(step, arriveEpsilon)` is what prevents overshoot jitter: at 340 px/s and 60fps a
-step is ~5.7px, so a fixed 3px epsilon alone would oscillate. `moveTo()` clamps the
+`max(step, arriveEpsilon)` is what prevents overshoot jitter: at 280 px/s and 60fps a
+step is ~4.7px, so a fixed 3px epsilon alone would oscillate. `moveTo()` clamps the
 destination into the playable rect, so the player can never leave the arena.
 
 `blinkTo(x, y)` (E/Flash) sets position directly with the same clamp and calls
@@ -685,7 +685,7 @@ shots (damage 5, 280px/s, radius 6, range 400), so they fizzle on wave clear.
 | Stat | Value |
 | --- | --- |
 | HP | 60 (basic 24 × 2.5) × stage HP multiplier |
-| Move speed | 187 px/s (55% of 340) |
+| Move speed | 154 px/s (55% of 280) |
 | Reach | 16px + both radii ≈ 56px centre-to-centre |
 | Damage | 10 |
 | Windup | 400ms |
@@ -708,14 +708,16 @@ REPOSITION  hold 360-480px from the player (re-planned every 220ms): walk in bey
               2. Orb   — player within 300px
               3. random among ready spells whose reach covers the player
             a cast start sets nextCastAt = now + 1400ms and that spell's cooldown
-LANCE       900ms charge, aim tracks the player → castLine(), enter LOCK
+LANCE       900ms charge, aim tracks (led by the 450ms lock) → castLine(), enter LOCK
 LOCK        rooted 450ms while the placed line counts down
-EYE         castCircle() on the player at once, then a 300ms cast pose
-ORB         300ms windup, aim tracks → fireOrb()
-RITE        rooted; 3 circles at 500 / 1300 / 2100ms, each landing 600ms later
+EYE         400ms targeting: eyeTarget (led by the 700ms delay) tracks, then castCircle() there
+ORB         300ms windup, aim tracks (led by the orb's flight time) → fireOrb()
+RITE        rooted; 3 circles at 500 / 1300 / 2100ms, each led by its 600ms delay
 ```
 
-Aim is the player's position plus `vx/vy × aimLeadMs` (0 by default).
+Aim leads the player: `aimPoint(ctx, impactMs)` = position + velocity ×
+`MAGUS.aimLead` (0.85) × the time until the spell lands, clamped to the arena. A
+straight-line runner is hit; a direction change or a stop dodges.
 
 `HostileSpellSystem` owns every placed zone and orb, so a zone outlives its caster;
 only a spell still being charged (LANCE, ORB windup, remaining Rite shots) dies with
@@ -988,8 +990,8 @@ edgeMargin 60. (Hit flash / death pop timings: `THEME.enemy`.)
 `attackRange` 16, `attackDamage` 10, `windupMs` 400, `attackCooldownMs` 1200,
 `scoreMultiplier` 2.25.
 
-`MAGUS`: radius 20, `scoreMultiplier` 1.5, `moveSpeedFraction` 0.5, `spacing` 360-480,
-`spellGapMs` 1400, `aimLeadMs` 0; `lance` / `eye` / `orb` / `rite` blocks hold each
+`MAGUS`: radius 20, `scoreMultiplier` 1.5, `moveSpeedFraction` 0.6, `spacing` 360-480,
+`spellGapMs` 1400, `aimLead` 0.85; `lance` / `eye` / `orb` / `rite` blocks hold each
 spell's timings, sizes, damage and cooldown (see §9).
 
 `ENEMY_PROJECTILES` ramps (position set by `STAGE_RAMPS.enemyFire`): interval

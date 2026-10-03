@@ -174,7 +174,8 @@ test('magus: roster + pips, spacing, Lance / Eye / Orb / Rite, stun rules, zones
   await calm();
   await place([{ type: 'magus', x: 1040, y: 360 }]);
   await castNow('eye');
-  const eye = await watch(cfg.magus.eye.delayMs + 150);
+  // Targeting first (castMs, a reticle tracking you), then the circle's delay.
+  const eye = await watch(cfg.magus.eye.castMs + cfg.magus.eye.delayMs + 150);
   {
     const placed = eye.find((f) => f.zones.some((z) => z.kind === 'circle'));
     const z = placed?.zones[0];
@@ -204,6 +205,46 @@ test('magus: roster + pips, spacing, Lance / Eye / Orb / Rite, stun rules, zones
   out.hp === 100 ? pass('walking out of the circle in time takes nothing') : fail(`walked out, hp ${out.hp}`);
 
   // === 5. Orb and the stun ===================================================
+  // === 4b. It aims where you are heading =====================================
+  section('4b. It aims where you are heading');
+  // Running in a straight line: the Eye goes down ahead of you and you run into it.
+  await calm(640, 160);
+  await place([{ type: 'magus', x: 1040, y: 200 }]);
+  await page.mouse.click(640, 700, { button: 'right' });
+  await castNow('eye');
+  await page.waitForFunction(() => window.__warmup.scene.getScene('GameScene').director.enemies[0].view.reticle.visible, null, { timeout: 2000 });
+  const reticleSeen = true;
+  await page.waitForFunction(() => window.__warmup.scene.getScene('GameScene').hostileSpells.zones.length > 0, null, { timeout: 3000 });
+  const ahead = await page.evaluate(() => {
+    const g = window.__warmup.scene.getScene('GameScene');
+    return { zoneY: g.hostileSpells.zones[0].y, py: g.player.y };
+  });
+  const ranInto = (await watch(cfg.magus.eye.delayMs + 100)).at(-1);
+  reticleSeen && ahead.zoneY > ahead.py + 60
+    ? pass(`a reticle tracks first, then the Eye goes down ahead of a running player (${Math.round(ahead.zoneY - ahead.py)}px ahead)`)
+    : fail(`eye lead: ${JSON.stringify(ahead)}`);
+  ranInto.hp < 100
+    ? pass(`keep running straight and you run into it (hp ${ranInto.hp})`)
+    : fail('a straight-line runner was not hit by the led Eye');
+  // Changing direction once it's down dodges it.
+  await calm(640, 160);
+  await place([{ type: 'magus', x: 1040, y: 200 }]);
+  await page.mouse.click(640, 700, { button: 'right' });
+  await castNow('eye');
+  await page.waitForFunction(() => window.__warmup.scene.getScene('GameScene').hostileSpells.zones.length > 0, null, { timeout: 3000 });
+  await page.mouse.click(640, 60, { button: 'right' });
+  const juked = (await watch(cfg.magus.eye.delayMs + 100)).at(-1);
+  juked.hp === 100 ? pass('turning back once it is placed dodges it') : fail(`reversed but hit: hp ${juked.hp}`);
+  // The Lance leads too: running straight through its lock gets you hit.
+  await calm(640, 150);
+  await place([{ type: 'magus', x: 900, y: 200 }]);
+  await page.mouse.click(640, 700, { button: 'right' });
+  await castNow('lance');
+  const ranLance = (await watch(cfg.magus.lance.chargeMs + cfg.magus.lance.lockMs + 150)).at(-1);
+  ranLance.hp === 100 - cfg.magus.lance.damage
+    ? pass(`the Lance locks where a runner is heading: hit for ${cfg.magus.lance.damage}`)
+    : fail(`led lance: hp ${ranLance.hp}`);
+
   section('5. Orb and the stun');
   await calm();
   await place([{ type: 'magus', x: 880, y: 360 }]);
