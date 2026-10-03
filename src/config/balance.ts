@@ -57,8 +57,8 @@ export const ATTACK = {
   range: 260,
 
   // --- attack speed ---------------------------------------------------------
-  // The base attack cycle (windup + recovery, before passive stacks) is set per
-  // stage in STAGES[n].baseAttackCooldownMs: 700ms at Stage 1 → 420ms at Stage 10.
+  // The base attack cycle (windup + recovery, before passive stacks) comes from
+  // the player's level: LEVELS.baseAttackCooldownMs, faster with every level.
   /**
    * Fraction of the cycle spent rooted in windup before release.
    * League's "attack cast time" as a percentage — THE knob for orbwalk feel.
@@ -561,24 +561,61 @@ export const DIFFICULTY = {
    * Enemies per wave. A stage's authored roster keeps its MIX; its size grows to
    * this (never below the authored size). See WaveDirector.rosterFor().
    */
-  waveSize: { base: 4, k: 1 } as Curve,
+  waveSize: { base: 6, k: 1 } as Curve,
   /** Most enemies on the field at once; further arrivals wait for a slot. */
-  maxAlive: { base: 6, k: 0.6, min: 6, max: 30 } as Curve,
+  maxAlive: { base: 8, k: 0.6, min: 8, max: 40 } as Curve,
   /** Average gap between arrivals (jittered by RUN.spawn.gapJitter). */
-  arrivalGapMs: { base: 300, k: -0.5, min: 60 } as Curve,
+  arrivalGapMs: { base: 250, k: -0.5, min: 50 } as Curve,
   /** Multiplies every mob's movement speed. The Pursuer stays capped below yours (PURSUER.maxSpeedFraction). */
   moveSpeed: { base: 1, k: 0.1 } as Curve,
   /** Multiplies enemy-cast projectile speeds (basic spit, Magus orb), capped at `projectileMaxSpeed`. */
   projectileSpeed: { base: 1, k: 0.15 } as Curve,
   projectileMaxSpeed: 650,
-  /** Multiplies damage from enemies (swings, spit, Magus spells). Edge fire keeps its own ramp. */
-  damage: { base: 1, k: 0.2 } as Curve,
+  /**
+   * Multiplies damage from enemy attacks (swings, spit, Magus spells). Steep,
+   * because every stage starts from full HP: the run ends at the first stage
+   * you cannot survive from 100 HP. Edge fire keeps its own ramp.
+   */
+  damage: { base: 1, k: 0.35 } as Curve,
+  /** Multiplies contact damage (ENEMIES[id].contactDamage): steeper still, so getting boxed in turns lethal. */
+  contactDamage: { base: 1, k: 0.5 } as Curve,
   /** How many basics may be winding up a spit at once (see AttackTokens). */
   attackTokens: { base: 2, k: 0.5, min: 2, max: 10 } as Curve,
   /** Enemies arrive in packs of this many (rounded) at nearby spots: 1 until about Stage 8. */
   packSize: { base: 1, k: 0.4, min: 1, max: 5 } as Curve,
-  /** HP restored when a stage is cleared (capped at full). */
-  stageClearHeal: 25,
+  /** Share of max HP restored when a stage is cleared: 1 = back to full. */
+  stageClearHeal: 1,
+};
+
+/**
+ * Bumped whenever tuning changes how hard a run is. The run log tags each run
+ * with it, and its summary only compares runs from the same version.
+ */
+export const BALANCE_VERSION = 4;
+
+/**
+ * The player's level, League style: kills give XP (ENEMIES[id].xp) and each
+ * level makes the kit faster. Calibrated so the level roughly tracks the
+ * stage — about level 11 at Stage 10, level 18 around Stage 17. See
+ * systems/Progression.ts.
+ */
+export const LEVELS = {
+  max: 18,
+  /** XP from level 1 to 2, and how much more each later level needs. */
+  xp: { first: 10, growth: 1.2 },
+  /** Q / W / E cooldown = base / (1 + haste / 100). 85 haste at level 18: cooldowns ×0.54. */
+  abilityHastePerLevel: 5,
+  /** The base auto cycle at level 1, sped up by attackSpeedPerLevel each level (700 → 438ms at 11 → 347ms at 18). */
+  baseAttackCooldownMs: 700,
+  attackSpeedPerLevel: 0.06,
+  /** Q ranks up: from this level each Q hit removes `pips` pips. */
+  qRankUp: { level: 9, pips: 2 },
+};
+
+/** Body contact: an active enemy touching you hurts (see Enemy.checkContact). */
+export const CONTACT = {
+  /** One enemy can bump you at most this often. Player i-frames still apply on top. */
+  cooldownMs: 800,
 };
 
 // ============================================================================
@@ -606,21 +643,32 @@ export interface EnemyEntry {
   maxPerWave?: Curve;
   /** Health pips: `start` on Stage 1, +1 every `every` stages, never above `max`. */
   pips: { start: number; every: number; max: number };
+  /** Damage when its body touches yours (×DIFFICULTY.contactDamage), at most once per CONTACT.cooldownMs. */
+  contactDamage: number;
+  /** XP the player earns for killing one (see LEVELS). */
+  xp: number;
 }
 
 export const ENEMIES = {
   basic: {
     name: 'Slime', cost: 1, unlockStage: 1, weight: 3, maxShare: 1,
-    pips: { start: 1, every: 3, max: 3 },
+    // One hit, always: basics get more numerous, never tougher.
+    pips: { start: 1, every: 10, max: 1 },
+    contactDamage: 6,
+    xp: 1,
   },
   pursuer: {
     name: 'Pursuer', cost: 1.5, unlockStage: 2, weight: 2, maxShare: 0.6,
-    pips: { start: 2, every: 3, max: 4 },
+    pips: { start: 2, every: 10, max: 3 },
+    contactDamage: 10,
+    xp: 2,
   },
   magus: {
     name: 'Magus', cost: 2, unlockStage: 5, weight: 0.6, maxShare: 0.25,
     maxPerWave: { base: 1, k: 0.3, max: 3 },
-    pips: { start: 1, every: 3, max: 3 },
+    pips: { start: 1, every: 10, max: 2 },
+    contactDamage: 6,
+    xp: 3,
   },
 } satisfies Record<string, EnemyEntry>;
 
@@ -664,15 +712,10 @@ export const ENDLESS = {
 };
 
 /**
- * Per-stage ramps for the player's pacing and the edge fire, indexed by
- * stage - 1. Past the end, the last value holds.
+ * Per-stage ramps, indexed by stage - 1. Past the end, the last value holds.
+ * (The player's attack speed comes from their level instead: see LEVELS.)
  */
 export const STAGE_RAMPS = {
-  /**
-   * The player's base auto cycle (windup + recovery) before passive stacks:
-   * 700ms at Stage 1 → 420ms from Stage 10. Time spent never changes it.
-   */
-  baseAttackCooldownMs: [700, 669, 638, 607, 576, 544, 513, 482, 451, 420],
   /**
    * Edge-projectile pressure: 0..1 along the ENEMY_PROJECTILES start → end
    * ramps (spawn interval, speed, size, damage, volley size).

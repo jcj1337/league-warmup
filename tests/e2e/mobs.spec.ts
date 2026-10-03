@@ -338,9 +338,9 @@ test('mobs: passive stacks, Q cooldown refund, Pursuer AI, stage pips + segmente
     d.stageIndex = 0;
     return out;
   });
-  const wantBasic = [1, 1, 1, 2, 2, 2, 3, 3, 3, 3];
+  const wantBasic = [1, 1, 1, 1, 1, 1, 1, 1, 1, 1];
   pipTable.map((r) => r.basic).join('/') === wantBasic.join('/')
-    ? pass(`basic pips by stage: ${pipTable.map((r) => r.basic).join('/')} (1 for 1-3, 2 for 4-6, 3 from Stage 7)`)
+    ? pass(`basic pips by stage: ${pipTable.map((r) => r.basic).join('/')} (one hit, always: basics get more numerous, never tougher)`)
     : fail(`basic pips by stage: ${pipTable.map((r) => r.basic).join('/')}, want ${wantBasic.join('/')}`);
   pipTable.every((r) => r.pursuer === r.basic + 1)
     ? pass(`Pursuer = Basic + 1 on every stage (${pipTable.map((r) => r.pursuer).join('/')})`)
@@ -369,8 +369,9 @@ test('mobs: passive stacks, Q cooldown refund, Pursuer AI, stage pips + segmente
       && b.cells.every((c, i) => i === 0 || c.x === b.cells[i - 1].x + b.cells[i - 1].w + barTheme.gap)
       && Math.max(...ws) - Math.min(...ws) <= 1;
   };
-  await page.evaluate(() => { window.__warmup.scene.getScene('GameScene').director.stageIndex = 6; });
-  await placeOne('basic', 1000, 200);
+  // Stage 11: Pursuers have 3 pips, the Magus 2.
+  await page.evaluate(() => { window.__warmup.scene.getScene('GameScene').director.stageIndex = 10; });
+  await placeOne('pursuer', 1000, 200);
   await page.waitForTimeout(80);
   const hidden = await bar();
   hidden.visible === false
@@ -381,7 +382,7 @@ test('mobs: passive stacks, Q cooldown refund, Pursuer AI, stage pips + segmente
   await page.waitForTimeout(80);
   const full = await bar();
   full.max === 3 && full.segments === 3 && full.filled === 3 && full.visible
-    ? pass("with DEBUG.healthBars 'always', a Stage 7 basic shows 3 segments, all filled [#][#][#]")
+    ? pass("with DEBUG.healthBars 'always', a Stage 11 Pursuer shows 3 segments, all filled [#][#][#]")
     : fail(`full bar: ${JSON.stringify(full)}`);
   // One hit through the scene's real hit funnel.
   await page.evaluate(() => {
@@ -398,22 +399,22 @@ test('mobs: passive stacks, Q cooldown refund, Pursuer AI, stage pips + segmente
     && hit.cells[2].w === hit.cells[0].w
     ? pass(`the hit emptied exactly one equal-width segment (${hit.cells.map((c) => `${c.w}px${c.filled ? '#' : ' '}`).join(' | ')})`)
     : fail(`segments after one hit: ${JSON.stringify(hit)}`);
-  await placeOne('pursuer', 1000, 200);
+  await placeOne('magus', 1000, 200);
   await page.waitForTimeout(80);
   const pBar = await bar();
-  pBar.segments === 4 && pBar.filled === 4
-    ? pass('Stage 7 pursuer shows 4 segments')
+  pBar.segments === 2 && pBar.filled === 2
+    ? pass('a Stage 11 Magus shows 2 segments')
     : fail(`pursuer bar: ${JSON.stringify(pBar)}`);
 
   // Constant physical width: more pips add dividers, never width.
   const widths = [];
-  for (const [stageIndex, type] of [[0, 'basic'], [0, 'pursuer'], [3, 'basic'], [6, 'basic'], [6, 'pursuer']] as const) {
+  for (const [stageIndex, type] of [[0, 'basic'], [0, 'pursuer'], [10, 'magus'], [10, 'basic'], [10, 'pursuer']] as const) {
     await page.evaluate((s) => { window.__warmup.scene.getScene('GameScene').director.stageIndex = s; }, stageIndex);
     await placeOne(type, 1000, 200);
     await page.waitForTimeout(80);
     widths.push({ stage: stageIndex + 1, type, ...(await bar()) });
   }
-  widths.map((w) => w.max).join('/') === '1/2/2/3/4' && widths.every((w) => w.segments === w.max && w.filled === w.max)
+  widths.map((w) => w.max).join('/') === '1/2/2/1/3' && widths.every((w) => w.segments === w.max && w.filled === w.max)
     ? pass(`live bars show one segment per max pip across stages (${widths.map((w) => `S${w.stage} ${w.type} ${w.segments}`).join(', ')})`)
     : fail(`segment counts: ${JSON.stringify(widths.map((w) => ({ stage: w.stage, type: w.type, max: w.max, segments: w.segments })))}`);
   widths.every((w) => w.width === barTheme.width && tiles(w))

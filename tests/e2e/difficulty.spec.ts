@@ -142,8 +142,8 @@ test('difficulty: threat curve, scaled stage numbers, scaled mob stats, heal on 
     ? pass('clearing a wave that is not the stage\'s last heals nothing')
     : fail(`wave clear: ${JSON.stringify(midStage)}`);
   const stageEnd = await clearWave(4, 2, 50);
-  stageEnd.next === 'stage' && stageEnd.after === 50 + cfg.D.stageClearHeal
-    ? pass(`clearing a stage heals ${cfg.D.stageClearHeal} (50 → ${stageEnd.after})`)
+  stageEnd.next === 'stage' && stageEnd.after === Math.min(100, 50 + Math.round(100 * cfg.D.stageClearHeal))
+    ? pass(`clearing a stage heals ${Math.round(100 * cfg.D.stageClearHeal)}% of max HP (50 → ${stageEnd.after})`)
     : fail(`stage clear: ${JSON.stringify(stageEnd)}`);
   const capped = await clearWave(2, 1, 90);
   capped.after === 100

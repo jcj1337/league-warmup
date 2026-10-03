@@ -24,6 +24,12 @@ export class AbilityCooldowns {
   private readonly readyAt: Record<AbilityId, number> = { q: 0, w: 0, e: 0, flash: 0 };
   private now = 0;
 
+  /**
+   * `haste()` multiplies the Q / W / E cooldowns (the player's level: see
+   * Progression.cooldownMultiplier). Flash is a summoner spell and ignores it.
+   */
+  constructor(private readonly haste: () => number = () => 1) {}
+
   update(nowMs: number): void {
     this.now = nowMs;
   }
@@ -36,13 +42,14 @@ export class AbilityCooldowns {
     return Math.max(0, this.readyAt[id] - this.now);
   }
 
+  /** The full cooldown right now: config value, shortened by level for Q / W / E. */
   totalMs(id: AbilityId): number {
-    return DURATIONS[id]();
+    return DURATIONS[id]() * (id === 'flash' ? 1 : this.haste());
   }
 
   /** Put an ability on its full cooldown, starting now. */
   start(id: AbilityId): void {
-    this.readyAt[id] = this.now + DURATIONS[id]();
+    this.readyAt[id] = this.now + this.totalMs(id);
   }
 
   /**

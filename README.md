@@ -49,32 +49,53 @@ the only thing that reads them.
 The run is **endless**: it ends only when you die. Stages 1–5 are a hand-written intro
 (single waves for 1–3, two waves for 4–5); every later stage is **generated**, three waves
 each, forever. Each wave is a finite group of enemies that arrive one at a time, in a
-shuffled order: the first at once, each later one a short gap after the previous (300ms
-±⅓ at Stage 1, 160ms at Stage 10), on a random spot away from you. From about Stage 9
+shuffled order: the first at once, each later one a short gap after the previous (250ms
+±⅓ at Stage 1, 133ms at Stage 10), on a random spot away from you. From about Stage 9
 they arrive in **packs** (2, later more) that land together on one side of the arena.
-Only so many can be on the field at once (6 at Stage 1, 13 at Stage 10, up to 30); the
+Only so many can be on the field at once (8 at Stage 1, 17 at Stage 10, up to 40); the
 rest wait for a slot. An arriving enemy holds its spot for 300ms — untargetable,
 undamageable and inert — then joins the fight. Killed enemies stay dead — nothing
 respawns mid-wave. When the last enemy of a wave dies and nobody is still due to
 arrive, the arena clears (hostile shots still in the air fizzle), a short breather runs
 — **400ms** between waves, **700ms** between stages — and the next wave spawns.
-Clearing a stage's last wave moves you to Wave 1 of the next stage and **heals 25 HP**
-(never past full). You stay in control during the breather.
+Clearing a stage's last wave moves you to Wave 1 of the next stage and **heals you to
+full**: every stage starts from 100 HP, so the run ends at the first stage you can't
+survive. You stay in control during the breather.
+
+**Contact damage.** An active enemy whose body touches yours bumps you: basic 6, Pursuer
+10, Magus 6 at Stage 1, scaled by `DIFFICULTY.contactDamage` (×1.88 at Stage 10, ×3.77 at
+20). Each enemy can bump you at most once per 800ms (`CONTACT.cooldownMs`), on top of the
+usual 250ms invulnerability after any hit. Enemies don't walk into you on purpose:
+contact comes from pathing through the crowd or getting boxed in. Arriving enemies are
+inert and never bump.
+
+**Levels.** Kills give XP (basic 1, Pursuer 2, Magus 3); 10 XP reaches level 2, and each
+later level needs 20% more, up to level 18. Each level gives **+5 ability haste** (Q / W
+/ E cooldowns ÷ (1 + haste/100): ×0.69 at level 10, ×0.54 at 18; Flash is a summoner
+and never changes) and **+6% attack speed** on the base auto cycle (700ms at level 1,
+455ms at 10, 347ms at 18). From **level 9**, Q is ranked up and each Q hit removes 2
+pips. The XP curve is calibrated so your level tracks the stage: about level 11
+entering Stage 10, level 18 around Stage 17. The vitals plate shows `LV n` and a slim
+gold XP bar; a level-up flashes a gold ring and `LEVEL n` over your slime. Tuned in
+`LEVELS` and each mob's `xp` in [balance.ts](src/config/balance.ts).
 
 Progression comes only from clearing enemies: elapsed time never advances a wave or a
 stage. A strong player reaches the hard encounters sooner; a struggling player keeps
 practising the easier ones for longer.
 
-When you die, the end screen shows the stage and wave reached (marked **NEW BEST!** when
-it beats your logged runs on this growth setting), waves cleared, run time, score, kills
-by type, hits landed and W mark procs, Q accuracy, what killed you, the damage you took
-by source, and the raw mechanical metrics. `R` restarts at Stage 1 Wave 1.
+When you die, the end screen shows the stage and wave reached and your level (marked
+**NEW BEST!** when it beats your logged runs on this growth setting and balance
+version), waves cleared, run time, score, kills by type, hits landed and W mark procs, Q
+accuracy, what killed you, the damage you took **in that final stage** by source, and
+the raw mechanical metrics. `R` restarts at Stage 1 Wave 1.
 
 **Run log.** Every finished run (not a mid-run restart) is saved in this browser's local
-storage: stage and wave reached, run time, the growth setting it was played on, what
-dealt the killing blow, and the HP lost to each source (Pursuer, basic spit, Magus, edge
-fire). The end screen shows `KILLED BY`, `DAMAGE TAKEN` and a summary of your runs on the
-current growth setting (count, median and best stage). From the console:
+storage: stage, wave and level reached, run time, the growth setting and
+`BALANCE_VERSION` it was played on, what dealt the killing blow, and the HP lost to each
+source over the run and in the final stage (Pursuer, basic spit, Magus, edge fire, and
+each mob's body contact). The end screen shows `KILLED BY`, `DAMAGE, FINAL STAGE` and a
+summary of your runs on the current growth setting and balance version (count, median and
+best stage); runs from older balance versions are kept but left out. From the console:
 `__runs.summary()`, `__runs.list()`, and `__runs.clear()` to delete the log. It lives in
 [RunHistory.ts](src/game/RunHistory.ts); nothing leaves the machine.
 
@@ -87,24 +108,25 @@ scaled stats live in its `scaling` block.
 
 | | Stage 1 | Stage 5 | Stage 10 | Stage 20 | Limit |
 | --- | --- | --- | --- | --- | --- |
-| Wave budget (enemies per hand-written wave) | 4 | 7 | 14 | 57 | — |
-| On the field at once | 6 | 8 | 13 | 30 | 30 |
-| Gap between arrivals | 300ms | 227ms | 160ms | 80ms | 60ms |
+| Wave budget (enemies per hand-written wave) | 6 | 10 | 21 | 85 | — |
+| On the field at once | 8 | 11 | 17 | 39 | 40 |
+| Gap between arrivals | 250ms | 189ms | 133ms | 66ms | 50ms |
 | Pack size | 1 | 1 | 2 | 3 | 5 |
 | Enemy move speed | ×1 | ×1.06 | ×1.13 | ×1.30 | Pursuer ≤ 0.85 of yours |
 | Spit / orb speed | ×1 | ×1.09 | ×1.21 | ×1.49 | 650px/s |
-| Enemy damage (swing, spit, Magus) | ×1 | ×1.12 | ×1.29 | ×1.70 | — |
+| Enemy damage (swing, spit, Magus) | ×1 | ×1.22 | ×1.55 | ×2.53 | — |
+| Contact damage | ×1 | ×1.32 | ×1.88 | ×3.77 | — |
 | Basics winding up a spit at once | 2 | 3 | 4 | 8 | 10 |
 | Spit / dash / swing cooldown, Magus spell gap (ms) | 3000 / 5000 / 1200 / 1400 | 2759 / 4471 / 1103 / 1184 | 2484 / 3888 / 994 / 960 | 2014 / 2940 / 806 / 700 | min 1500 / 2500 / 800 / 700 |
 
 Telegraphs (spit, dash, swing and Magus timings) and the 300ms arrival window are never
-scaled. Your kit never scales: the base auto cycle shortens from 700ms (Stage 1) to 420ms
-(Stage 10) and then holds. Edge fire follows its own ramp to Stage 10 (one shot every
-4.5s, tightening to every 3s) and then holds.
+scaled. Your kit grows with your **level** (above), never with the stage. Edge fire
+follows its own ramp to Stage 10 (one shot every 4.5s, tightening to every 3s) and then
+holds.
 
-**Health pips** step up every three stages and stop at the Stage 7 values: basic 1 / 2 / 3,
-Pursuer 2 / 3 / 4, Magus 1 / 2 / 3. Later stages get harder through numbers, speed and
-damage — never through enemies that take forever to kill.
+**Health pips** stay low: basics are **1 pip forever**; Pursuers 2 and the Magus 1, each
++1 from Stage 11 (3 and 2) and no more. Later stages get harder through numbers, speed
+and damage — never through enemies that take forever to kill.
 
 **Hand-written stages** keep their authored mix and grow it to the stage's budget, shared
 out by largest remainder (`WaveDirector.rosterFor`). B = basic, P = Pursuer, M = Magus;
@@ -112,11 +134,11 @@ the authored mix is in brackets.
 
 | Stage | Waves | Wave 1 | Wave 2 |
 | --- | --- | --- | --- |
-| 1 | 1 | 4B (3B) | — |
-| 2 | 1 | 4B + 1P (3B + 1P) | — |
-| 3 | 1 | 3B + 2P (2B + 2P) | — |
-| 4 | 2 | 5B + 1P (3B + 1P) | 4B + 2P (3B + 2P) |
-| 5 | 2 | 4B + 2P + 1M (2B + 1P + 1M) | 3B + 4P (2B + 3P) |
+| 1 | 1 | 6B (3B) | — |
+| 2 | 1 | 5B + 2P (3B + 1P) | — |
+| 3 | 1 | 4B + 4P (2B + 2P) | — |
+| 4 | 2 | 7B + 2P (3B + 1P) | 5B + 4P (3B + 2P) |
+| 5 | 2 | 6B + 3P + 1M (2B + 1P + 1M) | 4B + 6P (2B + 3P) |
 
 **Generated stages** buy each wave from its budget: mobs are drawn by weight among those
 unlocked, each costing points (basic 1, Pursuer 1.5, Magus 2 — heavier mobs mean fewer
@@ -164,14 +186,15 @@ and mode survive restarts; messages start fresh.
 
 | | Cast time | Cooldown | Range | Projectile speed | Pips removed |
 | --- | --- | --- | --- | --- | --- |
-| Auto | 175ms windup\* | 700→420ms\* | 260 | 1150 px/s (homing) | 1 |
-| Q | 165ms | 3000ms | 450 | 1250 px/s | 1 |
-| W | 185ms | 6000ms | 450 | 1000 px/s | 0 on contact, **+1 on detonation** |
-| E | 210ms | 8000ms | 310 blink / 380 bolt acquisition | 1050 px/s bolt | 1 |
+| Auto | 175ms windup\* | 700→347ms\* | 260 | 1150 px/s (homing) | 1 |
+| Q | 165ms | 3000ms† | 450 | 1250 px/s | 1 (2 from level 9) |
+| W | 185ms | 6000ms† | 450 | 1000 px/s | 0 on contact, **+1 on detonation** |
+| E | 210ms | 8000ms† | 310 blink / 380 bolt acquisition | 1050 px/s bolt | 1 |
 | F | instant | 20000ms | 275 | — | — |
 
-\* the auto cooldown is set by the current stage (700ms at Stage 1, 420ms at Stage 10);
-the windup is a quarter of it, and both shrink further as the passive stacks.
+\* the auto cooldown is set by your level (700ms at level 1, +6% attack speed per level,
+347ms at 18); the windup is a quarter of it, and both shrink further as the passive stacks.
+† at level 1; ability haste (+5 per level) shortens Q / W / E to ×0.54 at level 18.
 
 **Cast windows.** Q/W/E commit for a short window anchored to the auto windup
 (auto 175 ≈ Q 165 < W 185 < E 210). The aim (Q/W) or destination (E) is frozen at

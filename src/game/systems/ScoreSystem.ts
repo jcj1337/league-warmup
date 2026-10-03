@@ -15,6 +15,8 @@ export class ScoreSystem {
   public readonly damageTaken: Record<string, number> = {};
   /** Source of the hit that took the last HP, once the player is dead. */
   public killedBy: string | null = null;
+  /** Like damageTaken, but only since the current stage began (HP is full again then). */
+  public stageDamage: Record<string, number> = {};
 
   private survivalCredit = 0;
 
@@ -39,7 +41,13 @@ export class ScoreSystem {
   /** A hit that got through i-frames. `lethal` = it took the last HP. */
   addDamageTaken(source: string, amount: number, lethal: boolean): void {
     this.damageTaken[source] = (this.damageTaken[source] ?? 0) + amount;
+    this.stageDamage[source] = (this.stageDamage[source] ?? 0) + amount;
     if (lethal) this.killedBy = source;
+  }
+
+  /** A new stage begins: its damage tally starts empty. */
+  startStage(): void {
+    this.stageDamage = {};
   }
 
   addProjectileHit(): void {

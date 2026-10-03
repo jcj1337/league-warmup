@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { RunHistory, type RunSummary } from '../RunHistory';
-import { ARENA, DEBUG } from '../../config/balance';
+import { ARENA, DEBUG, BALANCE_VERSION } from '../../config/balance';
 import { THEME } from '../../config/theme';
 import { pixelText, setPixelScale } from '../art/font';
 import { ensureArt } from '../art/textures';
@@ -53,6 +53,9 @@ export class UIScene extends Phaser.Scene {
 
   private hpBar!: PixelBar;
   private hpText!: Phaser.GameObjects.BitmapText;
+  private levelText!: Phaser.GameObjects.BitmapText;
+  private xpBar!: PixelBar;
+  private shownLevel = 1;
   private hpBand: 'high' | 'mid' | 'low' | null = null;
 
   private overlay!: Phaser.GameObjects.Container;
@@ -92,6 +95,9 @@ export class UIScene extends Phaser.Scene {
     pixelText(this, M + 14, vitalsTop + 12, 'HP', 2, THEME.ui.dim).setDepth(101);
     this.hpBar = new PixelBar(this, HP_BAR_WIDTH, { top: THEME.ui.hpTop, bottom: THEME.ui.hpBottom }, 102, 10, 2);
     this.hpText = pixelText(this, M + 14 + 36, vitalsTop + 12, '', 2).setDepth(101);
+    // Level and XP to the next one: a slim gold bar under the HP bar.
+    this.levelText = pixelText(this, M + 300 - 14, vitalsTop + 12, '', 2, THEME.ui.level).setOrigin(1, 0).setDepth(101);
+    this.xpBar = new PixelBar(this, HP_BAR_WIDTH, { top: THEME.ui.xpTop, bottom: THEME.ui.xpBottom }, 102, 3, 1);
 
     // ---- bottom-left, above vitals: system messages ------------------------
     this.chat = new ChatBox(this);
@@ -268,6 +274,15 @@ export class UIScene extends Phaser.Scene {
     const vitalsTop = ARENA.height - 96;
     this.hpBar.update(40 + 14 + HP_BAR_WIDTH / 2, vitalsTop + 34, hpPct);
     this.hpText.setText(`${Math.ceil(hud.hp)} / ${hud.maxHp}`);
+    this.levelText.setText(`LV ${hud.level}`);
+    this.xpBar.update(40 + 14 + HP_BAR_WIDTH / 2, vitalsTop + 48, hud.levelProgress);
+    if (hud.level !== this.shownLevel) {
+      // A level-up pops the readout once; a new run quietly resets it.
+      if (hud.level > this.shownLevel) {
+        this.tweens.add({ targets: this.levelText, scale: { from: 1.5, to: 1 }, duration: 260, ease: 'Back.Out' });
+      }
+      this.shownLevel = hud.level;
+    }
 
     // Every slot is handed the real numbers from AbilityCooldowns and derives
     // nothing — which is why a Q hit refunding W/E shows up instantly on all three.
@@ -381,7 +396,7 @@ export class UIScene extends Phaser.Scene {
       [
         row(
           'STAGE REACHED',
-          `${result.stageReached}   (wave ${result.waveReached} / ${result.wavesInStage})${result.newBest ? '   NEW BEST!' : ''}`,
+          `${result.stageReached}  (wave ${result.waveReached}/${result.wavesInStage})  LV ${result.level}${result.newBest ? '  NEW BEST!' : ''}`,
         ),
         row('WAVES CLEARED', `${result.wavesCleared}`),
         row('RUN TIME', formatRunTime(result.runTimeSeconds)),
@@ -394,8 +409,8 @@ export class UIScene extends Phaser.Scene {
         row('PROJECTILES HIT BY', `${result.projectileHitsTaken}`),
         row('Q ACCURACY', `${result.qHit}/${result.qFired}  (${accuracy}%)`),
         row('KILLED BY', result.killedBy ? sourceName(result.killedBy) : '-'),
-        row('DAMAGE TAKEN', damageLine(result.damageTaken)),
-        row(`YOUR RUNS (GROWTH ${result.growth})`, runsLine(RunHistory.summary(result.growth))),
+        row('DAMAGE, FINAL STAGE', damageLine(result.stageDamage)),
+        row(`YOUR RUNS (V${BALANCE_VERSION} G${result.growth})`, runsLine(RunHistory.summary(result.growth, BALANCE_VERSION))),
         '',
         '--- MECHANICS (raw, not scored yet) ---',
         row('AUTOS STARTED', `${result.attacksStarted}`),
@@ -408,7 +423,10 @@ export class UIScene extends Phaser.Scene {
   }
 }
 
-const SOURCE_NAMES: Record<string, string> = { pursuer: 'pursuer', basic: 'spit', magus: 'magus', edgeFire: 'fire' };
+const SOURCE_NAMES: Record<string, string> = {
+  pursuer: 'pursuer', basic: 'spit', magus: 'magus', edgeFire: 'fire',
+  basicContact: 'slime touch', pursuerContact: 'pursuer touch', magusContact: 'magus touch',
+};
 const sourceName = (source: string) => SOURCE_NAMES[source] ?? source;
 
 /** "pursuer 64 spit 12 fire 8", biggest first. */

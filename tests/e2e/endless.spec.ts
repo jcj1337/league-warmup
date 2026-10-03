@@ -116,8 +116,8 @@ test('endless: generated stages, budgets + caps, first appearances, packs, pip c
     const d = window.__warmup.scene.getScene('GameScene').director;
     return [1, 4, 7, 10, 30].map((s) => ({ s, basic: d.pipsFor('basic', s), pursuer: d.pipsFor('pursuer', s), magus: d.pipsFor('magus', s) }));
   });
-  pips.map((p) => `${p.basic}/${p.pursuer}/${p.magus}`).join(' ') === '1/2/1 2/3/2 3/4/3 3/4/3 3/4/3'
-    ? pass('pips step up every 3 stages and stop at the Stage 7 values: basic 3, Pursuer 4, Magus 3 (Stage 30 included)')
+  pips.map((p) => `${p.basic}/${p.pursuer}/${p.magus}`).join(' ') === '1/2/1 1/2/1 1/2/1 1/2/1 1/3/2'
+    ? pass('basics are 1 pip forever; Pursuer 2 → 3 and Magus 1 → 2 from Stage 11, then capped (Stage 30 included)')
     : fail(`pips: ${JSON.stringify(pips)}`);
 
   // === 5. Damaged-only health bars ===========================================
@@ -126,7 +126,8 @@ test('endless: generated stages, budgets + caps, first appearances, packs, pip c
     const g = window.__warmup.scene.getScene('GameScene');
     const d = g.director;
     d.stageIndex = 6; d.waveIndex = 0; d.spawnWave(); d.arriveAllNow();
-    const e = d.enemies.find((x) => x.archetype === 'basic') ?? d.enemies[0];
+    // A mob with more than one pip, so it survives the first hit.
+    const e = d.enemies.find((x) => x.maxHp > 1);
     requestAnimationFrame(() => {
       const before = e.view.hpBar.visible;
       e.takeHit();

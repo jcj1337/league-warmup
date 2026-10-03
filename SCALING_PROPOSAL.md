@@ -221,7 +221,17 @@ on each stage clear.
 appearances, Stages 1–5 kept hand-written, no "run complete", stage shown without a
 total, personal best, "New threat" chat message, health bars only on damaged enemies.
 
-**Phase 4 — more, weaker enemies, and contact damage.** *(proposed, below)*
+**Phase 4 — more, weaker enemies, and contact damage.** *(done, with changes: see below)*
+
+Built with your answers: Q does not pierce; basics are 1 pip forever (Pursuer 2 → 3 and
+Magus 1 → 2 from Stage 11); contact damage on the harsher side (basic 6, Pursuer 10,
+Magus 6, ×T^0.5); and **a full heal at every stage clear** instead of +25. Because every
+stage now starts from 100 HP, enemy attack damage was steepened from ×T^0.2 to ×T^0.35
+so the run still ends: it now ends at the first stage you can't survive from full.
+`BALANCE_VERSION` (4) tags the run log, and the end screen shows the damage taken in the
+final stage. Also added: **player levels** (XP from kills, 1-18, +5 ability haste and
++6% attack speed per level, Q ranked up at level 9), replacing the per-stage attack
+speed ramp; calibrated to about level 11 at Stage 10 and 18 at Stage 17.
 
 ## Phase 4 — more, weaker enemies, and contact damage
 

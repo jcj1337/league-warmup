@@ -11,7 +11,8 @@ test('visuals: pixel-art setup, no tether line, command markers, sprite units + 
     g.player.hp = 100; g.player.x = 520; g.player.y = 380; g.player.stop();
     g.attacks.cancel(); g.attacks.state = 'idle'; g.attacks.clearMissiles();
     g.enemies.forEach((t, i) => {
-      const spots = [{ x: 760, y: 380 }, { x: 980, y: 520 }, { x: 330, y: 200 }, { x: 1060, y: 200 }];
+      // Stage 1 fields six: the first four are the ones under test, the rest parked out of the way.
+      const spots = [{ x: 760, y: 380 }, { x: 980, y: 520 }, { x: 330, y: 200 }, { x: 1060, y: 200 }, { x: 160, y: 560 }, { x: 1140, y: 600 }];
       t.x = spots[i].x; t.y = spots[i].y; t.hp = t.maxHp; t.active = true; t.__tag = i + 1;
       t.goalX = t.x; t.goalY = t.y; t.nextPlanAt = Number.POSITIVE_INFINITY;
     });

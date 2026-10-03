@@ -27,6 +27,15 @@ test('smoke: movement, attack, Q, enemy fire, context menu, run end + restart, d
 
   // --- 1. right-click movement -------------------------------------------------
   section('1. right-click movement');
+  // Keep the click points clear: an enemy wandering under one would turn a
+  // ground move into an attack order. They are released again below.
+  await page.evaluate(() => {
+    const g = window.__warmup.scene.getScene('GameScene');
+    g.director.enemies.forEach((e, i) => {
+      e.x = 1180; e.y = 120 + i * 80;
+      e.goalX = e.x; e.goalY = e.y; e.nextPlanAt = Number.POSITIVE_INFINITY;
+    });
+  });
   let a = await state();
   await rclick(300, 220);
   await page.waitForTimeout(500);
@@ -50,6 +59,9 @@ test('smoke: movement, attack, Q, enemy fire, context menu, run end + restart, d
   Math.hypot(d2.player.x - d1.player.x, d2.player.y - d1.player.y) < 2
     ? pass('player stops at destination')
     : fail('player never stops');
+  await page.evaluate(() => {
+    window.__warmup.scene.getScene('GameScene').director.enemies.forEach((e) => { e.nextPlanAt = 0; });
+  });
 
   // --- 2. basic attack ---------------------------------------------------------
   section('2. basic attack');

@@ -8,8 +8,8 @@ import type { KitingMetrics } from './KitingMetrics';
 import type { PassiveSystem } from './PassiveSystem';
 
 /**
- * Where the base auto cycle comes from. The WaveDirector supplies the current
- * stage's value, so attack speed scales with stage progress — never with time.
+ * Where the base auto cycle comes from. The player's Progression supplies it
+ * from their level, so attack speed grows with kills — never with time.
  */
 export interface AttackPacing {
   readonly baseAttackCooldownMs: number;
@@ -119,8 +119,8 @@ export class AttackSystem {
   // ------------------------------------------------------------ attack speed
 
   /**
-   * The base auto cycle before any buffs: the current stage's value from
-   * STAGES, supplied by the WaveDirector. Elapsed time has no influence on it.
+   * The base auto cycle before passive stacks: the player's level's value,
+   * supplied by Progression. Elapsed time has no influence on it.
    */
   get baseCooldownMs(): number {
     return this.pacing.baseAttackCooldownMs;

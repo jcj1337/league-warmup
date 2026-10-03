@@ -219,8 +219,8 @@ test('waves: stage/wave progression, variable waves per stage, finite rosters, b
   afterJump.stage === 1 && afterJump.wave === 1 && sameIds(afterJump.roster.map((e) => e.id), beforeJump.roster.map((e) => e.id))
     ? pass('two minutes of run time later: still Stage 1 Wave 1 with the same enemies')
     : fail(`after the clock jump: stage ${afterJump.stage} wave ${afterJump.wave}`);
-  afterJump.baseCd === cfg.stages[0].baseAttackCooldownMs
-    ? pass(`base auto cycle is still Stage 1's ${afterJump.baseCd}ms — time spent does not speed autos`)
+  afterJump.baseCd === beforeJump.baseCd
+    ? pass(`base auto cycle is still ${afterJump.baseCd}ms — time spent does not speed autos (only levels do)`)
     : fail(`base auto cycle drifted with time: ${afterJump.baseCd}ms`);
 
   // === 3. A kill never respawns a replacement =================================
@@ -333,8 +333,8 @@ test('waves: stage/wave progression, variable waves per stage, finite rosters, b
     await waitForArrivals();
     const after = await S();
     after.stage === multi + 1 && after.wave === 1 && matches(after.roster, rosterOf(multi + 1, 1))
-      && after.baseCd === cfg.stages[multi].baseAttackCooldownMs && after.wavesInStage === waveCounts[multi]
-      ? pass(`Stage ${multi + 1} starts at Wave 1 of ${after.wavesInStage} with its roster and ${after.baseCd}ms base autos`)
+      && after.wavesInStage === waveCounts[multi]
+      ? pass(`Stage ${multi + 1} starts at Wave 1 of ${after.wavesInStage} with its roster`)
       : fail(`Stage ${multi + 1} start: wave ${after.wave} of ${after.wavesInStage}, roster ${JSON.stringify(countTypes(after.roster))}, base ${after.baseCd}ms`);
   }
 
@@ -412,12 +412,9 @@ test('waves: stage/wave progression, variable waves per stage, finite rosters, b
     ? pass("every enemy in every wave spawns with its stage's enemyPips")
     : fail(`pip mismatch: ${JSON.stringify(badPips)}`);
   const pips = cfg.stages.map((s) => s.enemyPips.basic);
-  const cds = cfg.stages.map((s) => s.baseAttackCooldownMs);
-  pips.every((p, i) => i === 0 || p >= pips[i - 1]) && pips[pips.length - 1] > pips[0]
-    && cds.every((c, i) => i === 0 || c < cds[i - 1])
-    && table.every((t) => t.baseCd === cds[t.s])
-    ? pass(`later stages: tougher enemies (basic ${pips[0]} → ${pips[pips.length - 1]} pips) and faster base autos (${cds[0]} → ${cds[cds.length - 1]}ms)`)
-    : fail(`stage scaling: basic pips ${JSON.stringify(pips)}, base autos ${JSON.stringify(cds)}`);
+  pips.every((p) => p === 1) && table.every((t) => t.baseCd === table[0].baseCd)
+    ? pass(`basics stay 1 pip on every stage (more of them, never tougher), and the stage alone never changes your autos (${table[0].baseCd}ms: they follow your level)`)
+    : fail(`stage scaling: basic pips ${JSON.stringify(pips)}, base autos ${JSON.stringify(table.map((t) => t.baseCd))}`);
 
   // === 8. The run is endless: Stage 10 leads on to a generated Stage 11 ========
   section('8. The run is endless: Stage 10 leads on to a generated Stage 11');

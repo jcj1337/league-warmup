@@ -1,10 +1,15 @@
 import Phaser from 'phaser';
-import { DIFFICULTY, SKILLSHOT_W, type EnemyId } from '../../config/balance';
+import { CONTACT, DIFFICULTY, ENEMIES, SKILLSHOT_W, type EnemyId } from '../../config/balance';
+import { THEME } from '../../config/theme';
+import { Fx } from '../view/Fx';
 import { scaled } from '../systems/Difficulty';
 import type { GameClock } from '../systems/GameClock';
 import type { HostileSpellSink } from '../systems/HostileSpellSystem';
 import type { AttackTokens } from '../systems/AttackTokens';
 import type { EnemyView } from '../view/EnemyView';
+
+/** How an enemy hurt the player: an attack (swing, spit, spell), or touching bodies. */
+export type DamageKind = 'attack' | 'contact';
 
 /** Identifies an archetype for spawn weighting, scoring and kill tallies: a key of ENEMIES. */
 export type EnemyArchetype = EnemyId;
@@ -32,8 +37,12 @@ export interface EnemyContext {
     /** True while the player is stunned and cannot act. */
     stunned: boolean;
   };
-  /** Apply damage to the player, tagged with who dealt it. Routed through the scene's i-frame logic. */
-  damagePlayer(amount: number, source: EnemyArchetype): void;
+  /**
+   * Apply damage to the player, tagged with who dealt it and how ('attack' by
+   * default, or 'contact' for a body bump). Routed through the scene's
+   * i-frame logic and its stage damage scaling.
+   */
+  damagePlayer(amount: number, source: EnemyArchetype, kind?: DamageKind): void;
   /**
    * Cast hostile spells (ground zones, the Magus orb). The spell system owns
    * them, so a spell already placed still lands after its caster dies.
@@ -129,6 +138,8 @@ export abstract class Enemy {
    * enemy itself so every archetype gets them for free and they die with it.
    */
   private markUntil = 0;
+  /** Clock time this enemy may next bump the player (see checkContact). */
+  private nextContactAt = 0;
 
   constructor(scene: Phaser.Scene, clock: GameClock, x: number, y: number, opts: EnemyOptions) {
     this.scene = scene;
@@ -225,8 +236,32 @@ export abstract class Enemy {
   update(deltaSeconds: number, nowMs: number, ctx: EnemyContext): void {
     // Activation happens at the GameClock deadline — never on an animation.
     if (this.spawning && nowMs >= this.activeAt) this.lifecycle = 'active';
-    if (this.active) this.updateAi(deltaSeconds, nowMs, ctx);
+    if (this.active) {
+      this.updateAi(deltaSeconds, nowMs, ctx);
+      this.checkContact(nowMs, ctx);
+    }
     this.view.sync(nowMs, deltaSeconds);
+  }
+
+  /**
+   * Body contact: while this active enemy's circle overlaps the player's, it
+   * bumps them for ENEMIES[archetype].contactDamage, at most once per
+   * CONTACT.cooldownMs. Every mob gets this from the base class; none of them
+   * walk into the player on purpose, so it punishes pathing through a crowd.
+   */
+  private checkContact(nowMs: number, ctx: EnemyContext): void {
+    const p = ctx.player;
+    const dx = p.x - this.x;
+    const dy = p.y - this.y;
+    const reach = this.radius + p.radius;
+    if (dx * dx + dy * dy > reach * reach || nowMs < this.nextContactAt) return;
+    this.nextContactAt = nowMs + CONTACT.cooldownMs;
+    const dist = Math.hypot(dx, dy) || 1;
+    Fx.of(this.scene).sparks(
+      this.x + (dx / dist) * this.radius, this.y + (dy / dist) * this.radius,
+      [THEME.fx.hit.color, THEME.ui.danger], 6, 150, 160,
+    );
+    ctx.damagePlayer(ENEMIES[this.archetype].contactDamage, this.archetype, 'contact');
   }
 
   /** Behaviour. Default: stand still. */

@@ -442,7 +442,8 @@ test('pressure: wave sizes, staggered arrival + activation window, no premature 
   await calm(640, 360, 100);
   // Stage 1: enemy damage is unscaled there.
   await page.evaluate(() => { window.__warmup.scene.getScene('GameScene').director.stageIndex = 0; });
-  await solo([{ type: 'pursuer', x: 680, y: 360 }]);
+  // Just outside touching distance, so the hit is its swing, not body contact.
+  await solo([{ type: 'pursuer', x: 700, y: 360 }]);
   const struck = await waitFor(() => window.__warmup.scene.getScene('GameScene').player.hp < 100, null, 3000);
   const hpAfterSwing = await page.evaluate(() => {
     const g = window.__warmup.scene.getScene('GameScene');

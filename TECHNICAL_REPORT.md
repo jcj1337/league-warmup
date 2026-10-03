@@ -160,6 +160,7 @@ object, and an event-wired HUD kept breaking across restarts).
 | `WaveDirector.ts` | Stages, waves, finite rosters, breathers, stage tuning (HP / attack speed / fire), separation |
 | `EnemyProjectileSystem.ts` | Dodge pressure — fires only during a wave, cleared when a wave is cleared |
 | `HostileSpellSystem.ts` | Magus zones (line / circle), Magus orbs and basic spit globs: resolves them, applies damage, stun and slow; cleared when a wave is cleared |
+| `Progression.ts` | The player's level: XP from kills (`ENEMIES[id].xp`), levels 1-18 (`LEVELS`), ability haste for Q/W/E cooldowns, the base auto cycle (it is the `AttackPacing` source) and the Q rank-up |
 | `Difficulty.ts` | `threat(stage)`, `scaled(curve, stage, base)`, `stageDifficulty(stage)`: the per-stage curve every scaled number reads |
 | `AttackTokens.ts` | Turn-taking pool (`DIFFICULTY.attackTokens` for the stage): an enemy holds a token through a token-gated windup; tokens of inactive enemies are reclaimed |
 | `ScoreSystem.ts` | Score, damage, kills by archetype |
@@ -372,7 +373,7 @@ through the `AttackPacing` interface. Elapsed time plays no part: a player who t
 longer over a stage does not get faster autos for it.
 
 ```
-baseCooldownMs = STAGE_RAMPS.baseAttackCooldownMs[stage]             (700 → 420ms, then holds)
+baseCooldownMs = LEVELS.baseAttackCooldownMs / (1 + 0.06 × (level − 1))   (700 → 347ms at 18)
 cooldownMs     = baseCooldownMs / passive.attackSpeedMultiplier      ← authoritative
 windupMs       = windupMsOverride ?? max(minWindupMs, cooldownMs * windupPercent)
 ```
@@ -615,7 +616,6 @@ The director is also the single source of stage-scoped tuning for other systems:
 
 | Reader | Through | Value |
 | --- | --- | --- |
-| `AttackSystem` | `AttackPacing.baseAttackCooldownMs` | `STAGE_RAMPS.baseAttackCooldownMs` (700 → 420ms by Stage 10, then holds) |
 | `EnemyProjectileSystem` | `EnemyFirePressure.isWaveActive` / `fireIntensity` | fire on/off, `STAGE_RAMPS.enemyFire` (0 → 1 by Stage 10, then holds) |
 | itself, at spawn | `pipsFor(id, stage)` | `ENEMIES[id].pips`: `min(max, start + floor((stage−1)/every))` |
 | scene, HUD, tests | `difficulty` / `describeStage(i)` | the stage's `DIFFICULTY` numbers / its pips, pacing, fire and rosters |
@@ -920,7 +920,7 @@ leads or lags the mechanic.
 | `rangeFromPlayerEdge` | `false` | `true` = edge-to-edge (+14px effective) |
 | `projectileSpeed` / `projectileRadius` | 1150 / 6 | Damage lands sooner |
 
-The base attack cycle is per stage: `STAGE_RAMPS.baseAttackCooldownMs`.
+The base attack cycle comes from the player's level (`Progression`, `LEVELS`).
 
 The attack animation knobs live in `THEME.player.attack`: `windupLeanPx` 6,
 `releaseKickPx/Ms` 6/120, `chargeRingStartPad/EndPad` 20/3, `releaseRingRadius/Ms` 30/180.
@@ -962,7 +962,11 @@ last wave calls `onStageCleared()`, which heals the player.
 
 `STAGES`: the hand-written intro, one row per stage — `waves`, each a `WaveRoster` mix
 such as `{ basic: 2, pursuer: 2 }`. `ENDLESS.wavesPerStage` 3 for generated stages.
-`STAGE_RAMPS`: `baseAttackCooldownMs` and `enemyFire` per stage, last value holding.
+`STAGE_RAMPS`: `enemyFire` per stage, last value holding. `LEVELS`: max 18, `xp` first 10
+growth 1.2, `abilityHastePerLevel` 5, `baseAttackCooldownMs` 700, `attackSpeedPerLevel`
+0.06, `qRankUp` level 9 → 2 pips. `CONTACT.cooldownMs` 800; `ENEMIES[id].contactDamage`
+(6 / 10 / 6) and `xp` (1 / 2 / 3). `DIFFICULTY.damage` k 0.35, `contactDamage` k 0.5,
+`stageClearHeal` 1 (full). `BALANCE_VERSION` tags the run log.
 `ENEMIES`: per mob `name`, `cost`, `unlockStage`, `weight`, `maxShare`, optional
 `maxPerWave`, `pips { start, every, max }` (basic 1/3/3, Pursuer 2/3/4, Magus 1/3/3).
 `DIFFICULTY.packSize` 1 / k 0.4 / 1–5; `RUN.spawn.packMemberGapMs` 90. Values in §9.
@@ -1005,7 +1009,9 @@ action already work.
 movement        step = moveSpeed * dt;  position += normalize(dest - pos) * step
 attack reach    reach = ATTACK.range + enemy.radius + (rangeFromPlayerEdge ? player.radius : 0)
                 inRange ⟺ (dx² + dy²) <= reach²
-attack speed    cd  = STAGE_RAMPS.baseAttackCooldownMs[stage] / (1 + stacks * 0.10)
+attack speed    cd  = 700 / (1 + 0.06 (level − 1)) / (1 + stacks * 0.10)
+ability cd      cd  = base / (1 + 5 (level − 1) / 100)           Q / W / E only, not Flash
+contact         dmg = ENEMIES[id].contactDamage × T^0.5        ≤ 1 per enemy per 800ms
                 wind= max(90, cd * 0.25)
 cast progress   1 - (endsAt - now) / durationMs          (animation uses pow(·, 0.55))
 cooldown refund readyAt[id] = max(now, readyAt[id] - 750)   for q, w, e

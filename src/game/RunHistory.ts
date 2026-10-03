@@ -21,14 +21,21 @@ export interface RunRecord {
   runTimeSeconds: number;
   /** DIFFICULTY.growth the run was played on. Runs are only compared within one setting. */
   growth: number;
+  /** BALANCE_VERSION the run was played on (absent on runs logged before it existed). */
+  balanceVersion?: number;
+  /** The player's level when the run ended (absent before levels existed). */
+  level?: number;
   /** Source of the hit that took the last HP ('pursuer', 'basic', 'magus', 'edgeFire'), or null. */
   killedBy: string | null;
   /** Damage actually taken over the run, per source. */
   damageTaken: Record<string, number>;
+  /** Damage taken in the stage that ended the run (HP is restored at every stage clear). */
+  stageDamage?: Record<string, number>;
 }
 
 export interface RunSummary {
   growth: number;
+  balanceVersion: number;
   runs: number;
   /** Median stage reached; null with no runs. */
   median: number | null;
@@ -82,9 +89,9 @@ export const RunHistory = {
     }
   },
 
-  /** Stats over the runs played on one growth setting. */
-  summary(growth: number, recentCount = 10): RunSummary {
-    const runs = read().filter((r) => r.growth === growth);
+  /** Stats over the runs played on one growth setting and balance version. */
+  summary(growth: number, balanceVersion: number, recentCount = 10): RunSummary {
+    const runs = read().filter((r) => r.growth === growth && (r.balanceVersion ?? 0) === balanceVersion);
     const stages = runs.map((r) => r.stage).sort((a, b) => a - b);
     const mid = Math.floor(stages.length / 2);
     const median = stages.length === 0 ? null
@@ -94,6 +101,7 @@ export const RunHistory = {
     for (const r of runs) if (r.killedBy) killedBy[r.killedBy] = (killedBy[r.killedBy] ?? 0) + 1;
     return {
       growth,
+      balanceVersion,
       runs: runs.length,
       median,
       best: stages.length ? stages[stages.length - 1] : null,

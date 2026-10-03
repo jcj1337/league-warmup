@@ -1,15 +1,16 @@
 import Phaser from 'phaser';
-import { ARENA, ATTACK, BLINK_E, DEBUG, DIFFICULTY, PLAYER, SKILLSHOT_Q, SKILLSHOT_W } from '../../config/balance';
+import { ARENA, ATTACK, BALANCE_VERSION, BLINK_E, DEBUG, DIFFICULTY, ENEMIES, PLAYER, SKILLSHOT_Q, SKILLSHOT_W } from '../../config/balance';
 import { THEME } from '../../config/theme';
 import { ensureArt } from '../art/textures';
 import { Player } from '../entities/Player';
-import type { Enemy, EnemyArchetype } from '../entities/Enemy';
+import type { DamageKind, Enemy, EnemyArchetype } from '../entities/Enemy';
 import { RunHistory } from '../RunHistory';
 import { AttackSystem } from '../systems/AttackSystem';
 import { SkillshotSystem } from '../systems/SkillshotSystem';
 import { EnemyProjectileSystem } from '../systems/EnemyProjectileSystem';
 import { HostileSpellSystem } from '../systems/HostileSpellSystem';
 import { AttackTokens } from '../systems/AttackTokens';
+import { Progression } from '../systems/Progression';
 import { ScoreSystem } from '../systems/ScoreSystem';
 import { KitingMetrics } from '../systems/KitingMetrics';
 import { ApmTracker } from '../systems/ApmTracker';
@@ -56,11 +57,14 @@ export interface RoundResult {
   wastedRecoveryMs: number;
   /** Kills broken down by enemy archetype. */
   killsByType: Record<string, number>;
-  /** Damage taken per source, and the source of the killing blow (null if not killed). */
+  /** Damage taken per source over the run, and in the stage that killed you; the source of the killing blow. */
   damageTaken: Record<string, number>;
+  stageDamage: Record<string, number>;
   killedBy: string | null;
   /** DIFFICULTY.growth this run was played on. */
   growth: number;
+  /** The player's level when the run ended. */
+  level: number;
 }
 
 /** Snapshot the HUD polls every frame. */
@@ -95,6 +99,9 @@ export interface HudState {
   passiveStacks: number;
   passiveMaxStacks: number;
   passiveFraction: number;
+  /** The player's level (1-18) and 0..1 progress to the next one (1 at max). */
+  level: number;
+  levelProgress: number;
 }
 
 export class GameScene extends Phaser.Scene {
@@ -103,6 +110,8 @@ export class GameScene extends Phaser.Scene {
   private enemies: Enemy[] = [];
   private director!: WaveDirector;
   private passive!: PassiveSystem;
+  /** The player's level and XP: drives ability haste, attack speed and the Q rank-up. */
+  private progression!: Progression;
   private cooldowns!: AbilityCooldowns;
   private blink!: BlinkSystem;
   private cast!: CastSystem;
@@ -180,7 +189,8 @@ export class GameScene extends Phaser.Scene {
     this.metrics = new KitingMetrics();
     this.apm = new ApmTracker(this.clock.now);
     this.passive = new PassiveSystem();
-    this.cooldowns = new AbilityCooldowns();
+    this.progression = new Progression();
+    this.cooldowns = new AbilityCooldowns(() => this.progression.cooldownMultiplier);
     this.lastCastShownAt = -Infinity;
 
     // The run itself: stage/wave progression and the current wave's enemies.
@@ -193,13 +203,17 @@ export class GameScene extends Phaser.Scene {
     );
     this.enemies = this.director.enemies;
 
-    this.attacks = new AttackSystem(this, this.player, this.metrics, this.director, this.passive, {
+    this.attacks = new AttackSystem(this, this.player, this.metrics, this.progression, this.passive, {
       onHit: (target, killed) => this.onTargetHit(target, killed),
     });
 
     this.skillshot = new SkillshotSystem(this, this.player, this.cooldowns, {
       onQHit: (target, killed) => {
         this.onTargetHit(target, killed);
+        // Ranked-up Q (LEVELS.qRankUp): its extra pips land on whatever survived the first.
+        for (let extra = this.progression.qPips - 1; extra > 0 && target.active; extra--) {
+          if (target.takeHit()) this.onKill(target);
+        }
         this.grantPassiveStack();
         // A landed Q refunds the basic ability cooldowns — never Flash.
         this.cooldowns.reduce(SKILLSHOT_Q.hitCooldownReductionMs, ['q', 'w', 'e']);
@@ -559,7 +573,7 @@ export class GameScene extends Phaser.Scene {
         vy: this.player.vy,
         stunned: this.player.isStunned,
       },
-      damagePlayer: (amount, source) => this.onEnemyHit(amount, source),
+      damagePlayer: (amount, source, kind) => this.onEnemyHit(amount, source, kind),
       spells: this.hostileSpells,
       attackTokens: this.attackTokens,
       enemiesRemaining: this.director.enemiesRemaining,
@@ -591,13 +605,28 @@ export class GameScene extends Phaser.Scene {
     this.scoring.addHit();
 
     if (killed) {
-      // Score and kill tallies are per archetype, so a Pursuer is worth more.
-      this.scoring.addKill(target.archetype, target.scoreMultiplier);
-      this.director.onEnemyKilled(target, this.clock.now);
+      this.onKill(target);
       return;
     }
 
     if (target.isMarked(this.clock.now)) this.detonateMark(target);
+  }
+
+  /**
+   * Every kill, whatever landed it: score and kill tallies (per archetype, so a
+   * Pursuer is worth more), the wave's bookkeeping, and the kill's XP.
+   */
+  private onKill(target: Enemy): void {
+    this.scoring.addKill(target.archetype, target.scoreMultiplier);
+    this.director.onEnemyKilled(target, this.clock.now);
+    if (this.progression.addXp(ENEMIES[target.archetype].xp, this.clock.now) > 0) this.onLevelUp();
+  }
+
+  /** Level up: a gold ring and the new level over the slime. The numbers already changed. */
+  private onLevelUp(): void {
+    const { x, y, radius } = this.player;
+    this.fx.ring(x, y, radius + 4, radius + 46, 420, THEME.ui.accent, 1, 6);
+    this.fx.popup(x, y - radius - 24, `LEVEL ${this.progression.level}`, THEME.ui.accent, 900, 30);
   }
 
   /**
@@ -611,10 +640,7 @@ export class GameScene extends Phaser.Scene {
 
     const killed = target.takeHit();
     this.scoring.addMarkProc();
-    if (killed) {
-      this.scoring.addKill(target.archetype, target.scoreMultiplier);
-      this.director.onEnemyKilled(target, this.clock.now);
-    }
+    if (killed) this.onKill(target);
 
     this.fx.detonation(target.x, target.y);
   }
@@ -630,16 +656,21 @@ export class GameScene extends Phaser.Scene {
   }
 
   /**
-   * Damage from an enemy (a swing, a spit, a Magus spell), scaled by the
-   * stage's DIFFICULTY.damage. Edge fire has its own ramp and skips this.
+   * Damage from an enemy, scaled by the stage: attacks (swings, spit, Magus
+   * spells) by DIFFICULTY.damage, body contact by DIFFICULTY.contactDamage.
+   * Contact is logged as its own source ('basicContact', …). Edge fire has
+   * its own ramp and skips this.
    */
-  private onEnemyHit(damage: number, source: EnemyArchetype): void {
-    this.onPlayerHit(Math.round(damage * this.director.difficulty.damage), source);
+  private onEnemyHit(damage: number, source: EnemyArchetype, kind: DamageKind = 'attack'): void {
+    const diff = this.director.difficulty;
+    const mult = kind === 'contact' ? diff.contactDamage : diff.damage;
+    this.onPlayerHit(Math.round(damage * mult), kind === 'contact' ? `${source}Contact` : source);
   }
 
-  /** A stage was cleared: patch the player up a little before the next one. */
+  /** A stage was cleared: back to full HP (DIFFICULTY.stageClearHeal) before the next one. */
   private onStageCleared(): void {
-    const healed = this.player.heal(DIFFICULTY.stageClearHeal);
+    this.scoring.startStage();
+    const healed = this.player.heal(Math.round(this.player.maxHp * DIFFICULTY.stageClearHeal));
     if (healed > 0) {
       this.fx.popup(this.player.x, this.player.y - this.player.radius - 18, `+${healed}`, THEME.ui.good, 800, 26);
     }
@@ -677,7 +708,7 @@ export class GameScene extends Phaser.Scene {
     this.player.setRangeRingState(false, false, 0);
     this.player.stop();
 
-    const previousBest = RunHistory.summary(DIFFICULTY.growth).best;
+    const previousBest = RunHistory.summary(DIFFICULTY.growth, BALANCE_VERSION).best;
     this.result = {
       outcome,
       stageReached: this.director.stage,
@@ -702,8 +733,10 @@ export class GameScene extends Phaser.Scene {
       wastedRecoveryMs: Math.round(this.metrics.wastedRecoveryMs),
       killsByType: { ...this.scoring.killsByType },
       damageTaken: { ...this.scoring.damageTaken },
+      stageDamage: { ...this.scoring.stageDamage },
       killedBy: this.scoring.killedBy,
       growth: DIFFICULTY.growth,
+      level: this.progression.level,
     };
 
     // Local tuning log (see RunHistory). Only finished runs: a restart mid-run is not logged.
@@ -714,8 +747,11 @@ export class GameScene extends Phaser.Scene {
       wave: this.result.waveReached,
       runTimeSeconds: Math.round(this.result.runTimeSeconds * 10) / 10,
       growth: DIFFICULTY.growth,
+      balanceVersion: BALANCE_VERSION,
+      level: this.result.level,
       killedBy: this.result.killedBy,
       damageTaken: this.result.damageTaken,
+      stageDamage: this.result.stageDamage,
     });
   }
 
@@ -748,6 +784,8 @@ export class GameScene extends Phaser.Scene {
       passiveStacks: this.passive ? this.passive.stackCount : 0,
       passiveMaxStacks: this.passive ? this.passive.maxStacks : 0,
       passiveFraction: this.passive ? this.passive.remainingFraction : 0,
+      level: this.progression ? this.progression.level : 1,
+      levelProgress: this.progression ? this.progression.progress : 0,
     };
   }
 

@@ -32,11 +32,12 @@ const game = new Phaser.Game({
 //   __warmup.scene.getScene('GameScene').getHudState()
 //   __balance.ATTACK.range = 400      // most values apply on the next frame
 //   __theme.player.attack.windupLeanPx // presentation values
-//   __runs.summary()                   // your logged runs on the current growth setting
+//   __runs.summary()                   // your logged runs on the current growth + balance version
 //   __runs.list() / __runs.clear()     // every logged run / delete the log
 const runs = {
   list: () => RunHistory.list(),
-  summary: (growth: number = balance.DIFFICULTY.growth) => RunHistory.summary(growth),
+  summary: (growth: number = balance.DIFFICULTY.growth, version: number = balance.BALANCE_VERSION) =>
+    RunHistory.summary(growth, version),
   clear: () => RunHistory.clear(),
 };
 Object.assign(window as unknown as Record<string, unknown>, { __warmup: game, __balance: balance, __theme: THEME, __runs: runs });

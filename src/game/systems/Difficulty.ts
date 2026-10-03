@@ -31,6 +31,7 @@ export interface StageDifficulty {
   moveSpeed: number;
   projectileSpeed: number;
   damage: number;
+  contactDamage: number;
   attackTokens: number;
   packSize: number;
 }
@@ -46,6 +47,7 @@ export function stageDifficulty(stage: number): StageDifficulty {
     moveSpeed: scaled(D.moveSpeed, stage),
     projectileSpeed: scaled(D.projectileSpeed, stage),
     damage: scaled(D.damage, stage),
+    contactDamage: scaled(D.contactDamage, stage),
     attackTokens: Math.round(scaled(D.attackTokens, stage)),
     packSize: Math.round(scaled(D.packSize, stage)),
   };

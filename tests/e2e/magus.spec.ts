@@ -98,15 +98,15 @@ test('magus: roster + pips, spacing, Lance / Eye / Orb / Rite, stun rules, zones
     : fail(`magus pips: ${cfg.stages.map((s) => `${s.enemyPips.magus} vs ${s.enemyPips.basic}`).join(', ')}`);
   const spawned = await page.evaluate(() => {
     const d = window.__warmup.scene.getScene('GameScene').director;
-    d.stageIndex = 6;
+    d.stageIndex = 10;
     const m = d.spawnEnemy('magus');
     const out = { type: m.archetype, hp: m.hp, maxHp: m.maxHp, r: m.radius };
     m.destroy();
     d.stageIndex = 0;
     return out;
   });
-  spawned.type === 'magus' && spawned.maxHp === 3 && spawned.hp === 3 && spawned.r === cfg.magus.radius
-    ? pass(`a Stage 7 Magus spawns with 3 pips, radius ${spawned.r}`)
+  spawned.type === 'magus' && spawned.maxHp === 2 && spawned.hp === 2 && spawned.r === cfg.magus.radius
+    ? pass(`a Stage 11 Magus spawns with 2 pips, radius ${spawned.r}`)
     : fail(`spawned: ${JSON.stringify(spawned)}`);
 
   // === 2. Spacing ============================================================

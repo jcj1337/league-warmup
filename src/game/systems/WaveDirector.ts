@@ -18,7 +18,6 @@ import { Pursuer } from '../entities/Pursuer';
 import { Magus } from '../entities/Magus';
 import { mulberry32 } from '../art/pixel';
 import type { GameClock } from './GameClock';
-import type { AttackPacing } from './AttackSystem';
 import type { EnemyFirePressure } from './EnemyProjectileSystem';
 import { scaled, stageDifficulty, type StageDifficulty } from './Difficulty';
 
@@ -134,10 +133,10 @@ function ramp(values: readonly number[], stage: number): number {
  * never advances a wave: progression is kills alone.
  *
  * It is also the one source of stage-scoped tuning for other systems — enemy
- * health pips, the player's base auto cycle (AttackPacing) and enemy fire
- * (EnemyFirePressure).
+ * health pips and enemy fire (EnemyFirePressure). The player's attack speed
+ * comes from their level (Progression), not the stage.
  */
-export class WaveDirector implements AttackPacing, EnemyFirePressure {
+export class WaveDirector implements EnemyFirePressure {
   private readonly roster: Enemy[] = [];
   /** The rest of the current wave, soonest first. */
   private readonly pending: PendingArrival[] = [];
@@ -342,14 +341,13 @@ export class WaveDirector implements AttackPacing, EnemyFirePressure {
 
   /**
    * Everything one stage plays with, hand-written or generated: health pips
-   * per mob, the player's base auto cycle, edge-fire intensity and the rosters
-   * its waves field. A readout for the console and tests.
+   * per mob, edge-fire intensity and the rosters its waves field. A readout
+   * for the console and tests.
    */
   describeStage(stageIndex: number): {
     stage: number;
     generated: boolean;
     enemyPips: Record<EnemyArchetype, number>;
-    baseAttackCooldownMs: number;
     enemyFire: number;
     waves: ScaledRoster[];
   } {
@@ -358,7 +356,6 @@ export class WaveDirector implements AttackPacing, EnemyFirePressure {
       stage,
       generated: stageIndex >= STAGES.length,
       enemyPips: Object.fromEntries(IDS.map((id) => [id, this.pipsFor(id, stage)])) as Record<EnemyArchetype, number>,
-      baseAttackCooldownMs: ramp(STAGE_RAMPS.baseAttackCooldownMs, stage),
       enemyFire: ramp(STAGE_RAMPS.enemyFire, stage),
       waves: Array.from({ length: this.wavesIn(stageIndex) }, (_, w) => this.rosterFor(stageIndex, w)),
     };
@@ -374,11 +371,6 @@ export class WaveDirector implements AttackPacing, EnemyFirePressure {
   pipsFor(archetype: EnemyArchetype, stage = this.stage): number {
     const p = entry(archetype).pips;
     return Math.min(p.max, p.start + Math.floor((stage - 1) / p.every));
-  }
-
-  /** AttackPacing: the player's base auto cycle for the current stage. */
-  get baseAttackCooldownMs(): number {
-    return ramp(STAGE_RAMPS.baseAttackCooldownMs, this.stage);
   }
 
   /** EnemyFirePressure: 0..1 along the enemy projectile ramps. */

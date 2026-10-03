@@ -430,6 +430,10 @@ export const THEME = {
     hpLowTop: P.hpRed,
     hpLowBottom: P.hpRedDark,
     hitRim: P.danger,
+    /** Player level readout and XP bar on the vitals plate. */
+    level: P.gold,
+    xpTop: P.gold,
+    xpBottom: P.hpAmberDark,
     scrim: P.ink,
   },
 
