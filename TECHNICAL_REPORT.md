@@ -132,9 +132,10 @@ object, and an event-wired HUD kept breaking across restarts).
   windup progress / reach) the AI publishes for its view. Subclasses build their
   `view` in the constructor and supply `updateAi()`. Every combat system types
   against `Enemy`, never a concrete archetype.
-- **`Target.ts`** — basic enemy (red slime): wanders, never attacks.
-- **`Pursuer.ts`** — melee brute (horned purple slime) with a two-state AI (§9); tells its `PursuerView`
-  when a swing resolves and whether it landed.
+- **`Target.ts`** — basic enemy (red slime): hovers in a band around the player; from
+  `TARGETS.spit.fromStage` it spits (token-gated windup → glob via `HostileSpellSystem`).
+- **`Pursuer.ts`** — melee brute (horned purple slime) with a four-state AI (§9): chase, swing
+  windup, dash windup, dash. Tells its `PursuerView` when a swing resolves and whether it landed.
 - **`Magus.ts`** — artillery caster (brass-masked slate slime) with a Xerath-style kit (§9).
   Owns spacing, spell choice and charge states; the spells it places belong to
   `HostileSpellSystem`.
@@ -158,7 +159,9 @@ object, and an event-wired HUD kept breaking across restarts).
 | `PassiveSystem.ts` | Stack count, shared expiry, attack-speed multiplier |
 | `WaveDirector.ts` | Stages, waves, finite rosters, breathers, stage tuning (HP / attack speed / fire), separation |
 | `EnemyProjectileSystem.ts` | Dodge pressure — fires only during a wave, cleared when a wave is cleared |
-| `HostileSpellSystem.ts` | Magus zones (line / circle) and orbs: resolves them at their deadlines, applies damage, stun and slow; cleared when a wave is cleared |
+| `HostileSpellSystem.ts` | Magus zones (line / circle), Magus orbs and basic spit globs: resolves them, applies damage, stun and slow; cleared when a wave is cleared |
+| `Difficulty.ts` | `threat(stage)`, `scaled(curve, stage, base)`, `stageDifficulty(stage)`: the per-stage curve every scaled number reads |
+| `AttackTokens.ts` | Turn-taking pool (`DIFFICULTY.attackTokens` for the stage): an enemy holds a token through a token-gated windup; tokens of inactive enemies are reclaimed |
 | `ScoreSystem.ts` | Score, damage, kills by archetype |
 | `KitingMetrics.ts` | Six raw mechanical counters |
 
@@ -576,8 +579,8 @@ spawnWave() ─► fight ─► last enemy killed ─► intermission (GameClock
 - **`onEnemyKilled()`** is called from the scene's damage funnel. A dead enemy stays
   in the roster with `active=false`, so its death animation plays out. When no enemy
   is active, the wave is cleared **on the spot**: the phase becomes `'intermission'`
-  with `intermissionEndsAt = now + RUN.interWaveDelayMs` (800), or
-  `RUN.interStageDelayMs` (1200) after a stage's last wave — or `'complete'` after
+  with `intermissionEndsAt = now + RUN.interWaveDelayMs` (400), or
+  `RUN.interStageDelayMs` (700) after a stage's last wave — or `'complete'` after
   the final wave of the final stage.
 - **`update()`** advances once `now >= intermissionEndsAt` — the next wave, or Wave 1
   of the next stage — then runs enemy AI and separation. The breather is a GameClock
@@ -645,17 +648,38 @@ enemy.
 
 ### Pursuer AI
 
-Two states, no separate recovery — the cooldown is a timestamp checked from CHASE, so
-it keeps walking between swings.
+Four states, no separate recovery — the cooldowns are timestamps checked from CHASE,
+so it keeps walking between attacks.
 
 ```
-CHASE   walk at the player's CURRENT position at 55% of player speed
-        (facing smoothed via Angle.RotateTo; clamped to the arena)
-        in reach && now >= nextAttackAt → WINDUP
-WINDUP  rooted, telegraph ring contracts, 400ms
-        on expiry → resolveSwing(): damage ONLY if still in reach
-        nextAttackAt = swing start + 1200ms
+CHASE        walk at the player's CURRENT position at 55% of player speed
+             (facing smoothed via Angle.RotateTo; clamped to the arena)
+             canDash && now >= nextDashAt && player not stunned
+               && 110 <= dist <= 240 → DASH_WINDUP (angle locked, nextDashAt = now + 5000)
+             in reach && now >= nextAttackAt && player not stunned → WINDUP
+WINDUP       rooted, telegraph ring contracts, 400ms
+             on expiry → resolveSwing(): damage ONLY if still in reach
+             nextAttackAt = swing start + 1200ms
+DASH_WINDUP  rooted, crouched, locked path drawn, 350ms → DASH
+DASH         170px along the locked angle over 140ms; back to CHASE at full
+             distance or as soon as the player is in reach. No damage of its own.
 ```
+
+`canDash` is set at spawn from the stage (`PURSUER.dash.fromStage`, 4); the first dash
+waits 1s after activation.
+
+### Basic spit
+
+```
+hovering   now >= nextSpitAt && dist <= 400 && attackTokens.tryTake() → WINDUP
+WINDUP     rooted 350ms; aim tracks the player
+           on expiry → fireGlob() at the player's position NOW; release token;
+           nextSpitAt = now + 3000ms × (0.8..1.2)
+```
+
+`canSpit` is set at spawn from the stage (`TARGETS.spit.fromStage`, 2). The first spit
+is staggered 0.3–1× a cooldown after activation. Globs are plain `HostileSpellSystem`
+shots (damage 5, 280px/s, radius 6, range 400), so they fizzle on wave clear.
 
 | Stat | Value |
 | --- | --- |
@@ -915,7 +939,24 @@ Effect sizes and durations for every ability are presentation and live in `THEME
 
 ### The run
 
-`RUN`: `maxAliveEnemies` 4, `interWaveDelayMs` 800, `interStageDelayMs` 1200.
+`RUN`: `interWaveDelayMs` 400, `interStageDelayMs` 700, `spawn.gapJitter` ⅓, `spawn.manifestMs` 300.
+
+`DIFFICULTY` (each `clamp(base × T^k, min, max)`, `T = growth^(stage−1)`, growth 1.15):
+`waveSize` 4 / k 1; `maxAlive` 6 / k 0.6 / 6–30; `arrivalGapMs` 300 / k −0.5 / min 60;
+`moveSpeed` 1 / k 0.1; `projectileSpeed` 1 / k 0.15 (max 650px/s); `damage` 1 / k 0.2;
+`attackTokens` 2 / k 0.5 / 2–10; `magusPerWave` 1 / k 0.3 / max 3 (floored);
+`stageClearHeal` 25. Per-mob `scaling` blocks: basic `spitCooldownMs` k −0.15 / min 1500;
+Pursuer `dashCooldownMs` k −0.2 / min 2500, `attackCooldownMs` k −0.15 / min 800,
+`maxSpeedFraction` 0.85; Magus `spellGapMs` k −0.3 / min 700. An enemy resolves its
+scaled stats once, at spawn, from the stage it spawned on.
+
+Wave rosters: `WaveDirector.rosterFor(s, w)` keeps the authored mix and grows it to
+`max(authored, waveSize)` by largest remainder (ties to basic), caps Magi at
+`max(magusPerWave, authored)` and gives the excess to basics. Arrivals wait while
+`maxAlive` enemies are on the field (`arriveAllNow()`, the debug hook, ignores the cap).
+Enemy damage (swings, spit, Magus spells) goes through `GameScene.onEnemyHit()`, which
+multiplies by the stage's `damage`; edge fire keeps its own ramp. Clearing a stage's
+last wave calls `onStageCleared()`, which heals the player.
 
 `STAGES`: one row per stage — `enemyHpMultiplier`, `baseAttackCooldownMs`,
 `enemyFire`, and `waves` (each a `WaveRoster` such as `{ basic: 2, pursuer: 2 }`).
@@ -965,7 +1006,7 @@ cast progress   1 - (endsAt - now) / durationMs          (animation uses pow(·,
 cooldown refund readyAt[id] = max(now, readyAt[id] - 750)   for q, w, e
 enemy fire      param = lerp(start, end, STAGES[stage].enemyFire)
 enemy hp        hp = round(archetypeBaseHp * STAGES[stage].enemyHpMultiplier)
-wave clear      no enemy active → intermissionEndsAt = now + (last wave of stage ? 1200 : 800)
+wave clear      no enemy active → intermissionEndsAt = now + (last wave of stage ? 700 : 400)
 blink dest      d = cursor - player; dest = |d| > range ? player + normalize(d)*range : cursor
                 dest = clamp(dest, arena padding + player radius)
 straight shot   vx,vy = cos/sin(angle) * speed;  dies when travelled >= maxRange
@@ -1005,7 +1046,7 @@ slots all jump down on the next frame; Flash is untouched.
 
 **Wave clear.** the last living enemy takes lethal damage (auto, Q, E bolt or
 detonation) → `onTargetDamaged` → `director.onEnemyKilled` → no enemy active → phase
-`intermission`, `intermissionEndsAt = now + 800` (1200 after a stage's last wave) → later that same
+`intermission`, `intermissionEndsAt = now + 400` (700 after a stage's last wave) → later that same
 frame `enemyProjectiles.update` sees `!isWaveActive` → every hostile shot removed,
 nothing scheduled → the HUD polls `wavePhase` → "WAVE CLEAR" / "STAGE CLEAR" → at the
 deadline `director.update` → `advance()` → `spawnWave()` destroys the dead roster and

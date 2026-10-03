@@ -266,6 +266,8 @@ export const THEME = {
     frameMs: 260,
     hpBarOffsetY: 24,
     burst: [P.red, P.redLight, P.redShine],
+    /** Spit windup: a short dotted aim tick on the ground toward the player. */
+    spitAim: { color: P.warning, lengthPx: 34, alphaStart: 0.4, alphaEnd: 1 },
   },
 
   pursuer: {
@@ -279,6 +281,8 @@ export const THEME = {
     /** Telegraph: the ground under its real reach warms up across the windup. */
     telegraph: { color: P.warning, fillAlphaStart: 0.1, fillAlphaEnd: 0.28, alertAt: 0.55 },
     slashColor: P.purpleShine,
+    /** Dash: the locked path warms up red across the windup; afterimages trail the lunge. */
+    dash: { color: P.warning, fillAlphaStart: 0.1, fillAlphaEnd: 0.3, trail: P.purpleLight },
   },
 
   magus: {
@@ -373,6 +377,7 @@ export const THEME = {
       e: { color: P.e, spacing: 10, life: 160, size: 3 },
       hostile: { color: P.fireOrange, spacing: 16, life: 220, size: 6 },
       orb: { color: P.arcane, spacing: 10, life: 200, size: 4 },
+      glob: { color: P.redDeep, spacing: 10, life: 160, size: 3 },
     },
   },
 

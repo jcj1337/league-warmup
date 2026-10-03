@@ -14,6 +14,7 @@ import { Magus } from '../entities/Magus';
 import type { GameClock } from './GameClock';
 import type { AttackPacing } from './AttackSystem';
 import type { EnemyFirePressure } from './EnemyProjectileSystem';
+import { stageDifficulty, type StageDifficulty } from './Difficulty';
 
 /**
  * How an archetype is built. Adding a third enemy means adding one entry here,
@@ -21,23 +22,24 @@ import type { EnemyFirePressure } from './EnemyProjectileSystem';
  * every system downstream only knows about `Enemy`.
  */
 interface ArchetypeSpec {
-  create(scene: Phaser.Scene, clock: GameClock, x: number, y: number, pips: number): Enemy;
+  /** `stage` is 1-based: archetypes unlock behaviours (spit, dash) by stage. */
+  create(scene: Phaser.Scene, clock: GameClock, x: number, y: number, pips: number, stage: number): Enemy;
   /** Keep this much clear space from the player when spawning. */
   minSpawnDistance: number;
 }
 
 const ARCHETYPES: Record<EnemyArchetype, ArchetypeSpec> = {
   basic: {
-    create: (scene, clock, x, y, pips) => new Target(scene, clock, x, y, pips),
+    create: (scene, clock, x, y, pips, stage) => new Target(scene, clock, x, y, pips, stage),
     minSpawnDistance: TARGETS.minSpawnDistanceFromPlayer,
   },
   pursuer: {
-    create: (scene, clock, x, y, pips) => new Pursuer(scene, clock, x, y, pips),
+    create: (scene, clock, x, y, pips, stage) => new Pursuer(scene, clock, x, y, pips, stage),
     // Pursuers walk you down, so they get a wider berth on spawn.
     minSpawnDistance: TARGETS.minSpawnDistanceFromPlayer + 120,
   },
   magus: {
-    create: (scene, clock, x, y, pips) => new Magus(scene, clock, x, y, pips),
+    create: (scene, clock, x, y, pips, stage) => new Magus(scene, clock, x, y, pips, stage),
     // An artillery caster: it arrives roughly where it wants to stand.
     minSpawnDistance: TARGETS.minSpawnDistanceFromPlayer + 160,
   },
@@ -52,6 +54,9 @@ interface PendingArrival {
   /** GameClock time its arrival begins. */
   startsAt: number;
 }
+
+/** What a wave actually fields, per archetype. */
+export type ScaledRoster = Record<EnemyArchetype, number>;
 
 /** A roster as a flat list of archetypes, in ARCHETYPES order. */
 function expandRoster(roster: WaveRoster): EnemyArchetype[] {
@@ -74,12 +79,7 @@ function validateStages(): void {
       }
     }
     stage.waves.forEach((wave, w) => {
-      const count = expandRoster(wave).length;
-      if (count < 1 || count > RUN.maxAliveEnemies) {
-        throw new Error(
-          `STAGES[${s}].waves[${w}] fields ${count} enemies; a wave needs 1-${RUN.maxAliveEnemies}`,
-        );
-      }
+      if (expandRoster(wave).length < 1) throw new Error(`STAGES[${s}].waves[${w}] fields no enemies`);
     });
   });
 }
@@ -126,6 +126,7 @@ export class WaveDirector implements AttackPacing, EnemyFirePressure {
     private readonly scene: Phaser.Scene,
     private readonly clock: GameClock,
     private readonly playerPos: () => { x: number; y: number },
+    private readonly callbacks: { onStageCleared?: () => void } = {},
   ) {
     validateStages();
     this.spawnWave();
@@ -219,6 +220,45 @@ export class WaveDirector implements AttackPacing, EnemyFirePressure {
     return STAGES[this.stageIndex];
   }
 
+  /** Every scaled number for the current stage (see Difficulty). */
+  get difficulty(): StageDifficulty {
+    return stageDifficulty(this.stage);
+  }
+
+  /**
+   * The roster a wave actually fields: the authored MIX from STAGES, grown to
+   * the stage's DIFFICULTY.waveSize (never below the authored size). Counts are
+   * shared out by largest remainder so they sum exactly; Magi are capped at
+   * DIFFICULTY.magusPerWave (never below the authored count), the excess going
+   * to basics. Deterministic, so the same wave always fields the same roster.
+   */
+  rosterFor(stageIndex: number, waveIndex: number): ScaledRoster {
+    const authored = STAGES[stageIndex].waves[waveIndex];
+    const ids = Object.keys(ARCHETYPES) as EnemyArchetype[];
+    const authoredTotal = ids.reduce((n, id) => n + (authored[id] ?? 0), 0);
+    const diff = stageDifficulty(stageIndex + 1);
+    const total = Math.max(authoredTotal, diff.waveSize);
+
+    const exact = ids.map((id) => ((authored[id] ?? 0) * total) / authoredTotal);
+    const counts = exact.map(Math.floor);
+    let left = total - counts.reduce((a, b) => a + b, 0);
+    // Stable sort: ties go to the archetype listed first (basic).
+    const byRemainder = ids.map((_, i) => i).sort((a, b) => (exact[b] - counts[b]) - (exact[a] - counts[a]));
+    for (const i of byRemainder) {
+      if (left <= 0) break;
+      counts[i]++;
+      left--;
+    }
+
+    const roster = Object.fromEntries(ids.map((id, i) => [id, counts[i]])) as ScaledRoster;
+    const magusCap = Math.max(diff.magusPerWave, authored.magus ?? 0);
+    if (roster.magus > magusCap) {
+      roster.basic += roster.magus - magusCap;
+      roster.magus = magusCap;
+    }
+    return roster;
+  }
+
   /** Health pips an archetype spawns with on the current stage. */
   pipsFor(archetype: EnemyArchetype): number {
     return this.stageDefinition.enemyPips[archetype];
@@ -271,6 +311,7 @@ export class WaveDirector implements AttackPacing, EnemyFirePressure {
       this.currentPhase = 'complete';
       return;
     }
+    if (this.isLastWaveOfStage) this.callbacks.onStageCleared?.();
 
     this.currentPhase = 'intermission';
     this.intermissionEndsAt =
@@ -279,12 +320,13 @@ export class WaveDirector implements AttackPacing, EnemyFirePressure {
 
   /**
    * Skip the stagger: start every pending arrival now and activate everything
-   * mid-arrival. The composition and spots are unchanged. Test / debug hook.
+   * mid-arrival, ignoring the maxAlive cap. The composition and spots are
+   * unchanged. Test / debug hook.
    */
   arriveAllNow(): void {
     const now = this.clock.now;
     for (const entry of this.pending) entry.startsAt = now;
-    this.beginDueArrivals(now);
+    this.beginDueArrivals(now, Number.POSITIVE_INFINITY);
     for (const enemy of this.roster) {
       if (!enemy.spawning) continue;
       enemy.activeAt = now;
@@ -314,12 +356,13 @@ export class WaveDirector implements AttackPacing, EnemyFirePressure {
     this.roster.length = 0;
     this.pending.length = 0;
 
-    const { staggerMs } = RUN.spawn;
     const now = this.clock.now;
-    const order = Phaser.Utils.Array.Shuffle(expandRoster(this.stageDefinition.waves[this.waveIndex]));
+    const gap = this.difficulty.arrivalGapMs;
+    const jitter = RUN.spawn.gapJitter;
+    const order = Phaser.Utils.Array.Shuffle(expandRoster(this.rosterFor(this.stageIndex, this.waveIndex)));
     let startsAt = now;
     order.forEach((archetype, i) => {
-      if (i > 0) startsAt += Phaser.Math.Between(staggerMs.min, staggerMs.max);
+      if (i > 0) startsAt += gap * Phaser.Math.FloatBetween(1 - jitter, 1 + jitter);
       this.pending.push({ archetype, startsAt });
     });
 
@@ -327,9 +370,15 @@ export class WaveDirector implements AttackPacing, EnemyFirePressure {
     this.beginDueArrivals(now);
   }
 
-  /** Move every pending entry whose time has come onto the field, mid-arrival. */
-  private beginDueArrivals(nowMs: number): void {
-    while (this.pending.length > 0 && this.pending[0].startsAt <= nowMs) {
+  /**
+   * Move every pending entry whose time has come onto the field, mid-arrival —
+   * as long as there is room under the stage's DIFFICULTY.maxAlive. An entry
+   * that finds the field full waits, and arrives as soon as a slot frees up.
+   */
+  private beginDueArrivals(nowMs: number, cap = this.difficulty.maxAlive): void {
+    let onField = this.roster.filter((e) => !e.dead).length;
+    while (this.pending.length > 0 && this.pending[0].startsAt <= nowMs && onField < cap) {
+      onField++;
       const { archetype } = this.pending.shift()!;
       this.roster.push(this.spawnEnemy(archetype, RUN.spawn.manifestMs));
     }
@@ -342,7 +391,7 @@ export class WaveDirector implements AttackPacing, EnemyFirePressure {
   private spawnEnemy(archetype: EnemyArchetype, manifestMs = 0): Enemy {
     const spec = ARCHETYPES[archetype];
     const spot = this.findSpawnSpot(spec.minSpawnDistance);
-    const enemy = spec.create(this.scene, this.clock, spot.x, spot.y, this.pipsFor(archetype));
+    const enemy = spec.create(this.scene, this.clock, spot.x, spot.y, this.pipsFor(archetype), this.stage);
     if (manifestMs > 0) enemy.beginArrival(this.clock.now, manifestMs);
     return enemy;
   }

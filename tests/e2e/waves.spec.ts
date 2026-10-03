@@ -4,10 +4,15 @@ import { startSuite } from './support/harness';
 test('waves: stage/wave progression, variable waves per stage, finite rosters, breathers, run end, restart', async ({ page }, testInfo) => {
   const { pass, fail, section, finish } = await startSuite(page, testInfo, 400);
 
-  const cfg = await page.evaluate(() => ({
-    run: window.__balance.RUN,
-    stages: window.__balance.STAGES,
-  }));
+  const cfg = await page.evaluate(() => {
+    const d = window.__warmup.scene.getScene('GameScene').director;
+    return {
+      run: window.__balance.RUN,
+      stages: window.__balance.STAGES,
+      // What each wave actually fields: the authored mix, grown by the difficulty curve.
+      rosters: window.__balance.STAGES.map((st, s) => st.waves.map((_, w) => d.rosterFor(s, w))),
+    };
+  });
   // Progression is under test here, not survival: Pursuer swings land for 0, so
   // banner and arrival waits beside a live Pursuer can never kill the player.
   await page.evaluate(() => { window.__balance.PURSUER.attackDamage = 0; });
@@ -15,7 +20,7 @@ test('waves: stage/wave progression, variable waves per stage, finite rosters, b
   const waveCounts: number[] = cfg.stages.map((s) => s.waves.length);
   const wavesTotal = waveCounts.reduce((sum, n) => sum + n, 0);
   const lastStage = cfg.stages.length;
-  const rosterOf = (stage, wave) => cfg.stages[stage - 1].waves[wave - 1];
+  const rosterOf = (stage, wave) => cfg.rosters[stage - 1][wave - 1];
   const sizeOf = (roster): number => Object.values(roster).reduce((a: any, b: any) => a + b, 0) as number;
   /** Where the run goes after clearing `wave` of `stage` (not the final wave), per the table. */
   const nextAfter = (stage, wave) => wave < waveCounts[stage - 1]
@@ -180,11 +185,14 @@ test('waves: stage/wave progression, variable waves per stage, finite rosters, b
     ? pass(`short stages are not padded with bigger waves (avg ${avgSize(shortest).toFixed(1)} enemies vs ${avgSize([cfg.stages[lastStage - 1]]).toFixed(1)} in the final stage)`)
     : fail(`short stages average ${avgSize(shortest).toFixed(2)} enemies per wave vs ${avgSize([cfg.stages[lastStage - 1]]).toFixed(2)} in the final stage`);
   matches(fresh.roster, rosterOf(1, 1)) && fresh.roster.every((e) => e.active) && fresh.remaining === fresh.roster.length
-    ? pass(`Stage 1 Wave 1 spawns exactly its authored roster ${JSON.stringify(countTypes(fresh.roster))}`)
+    ? pass(`Stage 1 Wave 1 spawns exactly its scaled roster ${JSON.stringify(countTypes(fresh.roster))}`)
     : fail(`Stage 1 Wave 1 roster ${JSON.stringify(countTypes(fresh.roster))} vs ${JSON.stringify(rosterOf(1, 1))}`);
-  fresh.roster.length < cfg.run.maxAliveEnemies
-    ? pass(`a ${fresh.roster.length}-enemy wave leaves ${cfg.run.maxAliveEnemies - fresh.roster.length} of ${cfg.run.maxAliveEnemies} spots unused`)
-    : fail(`Stage 1 Wave 1 fielded ${fresh.roster.length} enemies`);
+  {
+    const authored = sizeOf(cfg.stages[0].waves[0]);
+    fresh.roster.length >= authored && fresh.roster.length <= 6
+      ? pass(`Stage 1 Wave 1 fields ${fresh.roster.length} (authored ${authored}, grown by the difficulty curve)`)
+      : fail(`Stage 1 Wave 1 fielded ${fresh.roster.length} enemies`);
+  }
   minGap(fresh.roster) > 0
     ? pass(`every enemy spawns in its own spot (closest gap ${minGap(fresh.roster).toFixed(0)}px)`)
     : fail(`enemies overlap at spawn (gap ${minGap(fresh.roster).toFixed(0)}px)`);
@@ -373,17 +381,22 @@ test('waves: stage/wave progression, variable waves per stage, finite rosters, b
     return out;
   });
   const pipsOf = (type, s) => cfg.stages[s].enemyPips[type];
-  const badRoster = table.find((t) => !matches(t.roster, cfg.stages[t.s].waves[t.w]) || t.stage !== t.s + 1 || t.wave !== t.w + 1 || t.phase !== 'wave');
+  const badRoster = table.find((t) => !matches(t.roster, cfg.rosters[t.s][t.w]) || t.stage !== t.s + 1 || t.wave !== t.w + 1 || t.phase !== 'wave');
   table.length === wavesTotal && !badRoster
-    ? pass(`all ${table.length} authored waves spawn exactly their rosters`)
+    ? pass(`all ${table.length} waves spawn exactly their scaled rosters`)
     : fail(`wave table mismatch: ${JSON.stringify(badRoster ?? table.length)}`);
   const badTotal = table.find((t) => t.of !== waveCounts[t.s]);
   !badTotal
     ? pass(`HUD wave total follows each stage's own count on every wave (${waveCounts.join(', ')})`)
     : fail(`HUD wave total ${badTotal?.of} on stage ${badTotal?.s + 1}, table says ${waveCounts[badTotal?.s]}`);
-  table.every((t) => t.roster.length >= 1 && t.roster.length <= cfg.run.maxAliveEnemies && t.roster.every((e) => e.active))
-    ? pass(`no wave fields more than ${cfg.run.maxAliveEnemies} enemies`)
-    : fail('a wave exceeded the enemy cap');
+  {
+    // Each wave keeps its authored mix and never shrinks below it.
+    const short = table.find((t) => t.roster.length < sizeOf(cfg.stages[t.s].waves[t.w]) || !t.roster.every((e) => e.active));
+    const firstSizes = cfg.rosters.map((st) => sizeOf(st[0]));
+    !short && firstSizes.every((n, i) => i === 0 || n >= firstSizes[i - 1])
+      ? pass(`waves never shrink below their authored size, and grow with the stage (Wave 1 sizes ${firstSizes.join(' / ')})`)
+      : fail(`wave sizes: ${JSON.stringify(short ?? firstSizes)}`);
+  }
   const overlapping = table.find((t) => minGap(t.roster) <= 0);
   !overlapping
     ? pass('every enemy in every wave spawns in its own spot')

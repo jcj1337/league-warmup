@@ -134,6 +134,13 @@ export class Player {
     this.rootCount = Math.max(0, this.rootCount - 1);
   }
 
+  /** Restore up to `amount` HP, never past full. @returns HP actually restored. */
+  heal(amount: number): number {
+    const healed = Math.min(amount, this.maxHp - this.hp);
+    this.hp += healed;
+    return healed;
+  }
+
   /** @returns damage actually taken (0 if the hit was eaten by i-frames). */
   takeDamage(amount: number, nowMs: number): number {
     if (nowMs - this.lastHitAt < PLAYER.hitInvulnerabilityMs) return 0;

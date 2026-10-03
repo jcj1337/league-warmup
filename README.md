@@ -48,15 +48,17 @@ the only thing that reads them.
 
 A run fights **10 stages** in a fixed arena, and stages differ in length: Stages 1–3
 are a single wave each, 4–6 have two waves, 7–9 three, and Stage 10 is a four-wave
-final gauntlet — 22 waves in all. Each wave is a finite, authored group of up to
-six enemies that arrive one at a time, in a shuffled order: the first at once, each
-later one 500–900ms after the previous, on a random spot away from you. An arriving
+final gauntlet — 22 waves in all. Each wave is a finite group of enemies (its mix
+authored, its size set by the difficulty curve below) that arrive one at a time, in a
+shuffled order: the first at once, each later one a short gap after the previous
+(300ms ±⅓ at Stage 1, 160ms at Stage 10), on a random spot away from you. Only so many
+can be on the field at once (6 at Stage 1, 13 at Stage 10); the rest wait for a slot. An arriving
 enemy holds its spot for 300ms — untargetable, undamageable and inert — then joins the
 fight. Killed enemies stay dead — nothing respawns mid-wave. When the last enemy of a
 wave dies and nobody is still due to arrive, the arena clears (hostile shots still in the air fizzle), a short
-breather runs — **800ms** between waves, **1200ms** between stages — and the next wave
-spawns. Clearing a stage's last wave moves you to Wave 1 of the next stage. You stay in
-control during the breather.
+breather runs — **400ms** between waves, **700ms** between stages — and the next wave
+spawns. Clearing a stage's last wave moves you to Wave 1 of the next stage and **heals
+25 HP** (never past full). You stay in control during the breather.
 
 Progression comes only from clearing enemies: elapsed time never advances a wave or a
 stage. A strong player reaches the hard encounters sooner; a struggling player keeps
@@ -68,38 +70,63 @@ score, kills by type, hits landed and W mark procs, Q accuracy and the raw mecha
 metrics. `R` restarts at
 Stage 1 Wave 1.
 
-Later stages are harder, not faster. Each stage row sets:
+Later stages are harder, not faster.
 
-- **Waves** — how many (one early, four at Stage 10) and each one's roster. Stage 1 is
+**The difficulty curve.** One threat level per stage, `T = 1.15^(stage − 1)` (+15% per
+stage, compounding), drives every scaled number: `value = clamp(base × T^k, min, max)`.
+The curves live in `DIFFICULTY` in [balance.ts](src/config/balance.ts); each mob's own
+scaled stats live in its `scaling` block.
+
+| | Stage 1 | Stage 5 | Stage 10 | Limit |
+| --- | --- | --- | --- | --- |
+| Enemies per wave (at least the authored size) | 4 | 7 | 14 | — |
+| On the field at once | 6 | 8 | 13 | 30 |
+| Gap between arrivals | 300ms | 227ms | 160ms | 60ms |
+| Enemy move speed | ×1 | ×1.06 | ×1.13 | Pursuer ≤ 0.85 of yours |
+| Spit / orb speed | ×1 | ×1.09 | ×1.21 | 650px/s |
+| Enemy damage (swing, spit, Magus) | ×1 | ×1.12 | ×1.29 | — |
+| Basics winding up a spit at once | 2 | 3 | 4 | 10 |
+| Spit / dash / swing cooldown, Magus spell gap (ms) | 3000 / 5000 / 1200 / 1400 | 2759 / 4471 / 1103 / 1184 | 2484 / 3888 / 994 / 960 | min 1500 / 2500 / 800 / 700 |
+
+Telegraphs (spit, dash, swing and Magus timings) and the 300ms arrival window are never
+scaled. Edge fire keeps its own per-stage ramp. Your kit never scales.
+
+Each stage row sets:
+
+- **Waves** — how many (one early, four at Stage 10) and each one's **mix**. Stage 1 is
   basic targets only; Pursuers join in Stage 2 and take a growing share of later waves,
-  with mixed waves throughout. The Magus joins in Stage 5, at most one per wave.
+  with mixed waves throughout. The Magus joins in Stage 5, at most one per wave (the
+  curve allows more from about Stage 13). A wave keeps its mix and grows to the curve's
+  size, shared out by largest remainder (`WaveDirector.rosterFor`).
 - **Enemy pips** — how many hits each enemy takes: basic 1 / 2 / 3 pips across Stages
   1–3 / 4–6 / 7–10 (capped at 3), Pursuer always one more (2 / 3 / 4), Magus the same as
   basic.
-- **Waves** size up: 3–4 enemies early, 4–5 mid, 5–6 late, with late waves swinging
-  between basic-heavy crowds and Pursuer-heavy brawls.
+- **Authored sizes** run 3–4 enemies early, 4–5 mid, 5–6 late, with late waves swinging
+  between basic-heavy crowds and Pursuer-heavy brawls; the curve grows them from there.
 - **Enemy fire** — edge projectiles are an occasional positioning check, one shot at a
   time: every 4.5s at Stage 1, tightening to every 3s by Stage 10.
 - **Your base attack speed** — the auto cycle shortens from 700ms (Stage 1) to 420ms
   (Stage 10). Time spent in a stage never speeds it up.
 
-B = basic target, P = Pursuer, M = Magus.
+B = basic target, P = Pursuer, M = Magus. Each cell is what the wave **fields**; the
+authored mix it grew from is in brackets.
 
 | Stage | Waves | Wave 1 | Wave 2 | Wave 3 | Wave 4 | Pips (B / P / M) | Base auto cycle |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| 1 | 1 | 3B | — | — | — | 1 / 2 / 1 | 700ms |
-| 2 | 1 | 3B + 1P | — | — | — | 1 / 2 / 1 | 669ms |
-| 3 | 1 | 2B + 2P | — | — | — | 1 / 2 / 1 | 638ms |
-| 4 | 2 | 3B + 1P | 3B + 2P | — | — | 2 / 3 / 2 | 607ms |
-| 5 | 2 | 2B + 1P + 1M | 2B + 3P | — | — | 2 / 3 / 2 | 576ms |
-| 6 | 2 | 4B + 1P | 2B + 2P + 1M | — | — | 2 / 3 / 2 | 544ms |
-| 7 | 3 | 3B + 1P + 1M | 2B + 3P | 3B + 2P + 1M | — | 3 / 4 / 3 | 513ms |
-| 8 | 3 | 2B + 3P | 4B + 1P + 1M | 2B + 3P + 1M | — | 3 / 4 / 3 | 482ms |
-| 9 | 3 | 3B + 2P + 1M | 2B + 3P | 2B + 3P + 1M | — | 3 / 4 / 3 | 451ms |
-| 10 | 4 | 4B + 1P + 1M | 3B + 3P | 4B + 1P + 1M | 2B + 3P + 1M | 3 / 4 / 3 | 420ms |
+| 1 | 1 | 4B (3B) | — | — | — | 1 / 2 / 1 | 700ms |
+| 2 | 1 | 4B + 1P (3B + 1P) | — | — | — | 1 / 2 / 1 | 669ms |
+| 3 | 1 | 3B + 2P (2B + 2P) | — | — | — | 1 / 2 / 1 | 638ms |
+| 4 | 2 | 5B + 1P (3B + 1P) | 4B + 2P (3B + 2P) | — | — | 2 / 3 / 2 | 607ms |
+| 5 | 2 | 4B + 2P + 1M (2B + 1P + 1M) | 3B + 4P (2B + 3P) | — | — | 2 / 3 / 2 | 576ms |
+| 6 | 2 | 6B + 2P (4B + 1P) | 4B + 3P + 1M (2B + 2P + 1M) | — | — | 2 / 3 / 2 | 544ms |
+| 7 | 3 | 6B + 2P + 1M (3B + 1P + 1M) | 4B + 5P (2B + 3P) | 5B + 3P + 1M (3B + 2P + 1M) | — | 3 / 4 / 3 | 513ms |
+| 8 | 3 | 4B + 7P (2B + 3P) | 8B + 2P + 1M (4B + 1P + 1M) | 5B + 5P + 1M (2B + 3P + 1M) | — | 3 / 4 / 3 | 482ms |
+| 9 | 3 | 7B + 4P + 1M (3B + 2P + 1M) | 5B + 7P (2B + 3P) | 5B + 6P + 1M (2B + 3P + 1M) | — | 3 / 4 / 3 | 451ms |
+| 10 | 4 | 11B + 2P + 1M (4B + 1P + 1M) | 7B + 7P (3B + 3P) | 11B + 2P + 1M (4B + 1P + 1M) | 6B + 7P + 1M (2B + 3P + 1M) | 3 / 4 / 3 | 420ms |
 
-All of it is tuned in one place: `RUN` (enemy cap, breathers, arrival stagger), `TARGETS` / `PURSUER` / `MAGUS` (enemy behaviour) and `STAGES` (per-stage
-waves, `enemyPips`, attack speed, enemy fire) in [balance.ts](src/config/balance.ts). Add or
+All of it is tuned in one place: `RUN` (breathers, arrival window), `DIFFICULTY` (the
+curve), `TARGETS` / `PURSUER` / `MAGUS` (enemy behaviour and per-mob scaling) and `STAGES`
+(per-stage wave mixes, `enemyPips`, attack speed, enemy fire) in [balance.ts](src/config/balance.ts). Add or
 remove waves in a stage by editing its `waves` list.
 
 The HUD shows `STAGE 7 / 10   WAVE 2 / 3   ENEMIES 2` along the top — the wave total is
@@ -185,14 +212,34 @@ Orbwalk loop: `T` (or `A` + click) → auto fires → right-click away → repea
 
 | | Look | Pips | Behaviour |
 | --- | --- | --- | --- |
-| Basic target | red slime with glowing eyes and a fanged snarl | 1 / 2 / 3 | always aggroed: walks toward you, then hovers 150–230px away inside your attack range, sidestepping around you; never attacks |
-| Pursuer | larger purple slime with devil horns | basic + 1 | walks you down at 55% of your speed; melee swing for **25** (a quarter of your HP) after a 400ms telegraph |
+| Basic target | red slime with glowing eyes and a fanged snarl | 1 / 2 / 3 | always aggroed: walks toward you, then hovers 150–230px away inside your attack range, sidestepping around you. From Stage 2 it **spits** (below) |
+| Pursuer | larger purple slime with devil horns | basic + 1 | walks you down at 55% of your speed; melee swing for **25** (a quarter of your HP) after a 400ms telegraph. From Stage 4 it **dashes** (below) |
 | Magus | tall slate slime in a brass crest and mask, rune tablets floating at its sides | same as basic | artillery caster with a Xerath-style kit (below); holds 360–480px from you, backs off at 50% of your speed, never moves while casting |
 
 Pips come from the current stage's `enemyPips` row. Pursuers first appear in
 Stage 2, the Magus in Stage 5. A Pursuer's swing only lands if you are still in reach when it
 resolves — walking or blinking out during the telegraph makes it miss. A Pursuer
 never starts a swing while you are stunned.
+
+### Basic spit and Pursuer dash
+
+**Spit** (basics, Stage 2+). Rooted for 350ms (hunkered, mouth glowing, a short red
+aim tick on the ground), then a small dark-red glob at where you are *at that
+instant*; it never re-aims. 5 damage, 280px/s, range 400, every ~3s per basic
+(±20%, so a group never fires in unison). A basic needs one of the **attack tokens**
+(`DIFFICULTY.attackTokens`: 2 at Stage 1, 4 at Stage 10) to start its windup, so only
+that many are ever winding up at once and a crowd takes turns. A basic killed
+mid-windup frees its token.
+
+**Dash** (Pursuers, Stage 4+). From 110–240px away (outside its swing reach), never
+at a stunned player: it crouches for 350ms while its path — **locked** at the start —
+glows red on the ground, then lunges 170px in 140ms, stopping early once you are in
+reach. The dash deals no damage; it closes the gap so the normal 400ms swing becomes a
+threat. Sidestep the strip and it lunges past you. Cooldown 5s from the start of a dash.
+
+Spit cooldown, dash cooldown and projectile speed scale with the stage (see the curve
+above). Tuned in `TARGETS.spit`, `PURSUER.dash` and `DIFFICULTY` in
+[balance.ts](src/config/balance.ts).
 
 ### The Magus
 
@@ -242,7 +289,9 @@ stay out of the HUD strips and always draw beneath combatants.
 | --- | --- |
 | You | friendly blue slime with a smile; its face turns toward where you move or aim |
 | Basic target | red slime, same family: angry brows, glowing yellow eyes, fangs |
+| Basic spit | hunkers down with a glowing mouth and a short dotted red aim tick; the glob is a small dark-red blob, smaller and darker than the orange fireballs |
 | Pursuer | bigger horned purple slime; rears up with white-hot eyes, flashes `!` and warms the ground red across its reach during the telegraph, then slams flat |
+| Pursuer dash | crouches low with white-hot eyes while a red strip shows its locked path, then lunges trailing purple afterimages |
 | Magus | tall slate slime, brass crest and mask with burning eye slits, two brass rune tablets bobbing at its sides; casting, it draws up tall, the tablets rise and flare, and energy gathers over its crest |
 | Magus zones | red ground edged in gold dots: a strip filling from the Magus outward (Lance), a disc with a ring closing inward and a white sweet spot (Eye / Rite) |
 | Magus orb | white-gold crackling spark with a gold trail |
@@ -271,10 +320,10 @@ is armed and flashes briefly after `T`.
 - `src/game/scenes/GameScene.ts` — input wiring, per-frame orchestration, round lifecycle.
 - `src/game/scenes/UIScene.ts` — HUD, ability bar, pause menu, end screen (polls GameScene).
 - `src/game/entities/` — `Player` (incl. stun / slow status), `Enemy` (abstract base), `Target`, `Pursuer`, `Magus`, `Projectile`, `AutoAttackMissile`.
-- `src/game/systems/` — `GameClock`, `InputController`, `AttackSystem`, `CastSystem`,
+- `src/game/systems/` — `GameClock`, `Difficulty` (the curve), `InputController`, `AttackSystem`, `CastSystem`, `AttackTokens` (enemy turn-taking),
   `AbilityCooldowns`, `SkillshotSystem` (Q+W), `BlinkSystem` (E+Flash), `PassiveSystem`,
   `WaveDirector` (stages, waves, breathers), `EnemyProjectileSystem`, `HostileSpellSystem`
-  (Magus zones and orbs), `ScoreSystem`, `KitingMetrics`.
+  (Magus zones and orbs, basic spit), `ScoreSystem`, `KitingMetrics`.
 - `src/game/ui/` — `AbilityBar`, `PassiveDisplay`, `PauseMenu`.
 
 See [TECHNICAL_REPORT.md](TECHNICAL_REPORT.md) for how the systems actually work.

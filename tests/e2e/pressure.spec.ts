@@ -6,6 +6,7 @@ test('pressure: wave sizes, staggered arrival + activation window, no premature 
   const { pass, fail, section, finish } = await startSuite(page, testInfo, 400, { arriveAll: false });
 
   const cfg = await page.evaluate(() => ({
+    rosters: window.__balance.STAGES.map((st, s) => st.waves.map((_, w) => window.__warmup.scene.getScene('GameScene').director.rosterFor(s, w))),
     run: window.__balance.RUN,
     stages: window.__balance.STAGES,
     fire: window.__balance.ENEMY_PROJECTILES,
@@ -28,7 +29,11 @@ test('pressure: wave sizes, staggered arrival + activation window, no premature 
     g.player.x = px; g.player.y = py; g.player.stop();
     g.attacks.cancel(); g.attacks.state = 'idle'; g.attacks.clearMissiles(); g.skillshot.clear();
   }, { px, py, hp });
-  /** Replace the wave with exactly these (already active) enemies, nothing pending. */
+  /**
+   * Replace the wave with exactly these (already active) enemies, nothing
+   * pending. Spit and dash are switched off: these sections pin the movement
+   * and melee AI (enemy-attacks.spec covers the attacks).
+   */
   const solo = (spots) => page.evaluate((spots) => {
     const g = window.__warmup.scene.getScene('GameScene');
     const d = g.director;
@@ -38,6 +43,8 @@ test('pressure: wave sizes, staggered arrival + activation window, no premature 
     for (const s of spots) {
       const e = d.spawnEnemy(s.type);
       e.x = s.x; e.y = s.y; e.hp = 9999;
+      if ('canSpit' in e) e.canSpit = false;
+      if ('canDash' in e) e.canDash = false;
       d.enemies.push(e);
     }
     g.enemies = d.enemies;
@@ -66,19 +73,22 @@ test('pressure: wave sizes, staggered arrival + activation window, no premature 
   cfg.stages.map((s) => s.waves.length).join('/') === '1/1/1/2/2/2/3/3/3/4'
     ? pass('waves per stage unchanged: 1/1/1/2/2/2/3/3/3/4')
     : fail(`waves per stage: ${cfg.stages.map((s) => s.waves.length).join('/')}`);
-  cfg.run.maxAliveEnemies === 6 && sizes.flat().every((n) => n >= 1 && n <= 6) && sizes.flat().includes(6) && sizes.flat().includes(5)
-    ? pass(`cap raised to ${cfg.run.maxAliveEnemies}; waves of 5 and 6 exist (sizes ${sizes.map((s) => s.join('+')).join(' / ')})`)
-    : fail(`cap ${cfg.run.maxAliveEnemies}, sizes ${JSON.stringify(sizes)}`);
   const inBand = (from, to, lo, hi) => sizes.slice(from, to).flat().every((n) => n >= lo && n <= hi);
   inBand(0, 3, 3, 4) && inBand(3, 6, 4, 5) && inBand(6, 10, 5, 6)
-    ? pass('early stages field 3-4 enemies, mid 4-5, late 5-6')
+    ? pass('authored mixes: early stages 3-4 enemies, mid 4-5, late 5-6')
     : fail(`size bands: ${JSON.stringify(sizes)}`);
+  {
+    const scaled = cfg.rosters.map((st) => st.map(sizeOf));
+    scaled.every((st, i) => st.every((n, w) => n >= sizes[i][w])) && Math.max(...scaled[9]) > Math.max(...sizes[9])
+      ? pass(`the difficulty curve grows them without shrinking any (fielded: ${scaled.map((st) => st.join('+')).join(' / ')})`)
+      : fail(`scaled sizes: ${JSON.stringify(scaled)}`);
+  }
   const lateMixes = new Set(cfg.stages.slice(6).flatMap((s) => s.waves.map((w) => `${w.basic ?? 0}B${w.pursuer ?? 0}P${w.magus ?? 0}M`)));
   lateMixes.size >= 3
     ? pass(`late waves vary their mixture (${[...lateMixes].join(', ')})`)
     : fail(`late waves repeat one mixture: ${[...lateMixes].join(', ')}`);
-  cfg.run.spawn.staggerMs.min >= 500 && cfg.run.spawn.staggerMs.max <= 900 && cfg.run.spawn.manifestMs === 300
-    ? pass(`arrivals ${cfg.run.spawn.staggerMs.min}-${cfg.run.spawn.staggerMs.max}ms apart, ${cfg.run.spawn.manifestMs}ms arrival window`)
+  cfg.run.spawn.manifestMs === 300 && cfg.run.spawn.gapJitter > 0 && cfg.run.spawn.gapJitter < 1
+    ? pass(`arrival gaps follow the curve ±${Math.round(cfg.run.spawn.gapJitter * 100)}%; ${cfg.run.spawn.manifestMs}ms arrival window`)
     : fail(`spawn config: ${JSON.stringify(cfg.run.spawn)}`);
 
   // === 2. Staggered arrival and authoritative activation =====================
@@ -87,9 +97,10 @@ test('pressure: wave sizes, staggered arrival + activation window, no premature 
   const arrival = await page.evaluate(() => new Promise<any>((res) => {
     const g = window.__warmup.scene.getScene('GameScene');
     const d = g.director;
-    d.stageIndex = 9; d.waveIndex = 0;   // Stage 10 Wave 1: six enemies
+    d.stageIndex = 6; d.waveIndex = 0;   // Stage 7 Wave 1: fits under its cap
     d.spawnWave();
     const t0 = g.clock.now;
+    const gapMs = d.difficulty.arrivalGapMs;
     const initial = { roster: d.enemies.length, pending: d.pendingCount, life: d.enemies.map((e) => e.lifecycle), started: d.enemies.map((e) => e.arrivalStartedAt) };
     let nextId = 1;
     const frames = [];
@@ -103,35 +114,38 @@ test('pressure: wave sizes, staggered arrival + activation window, no premature 
         })),
       });
       const f = frames[frames.length - 1];
-      if ((f.pending === 0 && f.spawning === 0) || g.clock.now - t0 > 9000) res({ t0, initial, frames });
+      if ((f.pending === 0 && f.spawning === 0) || g.clock.now - t0 > 9000) res({ t0, initial, frames, gapMs });
       else requestAnimationFrame(tick);
     };
     tick();
   }));
   const af = arrival.frames;
   const last = af[af.length - 1];
+  const w7 = cfg.rosters[6][0];
+  const n7 = sizeOf(w7);
   {
     const i = arrival.initial;
-    i.roster === 1 && i.pending === 5 && i.life[0] === 'spawning' && i.started[0] === arrival.t0
-      ? pass('the first enemy begins arriving the instant the wave starts; the other 5 are still pending')
+    i.roster === 1 && i.pending === n7 - 1 && i.life[0] === 'spawning' && i.started[0] === arrival.t0
+      ? pass(`the first enemy begins arriving the instant the wave starts; the other ${n7 - 1} are still pending`)
       : fail(`wave start: ${JSON.stringify(i)} at ${arrival.t0}`);
   }
   const byId = new Map();
   for (const f of af) for (const e of f.enemies) { if (!byId.has(e.id)) byId.set(e.id, []); byId.get(e.id).push({ ...e, clock: f.clock }); }
   const arrivals = [...byId.values()].map((seen) => seen[0]).sort((a, b) => a.start - b.start);
-  last.pending === 0 && last.spawning === 0 && last.alive === 6 && arrivals.length === 6
-    && sameCounts(countTypes(arrivals.map((e) => e.type)), cfg.stages[9].waves[0])
-    ? pass(`all 6 arrive and are alive together, exactly the authored ${JSON.stringify(cfg.stages[9].waves[0])}`)
+  last.pending === 0 && last.spawning === 0 && last.alive === n7 && arrivals.length === n7
+    && sameCounts(countTypes(arrivals.map((e) => e.type)), w7)
+    ? pass(`all ${n7} arrive and are alive together, exactly the scaled ${JSON.stringify(w7)}`)
     : fail(`after arrivals: ${JSON.stringify({ pending: last.pending, spawning: last.spawning, alive: last.alive, types: countTypes(arrivals.map((e) => e.type)) })}`);
   const gaps = arrivals.slice(1).map((e, i) => e.start - arrivals[i].start);
-  const { min: sMin, max: sMax } = cfg.run.spawn.staggerMs;
-  gaps.length === 5 && gaps.every((g) => g >= sMin - 50 && g <= sMax + 50)
-    ? pass(`arrivals begin ${gaps.map((g) => Math.round(g)).join(', ')}ms apart (${sMin}-${sMax} + frame slack)`)
+  const sMin = Math.round(arrival.gapMs * (1 - cfg.run.spawn.gapJitter));
+  const sMax = Math.round(arrival.gapMs * (1 + cfg.run.spawn.gapJitter));
+  gaps.length === n7 - 1 && gaps.every((g) => g >= sMin - 50 && g <= sMax + 50)
+    ? pass(`arrivals begin ${gaps.map((g) => Math.round(g)).join(', ')}ms apart (${sMin}-${sMax} at Stage 7, + frame slack)`)
     : fail(`arrival gaps: ${JSON.stringify(gaps)}`);
-  arrivals.every((e) => Math.abs(e.activeAt - e.start - cfg.run.spawn.manifestMs) < 1e-6) && new Set(arrivals.map((e) => e.activeAt)).size === 6
-    ? pass(`each becomes active exactly ${cfg.run.spawn.manifestMs}ms after its arrival begins, at 6 different times`)
+  arrivals.every((e) => Math.abs(e.activeAt - e.start - cfg.run.spawn.manifestMs) < 1e-6) && new Set(arrivals.map((e) => e.activeAt)).size === n7
+    ? pass(`each becomes active exactly ${cfg.run.spawn.manifestMs}ms after its arrival begins, at ${n7} different times`)
     : fail(`activation times: ${JSON.stringify(arrivals.map((e) => ({ start: e.start, activeAt: e.activeAt })))}`);
-  af.some((f) => f.alive >= 1 && f.alive < 6 && f.pending + f.spawning > 0)
+  af.some((f) => f.alive >= 1 && f.alive < n7 && f.pending + f.spawning > 0)
     ? pass('enemies do not all activate simultaneously (frames with some alive and others still to come)')
     : fail('never saw a partially arrived wave');
   const lateOrEarly = af.flatMap((f) => f.enemies.filter((e) => (e.life === 'spawning') !== (f.clock < e.activeAt)).map((e) => ({ clock: f.clock, ...e })));
@@ -157,9 +171,9 @@ test('pressure: wave sizes, staggered arrival + activation window, no premature 
     }
     return out;
   });
-  shuffles.every((s) => sameCounts(countTypes(s.order), cfg.stages[9].waves[0]))
+  shuffles.every((s) => sameCounts(countTypes(s.order), cfg.rosters[9][0]))
     && new Set(shuffles.map((s) => s.order.join())).size > 1 && new Set(shuffles.map((s) => s.starts.join())).size > 1
-    ? pass(`16 respawns of one wave: ${new Set(shuffles.map((s) => s.order.join())).size} different arrival orders and varied timing, always ${JSON.stringify(cfg.stages[9].waves[0])}`)
+    ? pass(`16 respawns of one wave: ${new Set(shuffles.map((s) => s.order.join())).size} different arrival orders and varied timing, always ${JSON.stringify(cfg.rosters[9][0])}`)
     : fail(`shuffled rosters: ${JSON.stringify(shuffles.slice(0, 4))}`);
   const table = await page.evaluate(() => {
     const d = window.__warmup.scene.getScene('GameScene').director;
@@ -174,10 +188,40 @@ test('pressure: wave sizes, staggered arrival + activation window, no premature 
     }
     return out;
   });
-  const badTable = table.find((t) => !sameCounts(countTypes(t.types), cfg.stages[t.s].waves[t.w]) || t.alive !== t.types.length);
+  const badTable = table.find((t) => !sameCounts(countTypes(t.types), cfg.rosters[t.s][t.w]) || t.alive !== t.types.length);
   !badTable
-    ? pass(`all ${table.length} authored waves deliver exactly their archetype counts through the shuffled queue`)
+    ? pass(`all ${table.length} waves deliver exactly their scaled archetype counts through the shuffled queue`)
     : fail(`archetype counts: ${JSON.stringify(badTable)}`);
+
+  // The field never holds more than the stage's cap; the overflow waits for a slot.
+  const capped = await page.evaluate(() => new Promise<any>((res) => {
+    const g = window.__warmup.scene.getScene('GameScene');
+    const d = g.director;
+    d.stageIndex = 9; d.waveIndex = 0;   // Stage 10 Wave 1: more enemies than the cap
+    d.spawnWave();
+    const cap = d.difficulty.maxAlive;
+    const t0 = g.clock.now;
+    let peak = 0;
+    let killedAt = null;
+    let refilled = false;
+    const tick = () => {
+      const onField = d.enemies.filter((e) => !e.dead).length;
+      peak = Math.max(peak, onField);
+      if (killedAt === null && d.pendingCount > 0 && onField === cap && g.clock.now - t0 > 3000) {
+        const e = d.enemies.find((x) => x.active);
+        e.hp = 1; e.takeHit(); d.onEnemyKilled(e, g.clock.now);
+        killedAt = g.clock.now;
+      } else if (killedAt !== null && !refilled) {
+        refilled = d.enemies.filter((x) => !x.dead).length === cap;
+      }
+      if (refilled || g.clock.now - t0 > 6000) res({ cap, peak, pendingAtCap: killedAt !== null, refilled });
+      else requestAnimationFrame(tick);
+    };
+    tick();
+  }));
+  capped.peak === capped.cap && capped.pendingAtCap && capped.refilled
+    ? pass(`Stage 10 fields at most ${capped.cap} at once; the rest wait, and one arrives as soon as a slot frees`)
+    : fail(`cap: ${JSON.stringify(capped)}`);
 
   // === 3. An arriving enemy is untargetable, undamageable and inert ==========
   section('3. An arriving enemy is untargetable, undamageable and inert');
@@ -351,7 +395,7 @@ test('pressure: wave sizes, staggered arrival + activation window, no premature 
     ? pass(`and keeps repositioning around the player instead of parking (${Math.round(path)}px of sidestepping in 2.5s)`)
     : fail(`no strafing: path ${Math.round(path)}px, modes ${[...new Set(late.map((f) => f.enemies[0].mode))]}`);
   settle.every((f) => f.hp === settle[0].hp && f.enemies[0].windup === -1 && f.enemies[0].state === null)
-    ? pass('it never winds up or deals damage')
+    ? pass('with its spit off, it never winds up or deals damage')
     : fail('a basic slime damaged the player or wound up');
 
   // === 5. Basic and Pursuer stay distinct ====================================
@@ -369,8 +413,10 @@ test('pressure: wave sizes, staggered arrival + activation window, no premature 
     ? pass(`the basic slime never follows it in (closest ${Math.round(basicMin)}px) and never swings`)
     : fail(`basic closest ${Math.round(basicMin)}px`);
   const drops = duo.slice(1).map((f, i) => duo[i].hp - f.hp).filter((d) => d !== 0);
-  drops.length > 0 && drops.every((d) => d === cfg.pursuer.attackDamage)
-    ? pass(`all damage came from Pursuer swings of ${cfg.pursuer.attackDamage} (${drops.length} hit(s))`)
+  // Enemy damage scales with the stage (DIFFICULTY.damage).
+  const swing = await page.evaluate((base) => Math.round(base * window.__warmup.scene.getScene('GameScene').director.difficulty.damage), cfg.pursuer.attackDamage);
+  drops.length > 0 && drops.every((d) => d === swing)
+    ? pass(`all damage came from Pursuer swings of ${swing} (${cfg.pursuer.attackDamage} scaled to this stage; ${drops.length} hit(s))`)
     : fail(`player hp drops: ${JSON.stringify(drops)}`);
 
   // === 6. A Pursuer hit costs a quarter of the player's HP ===================
@@ -379,6 +425,8 @@ test('pressure: wave sizes, staggered arrival + activation window, no premature 
     ? pass('PURSUER.attackDamage is 25 with the 400ms telegraph kept')
     : fail(`pursuer config: damage ${cfg.pursuer.attackDamage}, windup ${cfg.pursuer.windupMs}`);
   await calm(640, 360, 100);
+  // Stage 1: enemy damage is unscaled there.
+  await page.evaluate(() => { window.__warmup.scene.getScene('GameScene').director.stageIndex = 0; });
   await solo([{ type: 'pursuer', x: 680, y: 360 }]);
   const struck = await waitFor(() => window.__warmup.scene.getScene('GameScene').player.hp < 100, null, 3000);
   const hpAfterSwing = await page.evaluate(() => {
@@ -388,7 +436,7 @@ test('pressure: wave sizes, staggered arrival + activation window, no premature 
     return hp;
   });
   struck && hpAfterSwing === 75
-    ? pass('one landed swing takes the player from 100 to exactly 75')
+    ? pass('one landed Stage 1 swing takes the player from 100 to exactly 75')
     : fail(`after one swing: hp ${hpAfterSwing}`);
 
   // === 7. Edge fire is sparse, one shot at a time ============================

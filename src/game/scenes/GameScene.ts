@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { ARENA, ATTACK, BLINK_E, DEBUG, PLAYER, SKILLSHOT_Q, SKILLSHOT_W } from '../../config/balance';
+import { ARENA, ATTACK, BLINK_E, DEBUG, DIFFICULTY, PLAYER, SKILLSHOT_Q, SKILLSHOT_W } from '../../config/balance';
 import { THEME } from '../../config/theme';
 import { ensureArt } from '../art/textures';
 import { Player } from '../entities/Player';
@@ -8,6 +8,7 @@ import { AttackSystem } from '../systems/AttackSystem';
 import { SkillshotSystem } from '../systems/SkillshotSystem';
 import { EnemyProjectileSystem } from '../systems/EnemyProjectileSystem';
 import { HostileSpellSystem } from '../systems/HostileSpellSystem';
+import { AttackTokens } from '../systems/AttackTokens';
 import { ScoreSystem } from '../systems/ScoreSystem';
 import { KitingMetrics } from '../systems/KitingMetrics';
 import { ApmTracker } from '../systems/ApmTracker';
@@ -106,6 +107,8 @@ export class GameScene extends Phaser.Scene {
   private skillshot!: SkillshotSystem;
   private enemyProjectiles!: EnemyProjectileSystem;
   private hostileSpells!: HostileSpellSystem;
+  /** The crowd's turn-taking pool for token-gated enemy attacks (basic spit). */
+  private attackTokens!: AttackTokens;
   /** A move / attack / attack-move order issued while stunned, replayed when the stun ends. */
   private stunBuffered: (() => void) | null = null;
   private scoring!: ScoreSystem;
@@ -176,10 +179,12 @@ export class GameScene extends Phaser.Scene {
 
     // The run itself: stage/wave progression and the current wave's enemies.
     // Built before the systems that read stage tuning from it.
-    this.director = new WaveDirector(this, this.clock, () => ({
-      x: this.player.x,
-      y: this.player.y,
-    }));
+    this.director = new WaveDirector(
+      this,
+      this.clock,
+      () => ({ x: this.player.x, y: this.player.y }),
+      { onStageCleared: () => this.onStageCleared() },
+    );
     this.enemies = this.director.enemies;
 
     this.attacks = new AttackSystem(this, this.player, this.metrics, this.director, this.passive, {
@@ -213,9 +218,11 @@ export class GameScene extends Phaser.Scene {
       onPlayerHit: (damage) => this.onPlayerHit(damage),
     });
 
-    // Magus spells: placed zones and orbs live here, so they outlive their caster.
+    this.attackTokens = new AttackTokens(() => this.director.difficulty.attackTokens);
+
+    // Hostile spells: Magus zones and orbs, basic spit. They live here, so they outlive their caster.
     this.hostileSpells = new HostileSpellSystem(this, this.player, this.director, {
-      onPlayerHit: (damage) => this.onPlayerHit(damage),
+      onPlayerHit: (damage) => this.onEnemyHit(damage),
       onPlayerStunned: (ms) => this.stunPlayer(ms),
       onPlayerSlowed: (fraction, ms) => this.player.slow(this.clock.now, fraction, ms),
     });
@@ -546,8 +553,9 @@ export class GameScene extends Phaser.Scene {
         vy: this.player.vy,
         stunned: this.player.isStunned,
       },
-      damagePlayer: (amount) => this.onPlayerHit(amount),
+      damagePlayer: (amount) => this.onEnemyHit(amount),
       spells: this.hostileSpells,
+      attackTokens: this.attackTokens,
       enemiesRemaining: this.director.enemiesRemaining,
     });
     this.enemies = this.director.enemies;
@@ -618,6 +626,22 @@ export class GameScene extends Phaser.Scene {
   private grantPassiveStack(): void {
     this.passive.addStack();
     this.player.playPassivePulse(this.passive.isMaxStacked);
+  }
+
+  /**
+   * Damage from an enemy (a swing, a spit, a Magus spell), scaled by the
+   * stage's DIFFICULTY.damage. Edge fire has its own ramp and skips this.
+   */
+  private onEnemyHit(damage: number): void {
+    this.onPlayerHit(Math.round(damage * this.director.difficulty.damage));
+  }
+
+  /** A stage was cleared: patch the player up a little before the next one. */
+  private onStageCleared(): void {
+    const healed = this.player.heal(DIFFICULTY.stageClearHeal);
+    if (healed > 0) {
+      this.fx.popup(this.player.x, this.player.y - this.player.radius - 18, `+${healed}`, THEME.ui.good, 800, 26);
+    }
   }
 
   private onPlayerHit(damage: number): void {

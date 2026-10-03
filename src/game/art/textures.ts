@@ -18,10 +18,11 @@ export const TEX = {
     cast: 'player_cast',
     muzzle: 'fx_muzzle',
   },
-  basic: { frames: ['basic_0', 'basic_1'] },
+  basic: { frames: ['basic_0', 'basic_1'], spit: 'basic_spit' },
   pursuer: {
     walk: ['pursuer_walk_0', 'pursuer_walk_1'],
     windup: 'pursuer_windup',
+    crouch: 'pursuer_crouch',
     slam: 'pursuer_slam',
     alert: 'fx_alert',
   },
@@ -38,6 +39,7 @@ export const TEX = {
     e: 'proj_e',
     hostile: ['proj_hostile_0', 'proj_hostile_1'],
     orb: ['proj_orb_0', 'proj_orb_1'],
+    glob: 'proj_glob',
   },
   fx: {
     flashStar: 'fx_flash_star',

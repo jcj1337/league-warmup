@@ -341,6 +341,29 @@ export const TARGETS = {
   strafeArcDegrees: 35,
   /** Chance a new sidestep reverses the strafe direction. */
   strafeFlipChance: 0.3,
+  /** Per-stage scaling of its own stats (see DIFFICULTY). Movement speed scales globally. */
+  scaling: {
+    spitCooldownMs: { k: -0.15, min: 1500 } as Curve,
+  },
+  /**
+   * Spit: a slow, telegraphed glob. Rooted for `windupMs` (squashed, mouth
+   * glowing, a short aim tick on the ground), then it fires at where the player
+   * is at that instant — never re-aimed. A basic needs one of the attack
+   * tokens (DIFFICULTY.attackTokens) to start its windup, so a crowd takes turns.
+   */
+  spit: {
+    /** First stage on which basics spit. Stage 1 stays a pure kiting warm-up. */
+    fromStage: 2,
+    windupMs: 350,
+    /** Measured from one spit to the next, with ±cooldownJitter so a group never fires in unison. */
+    cooldownMs: 3000,
+    cooldownJitter: 0.2,
+    /** Only spits at a player within this centre-to-centre distance; also the glob's travel. */
+    range: 400,
+    speed: 280,
+    radius: 6,
+    damage: 5,
+  },
 } as const;
 
 /**
@@ -388,6 +411,31 @@ export const PURSUER = {
   attackCooldownMs: 1200,
   /** Kill score relative to a basic target. */
   scoreMultiplier: 2.25,
+  /** However fast stages make it, it stays slower than you: correct kiting always keeps spacing. */
+  maxSpeedFraction: 0.85,
+  /** Per-stage scaling of its own stats (see DIFFICULTY). Movement speed scales globally. */
+  scaling: {
+    dashCooldownMs: { k: -0.2, min: 2500 } as Curve,
+    attackCooldownMs: { k: -0.15, min: 800 } as Curve,
+  },
+  /**
+   * Dash: a telegraphed gap-closer, not a damage source. From outside its
+   * swing reach it crouches for `windupMs` with its path LOCKED and drawn on the
+   * ground, then lunges `distance` px in `durationMs` (stopping early once you
+   * are in reach). The normal, unchanged swing does the damage afterwards.
+   */
+  dash: {
+    /** First stage on which Pursuers dash. */
+    fromStage: 4,
+    /** Only dashes from this centre-to-centre distance band, and never at a stunned player. */
+    minRange: 110,
+    maxRange: 240,
+    windupMs: 350,
+    distance: 170,
+    durationMs: 140,
+    /** Measured from the start of one dash to the next. */
+    cooldownMs: 5000,
+  },
 } as const;
 
 /**
@@ -420,6 +468,10 @@ export const MAGUS = {
    * to make it punish running in straight lines.
    */
   aimLeadMs: 0,
+  /** Per-stage scaling of its own stats (see DIFFICULTY). Movement and orb speed scale globally. */
+  scaling: {
+    spellGapMs: { k: -0.3, min: 700 } as Curve,
+  },
 
   /**
    * Q — Lance. Rooted, it charges a line that tracks you, then LOCKS; the line
@@ -463,27 +515,68 @@ export const MAGUS = {
 // stage — progression is kills alone (see WaveDirector).
 
 export const RUN = {
-  /**
-   * Most enemies a wave may field — and so the most that can ever be alive at
-   * once. Every roster in STAGES is validated against this.
-   */
-  maxAliveEnemies: 6,
   /** Breather after clearing a wave, before the next wave of the same stage spawns. */
-  interWaveDelayMs: 800,
+  interWaveDelayMs: 400,
   /** Longer breather after a stage's last wave, before the next stage begins. */
-  interStageDelayMs: 1200,
+  interStageDelayMs: 700,
   /**
    * Staggered arrival. A wave's roster is shuffled; the first enemy begins
-   * arriving the moment the wave starts, each later one a random
-   * `staggerMs` after the previous. An arriving enemy stands on its fixed spawn
-   * spot for `manifestMs` — untargetable, undamageable, inert — and becomes a
-   * normal enemy at that GameClock deadline.
+   * arriving the moment the wave starts, each later one a random gap after the
+   * previous: DIFFICULTY.arrivalGapMs for the stage, ± `gapJitter`. An
+   * arriving enemy stands on its fixed spawn spot for `manifestMs` —
+   * untargetable, undamageable, inert — and becomes a normal enemy at that
+   * GameClock deadline. Never scaled: you always see where an enemy will appear.
    */
   spawn: {
-    staggerMs: { min: 500, max: 900 },
+    gapJitter: 1 / 3,
     manifestMs: 300,
   },
 } as const;
+
+// ============================================================================
+// DIFFICULTY — one threat level per stage drives every scaled number.
+// ============================================================================
+//
+//   T(stage) = growth ^ (stage - 1)              +15% per stage, compounding
+//   value    = clamp(base × T ^ k, min, max)     k = how strongly it follows T
+//
+// A negative k shrinks the value (cooldowns, gaps). See systems/Difficulty.ts.
+// Telegraphs (windups, Magus timings) and the arrival window are never scaled.
+
+/** One scaled stat. `base` defaults to the stat's own config value where a mob declares it. */
+export interface Curve {
+  base?: number;
+  k: number;
+  min?: number;
+  max?: number;
+}
+
+export const DIFFICULTY = {
+  /** Threat growth per stage. 1.15 doubles the threat about every 5 stages. */
+  growth: 1.15,
+  /**
+   * Enemies per wave. A stage's authored roster keeps its MIX; its size grows to
+   * this (never below the authored size). See WaveDirector.rosterFor().
+   */
+  waveSize: { base: 4, k: 1 } as Curve,
+  /** Most enemies on the field at once; further arrivals wait for a slot. */
+  maxAlive: { base: 6, k: 0.6, min: 6, max: 30 } as Curve,
+  /** Average gap between arrivals (jittered by RUN.spawn.gapJitter). */
+  arrivalGapMs: { base: 300, k: -0.5, min: 60 } as Curve,
+  /** Multiplies every mob's movement speed. The Pursuer stays capped below yours (PURSUER.maxSpeedFraction). */
+  moveSpeed: { base: 1, k: 0.1 } as Curve,
+  /** Multiplies enemy-cast projectile speeds (basic spit, Magus orb), capped at `projectileMaxSpeed`. */
+  projectileSpeed: { base: 1, k: 0.15 } as Curve,
+  projectileMaxSpeed: 650,
+  /** Multiplies damage from enemies (swings, spit, Magus spells). Edge fire keeps its own ramp. */
+  damage: { base: 1, k: 0.2 } as Curve,
+  /** How many basics may be winding up a spit at once (see AttackTokens). */
+  attackTokens: { base: 2, k: 0.5, min: 2, max: 10 } as Curve,
+  /** Most Magi per wave, rounded down: 1 until about Stage 13. Never adds a Magus to a wave that has none. */
+  magusPerWave: { base: 1, k: 0.3, max: 3 } as Curve,
+  /** HP restored when a stage is cleared (capped at full). */
+  stageClearHeal: 25,
+};
 
 /** How many of each archetype a wave spawns. Omitted archetypes spawn none. */
 export interface WaveRoster {
@@ -533,6 +626,10 @@ export interface StageDefinition {
  *     waves swing between basic-heavy crowds and Pursuer-heavy brawls rather
  *     than repeating one mixture. The Magus joins at Stage 5, at most one per
  *     wave, taking a body's place so wave sizes are unchanged.
+ *
+ * The rosters here are each wave's MIX. Its actual size follows
+ * DIFFICULTY.waveSize (never smaller than authored), so later stages field
+ * many more enemies in the same proportions. See WaveDirector.rosterFor().
  */
 export const STAGES: StageDefinition[] = [
   /* 1 */ { enemyPips: { basic: 1, pursuer: 2, magus: 1 }, baseAttackCooldownMs: 700, enemyFire: 0,

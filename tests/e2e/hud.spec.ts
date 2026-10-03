@@ -397,7 +397,9 @@ test('hud: contextual range ring, pause freeze + input gate, Q slot, settings me
   const cfg6 = await page.evaluate(() => ({ stages: window.__balance.STAGES, run: window.__balance.RUN }));
   const lastStage = cfg6.stages.length;
   const lastWaveOf = (stage) => cfg6.stages[stage - 1].waves.length;
-  const firstWaveSize = Object.values(cfg6.stages[0].waves[0]).reduce((a: any, b: any) => a + b, 0);
+  // What Stage 1 Wave 1 really fields: its authored mix, grown by the difficulty curve.
+  const firstWaveSize = await page.evaluate(() =>
+    Object.values(window.__warmup.scene.getScene('GameScene').director.rosterFor(0, 0)).reduce((a: any, b: any) => a + b, 0) as number);
   /** Test-only setup: put the director on a stage/wave with a fresh roster, arena quiet. */
   const jumpTo = (stage, wave) => page.evaluate(([st, wv]) => {
     const g = window.__warmup.scene.getScene('GameScene');

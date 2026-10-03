@@ -5,6 +5,7 @@ import { TEX } from '../art/textures';
 import { MagusView } from '../view/MagusView';
 import type { EnemyArt } from '../view/EnemyView';
 import { Enemy, type EnemyArchetype, type EnemyContext } from './Enemy';
+import { projectileSpeed, scaled } from '../systems/Difficulty';
 import type { GameClock } from '../systems/GameClock';
 
 /**
@@ -59,6 +60,9 @@ export class Magus extends Enemy {
   aimAngle = 0;
   /** True once it has spent its Rite. */
   riteUsed = false;
+  /** Its stage's spell gap and orb speed (see DIFFICULTY). */
+  readonly spellGapMs: number;
+  readonly orbSpeed: number;
 
   private stateStartedAt = 0;
   private stateEndsAt = 0;
@@ -72,8 +76,10 @@ export class Magus extends Enemy {
   private goalY: number;
   private nextPlanAt = 0;
 
-  constructor(scene: Phaser.Scene, clock: GameClock, x: number, y: number, pips: number) {
-    super(scene, clock, x, y, { radius: MAGUS.radius, maxHp: pips, scoreMultiplier: MAGUS.scoreMultiplier });
+  constructor(scene: Phaser.Scene, clock: GameClock, x: number, y: number, pips: number, stage: number) {
+    super(scene, clock, x, y, { radius: MAGUS.radius, maxHp: pips, scoreMultiplier: MAGUS.scoreMultiplier, stage });
+    this.spellGapMs = scaled(MAGUS.scaling.spellGapMs, stage, MAGUS.spellGapMs);
+    this.orbSpeed = projectileSpeed(MAGUS.orb.speed, stage);
     this.goalX = x;
     this.goalY = y;
     this.view = new MagusView(scene, this, ART);
@@ -123,7 +129,7 @@ export class Magus extends Enemy {
             x: this.x + Math.cos(this.aimAngle) * this.radius,
             y: this.y + Math.sin(this.aimAngle) * this.radius,
             angle: this.aimAngle,
-            speed: O.speed,
+            speed: this.orbSpeed,
             radius: O.radius,
             range: O.range,
             damage: O.damage,
@@ -146,7 +152,7 @@ export class Magus extends Enemy {
         }
         if (this.riteShotsLeft === 0 && nowMs >= this.stateEndsAt) {
           this.enter('reposition', nowMs, 0);
-          this.nextCastAt = nowMs + MAGUS.spellGapMs;
+          this.nextCastAt = nowMs + this.spellGapMs;
         }
         break;
 
@@ -187,7 +193,7 @@ export class Magus extends Enemy {
 
   private begin(id: SpellId, nowMs: number, ctx: EnemyContext): boolean {
     this.readyAt[id] = nowMs + MAGUS[id].cooldownMs;
-    this.nextCastAt = nowMs + MAGUS.spellGapMs;
+    this.nextCastAt = nowMs + this.spellGapMs;
 
     const aim = this.aimPoint(ctx);
     this.aimAngle = Math.atan2(aim.y - this.y, aim.x - this.x);
@@ -251,7 +257,7 @@ export class Magus extends Enemy {
     const dy = this.goalY - this.y;
     const toGoal = Math.hypot(dx, dy);
     if (toGoal > 2) {
-      const step = Math.min(PLAYER.moveSpeed * MAGUS.moveSpeedFraction * deltaSeconds, toGoal);
+      const step = Math.min(PLAYER.moveSpeed * MAGUS.moveSpeedFraction * this.moveScale * deltaSeconds, toGoal);
       this.x += (dx / toGoal) * step;
       this.y += (dy / toGoal) * step;
       this.pose.moving = true;

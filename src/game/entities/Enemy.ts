@@ -1,7 +1,9 @@
 import Phaser from 'phaser';
-import { SKILLSHOT_W } from '../../config/balance';
+import { DIFFICULTY, SKILLSHOT_W } from '../../config/balance';
+import { scaled } from '../systems/Difficulty';
 import type { GameClock } from '../systems/GameClock';
 import type { HostileSpellSink } from '../systems/HostileSpellSystem';
+import type { AttackTokens } from '../systems/AttackTokens';
 import type { EnemyView } from '../view/EnemyView';
 
 /** Identifies an archetype for spawn weighting, scoring and kill tallies. */
@@ -37,6 +39,8 @@ export interface EnemyContext {
    * them, so a spell already placed still lands after its caster dies.
    */
   spells: HostileSpellSink;
+  /** Shared pool a crowd takes turns with for token-gated attacks (the basic spit). */
+  attackTokens: AttackTokens;
   /** Enemies still between the player and a wave clear (pending + arriving + alive), the caller included. */
   enemiesRemaining: number;
 }
@@ -47,6 +51,8 @@ export interface EnemyOptions {
   maxHp: number;
   /** Kill score = SCORE.pointsPerKill * this. */
   scoreMultiplier: number;
+  /** 1-based stage it spawned on: its scaled stats are fixed from this. */
+  stage: number;
 }
 
 /**
@@ -84,6 +90,10 @@ export abstract class Enemy {
 
   public readonly radius: number;
   public readonly scoreMultiplier: number;
+  /** The stage it spawned on. */
+  public readonly stage: number;
+  /** DIFFICULTY.moveSpeed on that stage: multiplies every speed the AI moves at. */
+  public readonly moveScale: number;
 
   /** Remaining health pips. */
   public hp: number;
@@ -127,6 +137,8 @@ export abstract class Enemy {
     this.y = y;
     this.radius = opts.radius;
     this.scoreMultiplier = opts.scoreMultiplier;
+    this.stage = opts.stage;
+    this.moveScale = scaled(DIFFICULTY.moveSpeed, opts.stage);
     this.maxHp = opts.maxHp;
     this.hp = opts.maxHp;
   }

@@ -1,11 +1,13 @@
 import Phaser from 'phaser';
-import { DEBUG } from '../../config/balance';
+import { DEBUG, PURSUER } from '../../config/balance';
 import { THEME, actorDepth } from '../../config/theme';
 import { TEX } from '../art/textures';
 import type { Enemy } from '../entities/Enemy';
+import type { Pursuer } from '../entities/Pursuer';
+import type { Target } from '../entities/Target';
 import { Fx } from './Fx';
 import { PipBar } from './PipBar';
-import { dottedRing } from './pixelDraw';
+import { dottedLine, dottedRing } from './pixelDraw';
 
 /** How one archetype looks. Gameplay radius and reach live on the entity, not here. */
 export interface EnemyArt {
@@ -184,22 +186,66 @@ export class EnemyView {
 }
 
 /**
+ * The basic (red slime). Its spit windup shows as the hunkered, glowing-mouth
+ * frame (the art's `windup`) plus a short dotted aim tick on the ground
+ * pointing where the glob will go.
+ */
+export class BasicView extends EnemyView {
+  /** Plain readout of the aim tick, for inspection. */
+  readonly aim = { visible: false, angle: 0 };
+
+  constructor(scene: Phaser.Scene, private readonly basic: Target, art: EnemyArt) {
+    super(scene, basic, art);
+  }
+
+  protected override drawExtras(): void {
+    const b = this.basic;
+    if (!b.spitting) {
+      this.aim.visible = false;
+      return;
+    }
+    const A = THEME.basic.spitAim;
+    const t = Math.max(0, b.pose.windup);
+    const dx = Math.cos(b.spitAngle);
+    const dy = Math.sin(b.spitAngle);
+    const from = b.radius + 4;
+    dottedLine(
+      this.overlay,
+      b.x + dx * from, b.y + dy * from,
+      b.x + dx * (from + A.lengthPx), b.y + dy * (from + A.lengthPx),
+      A.color, Phaser.Math.Linear(A.alphaStart, A.alphaEnd, t), 3, 7,
+    );
+    this.aim.visible = true;
+    this.aim.angle = b.spitAngle;
+  }
+
+  protected override hideExtras(): void {
+    this.aim.visible = false;
+  }
+}
+
+/**
  * The Pursuer (horned purple slime) adds a very loud attack telegraph: across
  * the real 400ms windup it rears up with white-hot eyes, the ground under its
  * actual reach warms up red, a ring contracts onto it and a "!" flashes over
  * its head. When the swing resolves it flattens into a slam, with a slash only
  * if it connected.
+ *
+ * Its dash reads the same way: crouched low with white-hot eyes while the
+ * locked path warms up red on the ground, then afterimages along the lunge.
  */
 export class PursuerView extends EnemyView {
   readonly alert: Phaser.GameObjects.Image;
   /** Plain readout of the telegraph, for inspection. */
   readonly telegraph = { visible: false, progress: 0 };
+  /** Plain readout of the dash path telegraph, for inspection. */
+  readonly dashPath = { visible: false, angle: 0 };
   private swingAge = Number.POSITIVE_INFINITY;
 
-  constructor(scene: Phaser.Scene, enemy: Enemy, art: EnemyArt) {
-    super(scene, enemy, art);
+  constructor(scene: Phaser.Scene, private readonly pursuer: Pursuer, art: EnemyArt) {
+    super(scene, pursuer, art);
     const S = THEME.art.scale;
-    this.alert = scene.add.image(enemy.x, enemy.y, TEX.pursuer.alert).setScale(S).setDepth(THEME.depth.mark).setVisible(false);
+    this.alert = scene.add.image(pursuer.x, pursuer.y, TEX.pursuer.alert).setScale(S).setDepth(THEME.depth.mark).setVisible(false);
   }
 
   /** The swing resolved. `landed` = the player was still in reach. */
@@ -211,10 +257,11 @@ export class PursuerView extends EnemyView {
     }
   }
 
-  protected override drawExtras(_nowMs: number, bx: number, by: number, deltaSeconds: number): void {
+  protected override drawExtras(nowMs: number, bx: number, by: number, deltaSeconds: number): void {
     const T = THEME.pursuer;
     const pose = this.enemy.pose;
     this.swingAge += deltaSeconds * 1000;
+    this.drawDash(nowMs);
 
     // The slam frame holds briefly after a swing resolves (tint is kept by setTexture).
     if (pose.windup < 0 && this.swingAge < T.slamMs) this.sprite.setTexture(TEX.pursuer.slam);
@@ -239,9 +286,41 @@ export class PursuerView extends EnemyView {
     }
   }
 
+  /** Dash windup: crouch + the locked path warming up red. Lunge: afterimage puffs. */
+  private drawDash(nowMs: number): void {
+    const p = this.pursuer;
+    const D = THEME.pursuer.dash;
+    const t = p.dashWindupProgress(nowMs);
+    if (t >= 0) {
+      this.sprite.setTexture(TEX.pursuer.crouch);
+      const len = PURSUER.dash.distance + p.radius;
+      const half = p.radius * 0.8;
+      const dx = Math.cos(p.dashAngle);
+      const dy = Math.sin(p.dashAngle);
+      const nx = -dy * half;
+      const ny = dx * half;
+      const ex = p.x + dx * len;
+      const ey = p.y + dy * len;
+      this.overlay.fillStyle(D.color, Phaser.Math.Linear(D.fillAlphaStart, D.fillAlphaEnd, t));
+      this.overlay.fillPoints([
+        { x: p.x + nx, y: p.y + ny }, { x: ex + nx, y: ey + ny },
+        { x: ex - nx, y: ey - ny }, { x: p.x - nx, y: p.y - ny },
+      ], true);
+      dottedLine(this.overlay, p.x + nx, p.y + ny, ex + nx, ey + ny, D.color, 0.5 + 0.5 * t);
+      dottedLine(this.overlay, p.x - nx, p.y - ny, ex - nx, ey - ny, D.color, 0.5 + 0.5 * t);
+      Object.assign(this.dashPath, { visible: true, angle: p.dashAngle });
+      return;
+    }
+    this.dashPath.visible = false;
+    if (p.state === 'dash') {
+      Fx.of(this.scene).trail(p.x, p.y, { color: D.trail, life: 180, size: 9 });
+    }
+  }
+
   protected override hideExtras(): void {
     this.alert.setVisible(false);
     this.telegraph.visible = false;
+    this.dashPath.visible = false;
   }
 
   override destroy(): void {

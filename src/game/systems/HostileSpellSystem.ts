@@ -3,6 +3,8 @@ import { Projectile } from '../entities/Projectile';
 import { Fx } from '../view/Fx';
 import { HostileSpellView } from '../view/HostileSpellView';
 import { PROJECTILE_ART } from '../view/projectileArt';
+import type { ProjectileArt } from '../view/ProjectileView';
+import { THEME } from '../../config/theme';
 import type { Player } from '../entities/Player';
 
 /** A line that lands `delayMs` after it is placed (Magus Lance). */
@@ -28,8 +30,8 @@ export interface CircleSpell {
   centre?: { radius: number; damage: number; slowFraction: number; slowMs: number };
 }
 
-/** A straight, visible projectile that stuns on contact, longer the farther it flew (Magus Orb). */
-export interface OrbSpell {
+/** A straight, visible projectile that only deals damage (basic spit). */
+export interface GlobSpell {
   x: number;
   y: number;
   angle: number;
@@ -37,6 +39,10 @@ export interface OrbSpell {
   radius: number;
   range: number;
   damage: number;
+}
+
+/** A shot that also stuns on contact, longer the farther it flew (Magus Orb). */
+export interface OrbSpell extends GlobSpell {
   stunMinMs: number;
   stunMaxMs: number;
 }
@@ -46,6 +52,7 @@ export interface HostileSpellSink {
   castLine(spell: LineSpell, nowMs: number): void;
   castCircle(spell: CircleSpell, nowMs: number): void;
   fireOrb(spell: OrbSpell): void;
+  fireGlob(spell: GlobSpell): void;
 }
 
 export type ZoneShape = ({ kind: 'line' } & LineSpell) | ({ kind: 'circle' } & CircleSpell);
@@ -53,9 +60,11 @@ export type ZoneShape = ({ kind: 'line' } & LineSpell) | ({ kind: 'circle' } & C
 /** A placed zone and its deadline. Read by HostileSpellView. */
 export type SpellZone = ZoneShape & { placedAt: number; resolveAt: number };
 
-interface LiveOrb {
+interface LiveShot {
   missile: Projectile;
-  spell: OrbSpell;
+  spell: GlobSpell;
+  /** Orbs only: the stun range, by distance flown. */
+  stun?: { minMs: number; maxMs: number };
 }
 
 interface HostileSpellCallbacks {
@@ -66,7 +75,7 @@ interface HostileSpellCallbacks {
 
 /**
  * Every hostile spell an enemy has cast and that has not landed yet: delayed
- * ground zones and orbs in flight.
+ * ground zones, and shots in flight (Magus orbs, basic spit).
  *
  * Spells live here, not on their caster, so that a zone already placed still
  * lands after the caster dies — only a spell still being CHARGED dies with it.
@@ -79,7 +88,7 @@ interface HostileSpellCallbacks {
  */
 export class HostileSpellSystem implements HostileSpellSink {
   readonly zones: SpellZone[] = [];
-  private readonly orbs: LiveOrb[] = [];
+  private readonly shots: LiveShot[] = [];
   private readonly view: HostileSpellView;
   private now = 0;
 
@@ -97,7 +106,11 @@ export class HostileSpellSystem implements HostileSpellSink {
   }
 
   get orbCount(): number {
-    return this.orbs.length;
+    return this.shots.filter((s) => s.stun).length;
+  }
+
+  get globCount(): number {
+    return this.shots.filter((s) => !s.stun).length;
   }
 
   // ------------------------------------------------------------ sink
@@ -111,7 +124,19 @@ export class HostileSpellSystem implements HostileSpellSink {
   }
 
   fireOrb(spell: OrbSpell): void {
-    const missile = new Projectile(this.scene, {
+    this.shots.push({
+      missile: this.launch(spell, PROJECTILE_ART.orb),
+      spell,
+      stun: { minMs: spell.stunMinMs, maxMs: spell.stunMaxMs },
+    });
+  }
+
+  fireGlob(spell: GlobSpell): void {
+    this.shots.push({ missile: this.launch(spell, PROJECTILE_ART.glob), spell });
+  }
+
+  private launch(spell: GlobSpell, art: ProjectileArt): Projectile {
+    return new Projectile(this.scene, {
       x: spell.x,
       y: spell.y,
       angle: spell.angle,
@@ -120,9 +145,8 @@ export class HostileSpellSystem implements HostileSpellSink {
       damage: spell.damage,
       team: 'enemy',
       maxRange: spell.range,
-      art: PROJECTILE_ART.orb,
+      art,
     });
-    this.orbs.push({ missile, spell });
   }
 
   // ------------------------------------------------------------ frame
@@ -130,7 +154,7 @@ export class HostileSpellSystem implements HostileSpellSink {
   update(deltaSeconds: number, nowMs: number): void {
     this.now = nowMs;
     if (!this.wave.isWaveActive) {
-      if (this.zones.length > 0 || this.orbs.length > 0) this.clear();
+      if (this.zones.length > 0 || this.shots.length > 0) this.clear();
       return;
     }
 
@@ -141,17 +165,21 @@ export class HostileSpellSystem implements HostileSpellSink {
       this.resolve(zone);
     }
 
-    for (let i = this.orbs.length - 1; i >= 0; i--) {
-      const { missile, spell } = this.orbs[i];
+    for (let i = this.shots.length - 1; i >= 0; i--) {
+      const { missile, spell, stun } = this.shots[i];
       missile.update(deltaSeconds);
       if (missile.alive && missile.hits(this.player.x, this.player.y, this.player.radius)) {
-        const t = Phaser.Math.Clamp(missile.distanceTravelled / spell.range, 0, 1);
         this.callbacks.onPlayerHit(spell.damage);
-        this.callbacks.onPlayerStunned(Phaser.Math.Linear(spell.stunMinMs, spell.stunMaxMs, t));
-        Fx.of(this.scene).arcaneBurst(missile.x, missile.y, spell.radius * 2.5);
+        if (stun) {
+          const t = Phaser.Math.Clamp(missile.distanceTravelled / spell.range, 0, 1);
+          this.callbacks.onPlayerStunned(Phaser.Math.Linear(stun.minMs, stun.maxMs, t));
+          Fx.of(this.scene).arcaneBurst(missile.x, missile.y, spell.radius * 2.5);
+        } else {
+          Fx.of(this.scene).hit(missile.x, missile.y, THEME.basic.burst);
+        }
         missile.kill();
       }
-      if (!missile.alive) this.orbs.splice(i, 1);
+      if (!missile.alive) this.shots.splice(i, 1);
     }
 
     this.view.draw(this.zones, nowMs);
@@ -190,8 +218,8 @@ export class HostileSpellSystem implements HostileSpellSink {
   /** Drop everything without resolving it (wave clear, restart). */
   clear(): void {
     this.zones.length = 0;
-    for (const { missile } of this.orbs) missile.kill();
-    this.orbs.length = 0;
+    for (const { missile } of this.shots) missile.kill();
+    this.shots.length = 0;
     this.view.draw(this.zones, this.now);
   }
 }

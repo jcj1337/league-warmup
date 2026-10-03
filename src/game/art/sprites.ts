@@ -161,12 +161,16 @@ export const SPRITES: Record<string, PixelSprite> = {
   // ---- basic enemy -----------------------------------------------------------
   basic_0: { rows: frame(RED_BODY, BASIC_H), pal: RED_PAL },
   basic_1: { rows: frame(without(RED_BODY, 7), BASIC_H), pal: RED_PAL },
+  /** Spit windup: hunkered down, mouth glowing. */
+  basic_spit: { rows: frame(without(withRow(RED_BODY, 8, 'kdmmmmkyykmmdk'), 7), BASIC_H), pal: RED_PAL },
 
   // ---- pursuer ---------------------------------------------------------------
   pursuer_walk_0: { rows: frame(PURPLE_BODY, PURSUER_H), pal: PURPLE_PAL },
   pursuer_walk_1: { rows: frame(without(PURPLE_BODY, 10), PURSUER_H), pal: PURPLE_PAL },
   /** Windup: rears up tall, eyes white-hot. */
   pursuer_windup: { rows: frame(doubled(PURPLE_BODY, 6), PURSUER_H), pal: { ...PURPLE_PAL, y: P.eyeHot } },
+  /** Dash windup: crouched low, eyes white-hot. */
+  pursuer_crouch: { rows: frame(without(PURPLE_BODY, 6, 10), PURSUER_H), pal: { ...PURPLE_PAL, y: P.eyeHot } },
   /** Swing resolved: flattened slam. */
   pursuer_slam: { rows: frame(without(PURPLE_BODY, 6, 10), PURSUER_H), pal: PURPLE_PAL },
   // ---- magus -----------------------------------------------------------------
@@ -220,6 +224,11 @@ export const SPRITES: Record<string, PixelSprite> = {
     pal: { k: P.fireDark, r: P.fire, o: P.fireOrange, y: P.fireCore },
   },
 
+  /** Basic spit: a small dark-red slime glob — smaller and darker than the orange edge fireball. */
+  proj_glob: {
+    rows: ['.kkk.', 'kdrdk', 'krwrk', 'kdrdk', '.kkk.'],
+    pal: { k: P.ink, d: P.redDeep, r: P.red, w: P.redShine },
+  },
   /** Magus orb: a crackling white-gold sphere — paler and spikier than the edge fireball. */
   proj_orb_0: {
     rows: ['...a...', '..kak..', '.kaWak.', 'aaWWWaa', '.kaWak.', '..kak..', '...a...'],

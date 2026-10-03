@@ -2,13 +2,15 @@ import Phaser from 'phaser';
 import { ARENA, TARGETS } from '../../config/balance';
 import { THEME } from '../../config/theme';
 import { TEX } from '../art/textures';
-import { EnemyView, type EnemyArt } from '../view/EnemyView';
+import { BasicView, type EnemyArt } from '../view/EnemyView';
 import { Enemy, type EnemyArchetype, type EnemyContext } from './Enemy';
+import { projectileSpeed, scaled } from '../systems/Difficulty';
 import type { GameClock } from '../systems/GameClock';
 
 const ART: EnemyArt = {
   idle: TEX.basic.frames,
   move: TEX.basic.frames,
+  windup: TEX.basic.spit,
   frameMs: THEME.basic.frameMs,
   originY: THEME.basic.originY,
   shadow: TEX.shadow.m,
@@ -30,10 +32,15 @@ export type BasicMode = 'approach' | 'retreat' | 'strafe';
 /**
  * The basic enemy: a small red slime.
  *
- * Always aggroed, never attacks. It walks toward the player, then hovers in a
- * pressure band inside the player's attack range and shuffles sideways, so it
- * crowds spacing and target selection without becoming a second melee threat —
- * that job belongs to the Pursuer.
+ * Always aggroed. It walks toward the player, then hovers in a pressure band
+ * inside the player's attack range and shuffles sideways, so it crowds spacing
+ * and target selection without becoming a second melee threat — that job
+ * belongs to the Pursuer.
+ *
+ * From TARGETS.spit.fromStage it also spits: rooted for a short windup (only
+ * while holding one of the shared attack tokens), then a slow glob at where
+ * the player is at that instant. A crowd of them is a dodging drill from
+ * every direction, never all at once.
  *
  * Movement steers toward one goal point (`goalX/goalY`) chosen at each plan
  * tick (`nextPlanAt`), so the slime reacts with a short, readable delay rather
@@ -42,6 +49,21 @@ export type BasicMode = 'approach' | 'retreat' | 'strafe';
  */
 export class Target extends Enemy {
   readonly archetype: EnemyArchetype = 'basic';
+  declare view: BasicView;
+
+  /** Whether it spits at all: set from the stage it spawned on. */
+  canSpit: boolean;
+  /** Its stage's spit cooldown and glob speed (see DIFFICULTY). */
+  readonly spitCooldownMs: number;
+  readonly spitSpeed: number;
+  /** True while rooted in a spit windup. A readout for the view; only the AI writes it. */
+  spitting = false;
+  /** Where the spit points, in radians. Tracks the player through the windup. */
+  spitAngle = 0;
+  private spitStartedAt = 0;
+  private spitEndsAt = 0;
+  /** Earliest time of the next windup. Negative = not scheduled yet (first active frame). */
+  private nextSpitAt = -1;
 
   /** What the last plan tick decided. A readout for inspection and visuals; only the AI writes it. */
   mode: BasicMode = 'approach';
@@ -53,17 +75,21 @@ export class Target extends Enemy {
   /** Strafe direction around the player: 1 = counter-clockwise, -1 = clockwise. */
   private strafeDir = Math.random() < 0.5 ? 1 : -1;
 
-  constructor(scene: Phaser.Scene, clock: GameClock, x: number, y: number, pips: number) {
-    super(scene, clock, x, y, { radius: TARGETS.radius, maxHp: pips, scoreMultiplier: 1 });
+  constructor(scene: Phaser.Scene, clock: GameClock, x: number, y: number, pips: number, stage: number) {
+    super(scene, clock, x, y, { radius: TARGETS.radius, maxHp: pips, scoreMultiplier: 1, stage });
     this.goalX = x;
     this.goalY = y;
-    this.view = new EnemyView(scene, this, ART);
+    this.canSpit = stage >= TARGETS.spit.fromStage;
+    this.spitCooldownMs = scaled(TARGETS.scaling.spitCooldownMs, stage, TARGETS.spit.cooldownMs);
+    this.spitSpeed = projectileSpeed(TARGETS.spit.speed, stage);
+    this.view = new BasicView(scene, this, ART);
   }
 
   protected override updateAi(deltaSeconds: number, nowMs: number, ctx: EnemyContext): void {
     this.pose.moving = false;
     // Always face the player: it is aggroed even while sidestepping.
     if (Math.abs(ctx.player.x - this.x) > 2) this.pose.facing = ctx.player.x >= this.x ? 1 : -1;
+    if (this.updateSpit(nowMs, ctx)) return;
     if (this.moveSpeed <= 0) return;
 
     if (nowMs >= this.nextPlanAt) this.plan(nowMs, ctx);
@@ -84,6 +110,50 @@ export class Target extends Enemy {
     this.y = Phaser.Math.Clamp(this.y, m, ARENA.height - m);
   }
 
+  /**
+   * The spit cycle: wait out the cooldown, take a token, wind up rooted, fire
+   * at where the player is now, hand the token back.
+   * @returns true while rooted in the windup.
+   */
+  private updateSpit(nowMs: number, ctx: EnemyContext): boolean {
+    if (!this.canSpit) return false;
+    const S = TARGETS.spit;
+    const dx = ctx.player.x - this.x;
+    const dy = ctx.player.y - this.y;
+    // First active frame: stagger the opening spit so a fresh wave never fires in unison.
+    if (this.nextSpitAt < 0) this.nextSpitAt = nowMs + this.spitCooldownMs * Phaser.Math.FloatBetween(0.3, 1);
+
+    if (this.spitting) {
+      this.spitAngle = Math.atan2(dy, dx);
+      if (nowMs < this.spitEndsAt) {
+        this.pose.windup = Phaser.Math.Clamp((nowMs - this.spitStartedAt) / S.windupMs, 0, 1);
+        return true;
+      }
+      ctx.spells.fireGlob({
+        x: this.x + Math.cos(this.spitAngle) * this.radius,
+        y: this.y + Math.sin(this.spitAngle) * this.radius,
+        angle: this.spitAngle,
+        speed: this.spitSpeed,
+        radius: S.radius,
+        range: S.range,
+        damage: S.damage,
+      });
+      ctx.attackTokens.release(this);
+      this.spitting = false;
+      this.pose.windup = -1;
+      this.nextSpitAt = nowMs + this.spitCooldownMs * Phaser.Math.FloatBetween(1 - S.cooldownJitter, 1 + S.cooldownJitter);
+      return false;
+    }
+
+    if (nowMs < this.nextSpitAt || Math.hypot(dx, dy) > S.range || !ctx.attackTokens.tryTake(this)) return false;
+    this.spitting = true;
+    this.spitStartedAt = nowMs;
+    this.spitEndsAt = nowMs + S.windupMs;
+    this.spitAngle = Math.atan2(dy, dx);
+    this.pose.windup = 0;
+    return true;
+  }
+
   /** Pick this tick's mode, goal point and speed from where the player is now. */
   private plan(nowMs: number, ctx: EnemyContext): void {
     const band = TARGETS.pressureBand;
@@ -95,18 +165,18 @@ export class Target extends Enemy {
 
     if (dist > band.max) {
       this.mode = 'approach';
-      this.moveSpeed = TARGETS.approachSpeed;
+      this.moveSpeed = TARGETS.approachSpeed * this.moveScale;
       this.nextPlanAt = nowMs + TARGETS.approachReplanMs;
       this.setGoal(px, py, [bearing], band.max - 10);
     } else if (dist < band.min) {
       this.mode = 'retreat';
-      this.moveSpeed = TARGETS.strafeSpeed;
+      this.moveSpeed = TARGETS.strafeSpeed * this.moveScale;
       this.nextPlanAt = nowMs + TARGETS.approachReplanMs;
       // Straight back out if there is room; pinned against a wall, back off at an angle.
       this.setGoal(px, py, [bearing, bearing + 0.7, bearing - 0.7, bearing + 1.4, bearing - 1.4], band.min + 10);
     } else {
       this.mode = 'strafe';
-      this.moveSpeed = TARGETS.strafeSpeed;
+      this.moveSpeed = TARGETS.strafeSpeed * this.moveScale;
       this.nextPlanAt = nowMs + Phaser.Math.Between(TARGETS.strafeReplanMs.min, TARGETS.strafeReplanMs.max);
       if (Math.random() < TARGETS.strafeFlipChance) this.strafeDir *= -1;
       const arc = Phaser.Math.DegToRad(TARGETS.strafeArcDegrees) * this.strafeDir;
