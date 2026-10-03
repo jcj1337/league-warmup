@@ -1,7 +1,9 @@
 import Phaser from 'phaser';
+import { CursorLock } from '../CursorLock';
 import { Keybinds } from '../Keybinds';
+import { MouseSpeed } from '../MouseSpeed';
 import { RunHistory, type RunSummary } from '../RunHistory';
-import { ARENA, DEBUG, BALANCE_VERSION } from '../../config/balance';
+import { ARENA, DEBUG, BALANCE_VERSION, MOUSE } from '../../config/balance';
 import { THEME } from '../../config/theme';
 import { pixelText, setPixelScale } from '../art/font';
 import { ensureArt } from '../art/textures';
@@ -38,6 +40,7 @@ export class UIScene extends Phaser.Scene {
   private abilityBar!: AbilityBar;
   private passiveDisplay!: PassiveDisplay;
   private pauseMenu!: PauseMenu;
+  private cursorLock!: CursorLock;
   private stageText!: Phaser.GameObjects.BitmapText;
   /** Last stage / wave the transition banner reacted to. Round-scoped: see beginRound(). */
   private lastStage = 1;
@@ -145,6 +148,12 @@ export class UIScene extends Phaser.Scene {
 
     this.buildOverlay();
     this.buildPauseMenu();
+
+    // Mouse Speed: UIScene outlives every round, so the lock is built once, here.
+    this.cursorLock = new CursorLock(this.game.canvas, {
+      wantsLock: () => this.game_.ownsMouse,
+      onLockLost: () => this.game_.onCursorLockLost(),
+    });
   }
 
   /** Pixel HUD plate that groups a block of HUD content. */
@@ -175,6 +184,16 @@ export class UIScene extends Phaser.Scene {
         },
       },
       [
+        {
+          // League's Mouse Speed: a multiplier on cursor movement (CursorLock applies it).
+          label: 'Mouse Speed',
+          slider: { min: MOUSE.minSpeed, max: MOUSE.maxSpeed, step: MOUSE.step },
+          value: () => MouseSpeed.value,
+          set: (v: number) => {
+            MouseSpeed.set(v);
+          },
+          read: () => MouseSpeed.label(),
+        },
         {
           label: 'Range Indicator',
           read: () => DEBUG.attackRangeDisplay.toUpperCase(),
@@ -317,6 +336,7 @@ export class UIScene extends Phaser.Scene {
     this.chat.update();
 
     this.pauseMenu.setVisible(this.game_.isPaused);
+    this.cursorLock.update();
 
     this.syncOverlay();
   }

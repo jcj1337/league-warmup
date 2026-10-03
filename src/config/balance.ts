@@ -173,6 +173,20 @@ export const KEYBINDS = {
 };
 
 /**
+ * Mouse Speed (pause menu), League-style: a multiplier on how far the cursor
+ * moves per unit of mouse movement, on top of your OS pointer speed. At 1 the
+ * game uses your normal OS cursor untouched; any other value locks the pointer
+ * to the canvas during play and drives a game cursor at speed × the OS motion.
+ * The player's value lives in `MouseSpeed` (src/game/MouseSpeed.ts).
+ */
+export const MOUSE = {
+  defaultSpeed: 1,
+  minSpeed: 0,
+  maxSpeed: 10,
+  step: 0.1,
+};
+
+/**
  * Development readouts. All of these are pure overlay — turning any of them off
  * changes nothing about how the game plays.
  */

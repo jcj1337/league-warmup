@@ -10,6 +10,8 @@ declare global {
     __runs: any;
     /** The live key bindings (code / label / set / reset / all), exposed by src/main.ts. */
     __keybinds: any;
+    /** The live Mouse Speed setting (value / set / reset / label), exposed by src/main.ts. */
+    __mouseSpeed: any;
     /** Not exposed by the game; the hud suite falls back when it is absent. */
     __theme?: any;
   }

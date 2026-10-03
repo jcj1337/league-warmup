@@ -362,10 +362,21 @@ current move or attack order resumes afterwards.
 timers, cast windows, cooldowns, mark durations, projectiles, wave breathers and the run
 clock. Nothing fast-forwards on resume.
 
-The menu has Resume, Restart Round, and two settings that write straight into the
-`DEBUG` config: **Attack Range Indicator** (contextual / always / off) and **Damage
-Numbers** (the "-1" pip-loss pops). Below them are the controls, with every key
-rebindable (see [Controls](#controls)).
+The menu has Resume, Restart Round, a **Mouse Speed** slider, and two settings that write
+straight into the `DEBUG` config: **Attack Range Indicator** (contextual / always / off)
+and **Damage Numbers** (the "-1" pip-loss pops). Below them are the controls, with every
+key rebindable (see [Controls](#controls)).
+
+**Mouse Speed** (0.0–10.0, default 1.0; click or drag the track, scroll over it for ±0.1)
+works like League's: a multiplier on how far the cursor moves, on top of your OS pointer
+speed. At 1.0 the game uses your normal cursor, untouched. At any other value the game
+takes a pointer lock while you play: it draws its own cursor, moves it by speed × your
+mouse movement, and keeps it inside the game. The lock is released whenever play stops
+(pause menu, end screen) and comes back on Resume or your next click. `Esc` still backs
+out of A-targeting or opens the menu. At 0.0 the cursor doesn't move. Kept for this tab's
+session, like key bindings. From the console: `__mouseSpeed.set(2.5)`, `.reset()`.
+Defaults in `MOUSE` in [balance.ts](src/config/balance.ts); the lock is
+[CursorLock.ts](src/game/CursorLock.ts).
 
 ## Reading the field
 

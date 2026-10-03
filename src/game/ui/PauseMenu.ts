@@ -11,13 +11,41 @@ export interface PauseMenuActions {
 }
 
 /** One settings row: a label, a cycling value, and what to do when clicked. */
-interface SettingRow {
+interface CycleRow {
   label: string;
   /** Current value, re-read every time the menu opens. */
   read(): string;
   /** Advance to the next value. */
   cycle(): void;
 }
+
+/** A settings row with a slider: click or drag the track, or scroll over it to nudge one step. */
+interface SliderRow {
+  label: string;
+  slider: { min: number; max: number; step: number };
+  value(): number;
+  /** Store a new value; the store snaps and clamps it. */
+  set(value: number): void;
+  /** The value as shown beside the track. */
+  read(): string;
+}
+
+export type SettingRow = CycleRow | SliderRow;
+
+/** A built slider row. */
+interface Slider {
+  row: SliderRow;
+  knob: Phaser.GameObjects.Rectangle;
+  fill: Phaser.GameObjects.Rectangle;
+  value: Phaser.GameObjects.BitmapText;
+  /** Track left edge and width, in scene pixels. */
+  x0: number;
+  width: number;
+}
+
+/** Slider track: width and the gap left for the value text on its right. */
+const SLIDER_W = 170;
+const SLIDER_VALUE_W = 64;
 
 /** One rebindable key row. */
 interface BindRow {
@@ -43,7 +71,10 @@ const KEY_ROW_H = 22;
  */
 export class PauseMenu {
   private readonly container: Phaser.GameObjects.Container;
-  private readonly rows: Array<{ row: SettingRow; value: Phaser.GameObjects.BitmapText }> = [];
+  private readonly rows: Array<{ row: CycleRow; value: Phaser.GameObjects.BitmapText }> = [];
+  private readonly sliders: Slider[] = [];
+  /** The slider being dragged, if any. */
+  private dragging: Slider | null = null;
   private readonly bindRows: BindRow[] = [];
   private readonly status: Phaser.GameObjects.BitmapText;
   /** The key row waiting for a key press, if any. */
@@ -102,6 +133,11 @@ export class PauseMenu {
       const rowY = top + 238 + i * 34;
       parts.push(pixelText(scene, left + 30, rowY, row.label, 2, THEME.ui.dim).setOrigin(0, 0.5));
 
+      if ('slider' in row) {
+        parts.push(...this.buildSlider(row, left + w - 30 - SLIDER_VALUE_W - SLIDER_W, rowY, left + w - 30));
+        return;
+      }
+
       const value = pixelText(scene, left + w - 30, rowY, row.read(), 2, THEME.ui.accent)
         .setOrigin(1, 0.5)
         .setInteractive({ useHandCursor: true });
@@ -157,6 +193,14 @@ export class PauseMenu {
 
     this.container = scene.add.container(0, 0, parts).setDepth(400).setVisible(false);
     this.refreshBinds();
+
+    // A drag keeps following the mouse off the track, and ends on release anywhere.
+    scene.input.on('pointermove', (pointer: Phaser.Input.Pointer) => {
+      if (this.dragging && pointer.isDown) this.slideTo(this.dragging, pointer.x);
+    });
+    scene.input.on('pointerup', () => {
+      this.dragging = null;
+    });
     // A rebind from anywhere (this menu, a reset, the console) shows at once.
     Keybinds.onChange(() => this.refreshBinds());
   }
@@ -196,6 +240,57 @@ export class PauseMenu {
     }
   }
 
+  /**
+   * A pixel slider: a track from `x0` (SLIDER_W wide), its filled part, a knob,
+   * and the value right-aligned at `valueRight`. Returns the objects to be contained.
+   */
+  private buildSlider(row: SliderRow, x0: number, y: number, valueRight: number): Phaser.GameObjects.GameObject[] {
+    const track = this.scene.add.rectangle(x0, y, SLIDER_W, 6, THEME.menu.button).setOrigin(0, 0.5)
+      .setStrokeStyle(2, THEME.menu.buttonEdge);
+    const fill = this.scene.add.rectangle(x0, y, 0, 6, THEME.ui.accent).setOrigin(0, 0.5);
+    const knob = this.scene.add.rectangle(x0, y, 10, 20, THEME.ui.accent).setStrokeStyle(2, THEME.ui.panel);
+    const value = pixelText(this.scene, valueRight, y, row.read(), 2, THEME.ui.accent).setOrigin(1, 0.5);
+    // Taller than the track, so it's easy to grab.
+    const hit = this.scene.add.rectangle(x0 - 8, y, SLIDER_W + 16, 26, 0xffffff, 0).setOrigin(0, 0.5)
+      .setInteractive({ useHandCursor: true });
+
+    const slider: Slider = { row, knob, fill, value, x0, width: SLIDER_W };
+    this.sliders.push(slider);
+    this.drawSlider(slider);
+
+    hit.on('pointerover', () => knob.setFillStyle(THEME.ui.text));
+    hit.on('pointerout', () => knob.setFillStyle(THEME.ui.accent));
+    hit.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
+      this.dragging = slider;
+      this.slideTo(slider, pointer.x);
+    });
+    hit.on('wheel', (_p: Phaser.Input.Pointer, _dx: number, dy: number) => {
+      if (dy === 0) return;
+      row.set(row.value() + (dy < 0 ? row.slider.step : -row.slider.step));
+      this.drawSlider(slider);
+    });
+
+    return [track, fill, knob, value, hit];
+  }
+
+  /** Set a slider from a pointer x over its track. */
+  private slideTo(slider: Slider, px: number): void {
+    const { min, max } = slider.row.slider;
+    const t = Phaser.Math.Clamp((px - slider.x0) / slider.width, 0, 1);
+    slider.row.set(min + t * (max - min));
+    this.drawSlider(slider);
+  }
+
+  /** Move the knob and fill to the stored value and re-read its text. */
+  private drawSlider(slider: Slider): void {
+    const { min, max } = slider.row.slider;
+    const t = max > min ? (slider.row.value() - min) / (max - min) : 0;
+    const x = Math.round(slider.x0 + t * slider.width);
+    slider.knob.setX(x);
+    slider.fill.width = x - slider.x0;
+    slider.value.setText(slider.row.read());
+  }
+
   /** Pixel button with hover states; returns the objects to be contained. */
   private button(
     cx: number,
@@ -229,7 +324,12 @@ export class PauseMenu {
 
   setVisible(visible: boolean): void {
     // Re-read every setting on open, in case it was changed from the console.
-    if (visible) this.rows.forEach(({ row, value }) => value.setText(row.read()));
+    if (visible) {
+      this.rows.forEach(({ row, value }) => value.setText(row.read()));
+      this.sliders.forEach((s) => this.drawSlider(s));
+    } else {
+      this.dragging = null;
+    }
     // Closing drops a rebind that never got its key. (Called every frame: act on the change only.)
     if (!visible && this.container.visible) {
       this.stopRebind();

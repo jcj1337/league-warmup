@@ -455,6 +455,22 @@ export class GameScene extends Phaser.Scene {
     return this.paused;
   }
 
+  /** True while gameplay owns the mouse (CursorLock holds the pointer lock only then). */
+  get ownsMouse(): boolean {
+    return this.state === 'running' && !this.paused;
+  }
+
+  /**
+   * The browser dropped the Mouse Speed pointer lock on its own — the player
+   * pressed Escape (which the page usually never sees) or switched away.
+   * Treated exactly like Escape: back out of A-targeting, else pause.
+   */
+  onCursorLockLost(): void {
+    if (!this.ownsMouse) return;
+    if (this.inputs.attackMovePending) this.inputs.cancelPending();
+    else this.setPaused(true);
+  }
+
   /**
    * How strongly to draw the attack-range ring right now, 0..1.
    *
