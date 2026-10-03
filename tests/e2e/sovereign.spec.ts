@@ -80,8 +80,9 @@ test('sovereign: unlock, Dark Sphere + cap + cleanup, Force of Will (sphere and 
     const count = (s) => d.describeStage(s - 1).waves.map((w) => w.sovereign);
     return { before: count(unlock - 1), first: count(unlock), later: count(15) };
   }, unlock);
-  unlock === 7 && reg.before.every((n) => n === 0) && reg.first[0] === 1 && [...reg.first, ...reg.later].every((n) => n <= 1)
-    ? pass(`unlocks at Stage ${unlock}: none before, exactly one in Wave 1 of Stage ${unlock}, never more than one per wave`)
+  // Stage 5 is hand-written: the Magus debuts in its Wave 1, the Sovereign in its Wave 2.
+  unlock === 5 && reg.before.every((n) => n === 0) && reg.first.join() === '0,1' && [...reg.first, ...reg.later].every((n) => n <= 1)
+    ? pass(`unlocks at Stage ${unlock}: none before, one in Wave 2 of Stage ${unlock}, never more than one per wave`)
     : fail(`sovereigns per wave: ${JSON.stringify(reg)}`);
   cfg.E.pursuer.weight === 1.5 && cfg.E.pursuer.maxShare === 0.5
     ? pass('Pursuers are rarer to make room for her (weight 1.5, share 0.5)')

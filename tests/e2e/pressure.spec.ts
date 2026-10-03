@@ -213,7 +213,11 @@ test('pressure: wave sizes, staggered arrival + activation window, no premature 
   const capped = await page.evaluate(() => new Promise<any>((res) => {
     const g = window.__warmup.scene.getScene('GameScene');
     const d = g.director;
-    d.stageIndex = 14; d.waveIndex = 0;  // Stage 15 Wave 1: far more enemies than the cap
+    // The first stage whose Wave 1 fields more enemies than its cap.
+    const size = (i) => (Object.values(d.rosterFor(i, 0)) as number[]).reduce((n, c) => n + c, 0);
+    let s = 10;
+    for (; s < 40; s++) { d.stageIndex = s; if (size(s) > d.difficulty.maxAlive + 2) break; }
+    d.stageIndex = s; d.waveIndex = 0;
     d.spawnWave();
     const cap = d.difficulty.maxAlive;
     const t0 = g.clock.now;
@@ -230,13 +234,13 @@ test('pressure: wave sizes, staggered arrival + activation window, no premature 
       } else if (killedAt !== null && !refilled) {
         refilled = d.enemies.filter((x) => !x.dead).length === cap;
       }
-      if (refilled || g.clock.now - t0 > 6000) res({ cap, peak, pendingAtCap: killedAt !== null, refilled });
+      if (refilled || g.clock.now - t0 > 6000) res({ stage: d.stage, cap, peak, pendingAtCap: killedAt !== null, refilled });
       else requestAnimationFrame(tick);
     };
     tick();
   }));
   capped.peak === capped.cap && capped.pendingAtCap && capped.refilled
-    ? pass(`Stage 15 fields at most ${capped.cap} at once; the rest wait, and one arrives as soon as a slot frees`)
+    ? pass(`Stage ${capped.stage} fields at most ${capped.cap} at once; the rest wait, and one arrives as soon as a slot frees`)
     : fail(`cap: ${JSON.stringify(capped)}`);
 
   // === 3. An arriving enemy is untargetable, undamageable and inert ==========

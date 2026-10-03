@@ -969,10 +969,11 @@ Effect sizes and durations for every ability are presentation and live in `THEME
 `RUN`: `interWaveDelayMs` 400, `interStageDelayMs` 700, `spawn.gapJitter` ⅓, `spawn.manifestMs` 300.
 
 `DIFFICULTY` (each `clamp(base × T^k, min, max)`, `T = growth^(stage−1)`, growth 1.15):
-`waveSize` 4 / k 1; `maxAlive` 6 / k 0.6 / 6–30; `arrivalGapMs` 300 / k −0.5 / min 60;
-`moveSpeed` 1 / k 0.1; `projectileSpeed` 1 / k 0.15 (max 650px/s); `damage` 1 / k 0.2;
-`attackTokens` 2 / k 0.5 / 2–10; `magusPerWave` 1 / k 0.3 / max 3 (floored);
-`stageClearHeal` 25. Per-mob `scaling` blocks: basic `spitCooldownMs` k −0.15 / min 1500;
+`waveSize` 6 / k 0.85; `maxAlive` 8 / k 0.6 / 8–40; `arrivalGapMs` 250 / k −0.5 / min 50;
+`moveSpeed` 1 / k 0.1; `projectileSpeed` 1 / k 0.15 (max 650px/s); `damage` 1 / k 0.35;
+`contactDamage` 1 / k 0.5; `attackTokens` 2 / k 0.5 / 2–10; `packSize` 1 / k 0.4 / 1–5;
+`stageClearHeal` 1 (full). Casters (Magus, Sovereign) cost 3 budget points, so each one
+in a wave displaces basics. Per-mob `scaling` blocks: basic `spitCooldownMs` k −0.15 / min 1500;
 Pursuer `dashCooldownMs` k −0.2 / min 2500, `attackCooldownMs` k −0.15 / min 800,
 `maxSpeedFraction` 0.85; Magus `spellGapMs` k −0.3 / min 700. An enemy resolves its
 scaled stats once, at spawn, from the stage it spawned on.

@@ -121,7 +121,7 @@ scaled stats live in its `scaling` block.
 
 | | Stage 1 | Stage 5 | Stage 10 | Stage 20 | Limit |
 | --- | --- | --- | --- | --- | --- |
-| Wave budget (enemies per hand-written wave) | 6 | 10 | 21 | 85 | — |
+| Wave budget (enemies per hand-written wave) | 6 | 10 | 17 | 57 | — |
 | On the field at once | 8 | 11 | 17 | 39 | 40 |
 | Gap between arrivals | 250ms | 189ms | 133ms | 66ms | 50ms |
 | Pack size | 1 | 1 | 2 | 3 | 5 |
@@ -142,7 +142,7 @@ holds.
 and damage — never through enemies that take forever to kill.
 
 **Hand-written stages** keep their authored mix and grow it to the stage's budget, shared
-out by largest remainder (`WaveDirector.rosterFor`). B = basic, P = Pursuer, M = Magus;
+out by largest remainder (`WaveDirector.rosterFor`). B = basic, P = Pursuer, M = Magus, S = Sovereign;
 the authored mix is in brackets.
 
 | Stage | Waves | Wave 1 | Wave 2 |
@@ -151,10 +151,10 @@ the authored mix is in brackets.
 | 2 | 1 | 5B + 2P (3B + 1P) | — |
 | 3 | 1 | 4B + 4P (2B + 2P) | — |
 | 4 | 2 | 7B + 2P (3B + 1P) | 5B + 4P (3B + 2P) |
-| 5 | 2 | 6B + 3P + 1M (2B + 1P + 1M) | 4B + 6P (2B + 3P) |
+| 5 | 2 | 6B + 3P + 1M (2B + 1P + 1M) | 5B + 4P + 1S (2B + 2P + 1S) |
 
 **Generated stages** buy each wave from its budget: mobs are drawn by weight among those
-unlocked, each costing points (basic 1, Pursuer 1.5, Magus 2, Sovereign 2 — heavier mobs mean fewer
+unlocked, each costing points (basic 1, Pursuer 1.5, Magus 3, Sovereign 3 — heavier mobs mean fewer
 bodies) and held to its share of the budget and its per-wave cap (Magi: 1 per wave until
 about Stage 17, then more). A mob's first stage fields exactly one of it in Wave 1, so you
 meet it alone. Rosters are rolled once per run, so a wave never changes under you.
@@ -266,10 +266,10 @@ Orbwalk loop: `T` (or `A` + click) → auto fires → right-click away → repea
 | Basic target | red slime with glowing eyes and a fanged snarl | 1 / 2 / 3 | always aggroed: walks toward you, then hovers 150–230px away inside your attack range, sidestepping around you. From Stage 2 it **spits** (below) |
 | Pursuer | larger purple slime with devil horns | basic + 1 | walks you down at 55% of your speed; melee swing for **25** (a quarter of your HP) after a 400ms telegraph. From Stage 4 it **dashes** (below) |
 | Magus | tall slate slime in a brass crest and mask, rune tablets floating at its sides | same as basic | artillery caster with a Xerath-style kit (below); holds 360–480px from you, backs off at 60% of your speed, never moves while casting |
-| Sovereign | indigo slime under a silver diadem, two dark orbs circling her head | 2 (3 from Stage 11) | sphere mage with a Syndra-style kit (below); holds 280–380px from you, at most one per wave, from Stage 7 |
+| Sovereign | indigo slime under a silver diadem, two dark orbs circling her head | 2 (3 from Stage 11) | sphere mage with a Syndra-style kit (below); holds 280–380px from you, at most one per wave, from Stage 5 |
 
 Pips follow each mob's `ENEMIES` pip ramp (see above). Pursuers first appear in
-Stage 2, the Magus in Stage 5, the Sovereign in Stage 7. A Pursuer's swing only lands if you are still in reach when it
+Stage 2, the Magus and the Sovereign in Stage 5 (Waves 1 and 2). A Pursuer's swing only lands if you are still in reach when it
 resolves — walking or blinking out during the telegraph makes it miss. A Pursuer
 never starts a swing while you are stunned.
 

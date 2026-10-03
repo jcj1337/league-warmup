@@ -631,7 +631,7 @@ export const DIFFICULTY = {
    * Enemies per wave. A stage's authored roster keeps its MIX; its size grows to
    * this (never below the authored size). See WaveDirector.rosterFor().
    */
-  waveSize: { base: 6, k: 1 } as Curve,
+  waveSize: { base: 6, k: 0.85 } as Curve,
   /** Most enemies on the field at once; further arrivals wait for a slot. */
   maxAlive: { base: 8, k: 0.6, min: 8, max: 40 } as Curve,
   /** Average gap between arrivals (jittered by RUN.spawn.gapJitter). */
@@ -661,7 +661,7 @@ export const DIFFICULTY = {
  * Bumped whenever tuning changes how hard a run is. The run log tags each run
  * with it, and its summary only compares runs from the same version.
  */
-export const BALANCE_VERSION = 8;
+export const BALANCE_VERSION = 9;
 
 /**
  * The player's level, League style: kills give XP (ENEMIES[id].xp) and each
@@ -735,14 +735,15 @@ export const ENEMIES = {
     xp: 2,
   },
   magus: {
-    name: 'Magus', cost: 2, unlockStage: 5, weight: 0.6, maxShare: 0.25,
+    // Costs 3: a caster in the wave makes room by pushing out basics.
+    name: 'Magus', cost: 3, unlockStage: 5, weight: 0.6, maxShare: 0.25,
     maxPerWave: { base: 1, k: 0.3, max: 3 },
     pips: { start: 1, every: 10, max: 2 },
     contactDamage: 6,
     xp: 3,
   },
   sovereign: {
-    name: 'Sovereign', cost: 2, unlockStage: 7, weight: 0.6, maxShare: 0.25,
+    name: 'Sovereign', cost: 3, unlockStage: 5, weight: 0.6, maxShare: 0.25,
     maxPerWave: { base: 1, k: 0, max: 1 },
     pips: { start: 2, every: 10, max: 3 },
     contactDamage: 6,
@@ -772,7 +773,8 @@ export interface StageDefinition {
  * The hand-written intro. Each roster is a wave's MIX; its actual size
  * follows DIFFICULTY.waveSize (never smaller than authored), so it grows in
  * the same proportions. See WaveDirector.rosterFor().
- *   - Stage 1 is basic slimes only; Pursuers arrive in Stage 2, the Magus in 5.
+ *   - Stage 1 is basic slimes only; Pursuers arrive in Stage 2; the Magus (Wave 1)
+ *     and the Sovereign (Wave 2) in 5.
  *   - Single waves for Stages 1-3, two for 4-5.
  * Add, remove or edit stages freely: everything past the table is generated.
  */
@@ -781,7 +783,7 @@ export const STAGES: StageDefinition[] = [
   /* 2 */ { waves: [{ basic: 3, pursuer: 1 }] },
   /* 3 */ { waves: [{ basic: 2, pursuer: 2 }] },
   /* 4 */ { waves: [{ basic: 3, pursuer: 1 }, { basic: 3, pursuer: 2 }] },
-  /* 5 */ { waves: [{ basic: 2, pursuer: 1, magus: 1 }, { basic: 2, pursuer: 3 }] },
+  /* 5 */ { waves: [{ basic: 2, pursuer: 1, magus: 1 }, { basic: 2, pursuer: 2, sovereign: 1 }] },
 ];
 
 /** Generated stages (everything past STAGES). */
