@@ -9,7 +9,7 @@ test('difficulty: threat curve, scaled stage numbers, scaled mob stats, heal on 
     targets: window.__balance.TARGETS,
     pursuer: window.__balance.PURSUER,
     magus: window.__balance.MAGUS,
-    stages: window.__balance.STAGES.length,
+    stages: 10,
   }));
   const T = (s) => Math.pow(cfg.D.growth, s - 1);
   const curve = (c, s, base = c.base ?? 1) => Math.min(c.max ?? Infinity, Math.max(c.min ?? -Infinity, base * Math.pow(T(s), c.k)));

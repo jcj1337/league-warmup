@@ -459,7 +459,7 @@ export const THEME = {
     handleHitHeight: 10,
     handleOverhang: 4,
     handleHoverAlpha: 0.55,
-    colors: { welcome: P.gold, mission: P.cream, complete: P.good } as Record<string, number>,
+    colors: { welcome: P.gold, mission: P.cream, complete: P.good, threat: P.danger } as Record<string, number>,
   },
 
   /** Stage / wave transition banners. Presentation only. */

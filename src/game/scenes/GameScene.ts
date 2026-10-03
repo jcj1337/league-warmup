@@ -26,15 +26,16 @@ import { Fx } from '../view/Fx';
 export type RoundState = 'running' | 'over';
 
 export interface RoundResult {
-  /** How the run ended: the player died, or the final stage's last wave was cleared. */
-  outcome: 'completed' | 'defeated';
-  /** The stage and wave in play when the run ended (the one just cleared, on completion). */
+  /** How the run ended. The run is endless, so it always ends in defeat. */
+  outcome: 'defeated';
+  /** The stage and wave in play when the run ended. */
   stageReached: number;
-  stageCount: number;
   waveReached: number;
   wavesInStage: number;
   wavesCleared: number;
-  wavesTotal: number;
+  /** Best stage of earlier logged runs on this growth setting (null: none), and whether this run beat it. */
+  previousBest: number | null;
+  newBest: boolean;
   /** Total run time on the GameClock, in seconds. */
   runTimeSeconds: number;
   score: number;
@@ -82,14 +83,13 @@ export interface HudState {
   attackMovePending: boolean;
   /** Gameplay actions per minute over a rolling window. Informational only. */
   apm: number;
-  /** Stage / wave progress, straight from the WaveDirector. */
+  /** Stage / wave progress, straight from the WaveDirector. The run is endless: no stage total. */
   stage: number;
-  stageCount: number;
   wave: number;
   wavesInStage: number;
   enemiesRemaining: number;
   wavePhase: WavePhase;
-  /** During a breather, what comes next; null while fighting or once complete. */
+  /** During a breather, what comes next; null while fighting. */
   nextTransition: 'wave' | 'stage' | null;
   /** Q passive. */
   passiveStacks: number;
@@ -574,13 +574,8 @@ export class GameScene extends Phaser.Scene {
     // Decoration last: it reads what this frame decided and changes nothing.
     this.fx.update(dt);
 
-    // The run ends on death, or once the final stage's last wave is cleared.
-    // There is no timer end.
-    if (!this.player.isAlive) {
-      this.endRound('defeated');
-    } else if (this.director.isRunComplete) {
-      this.endRound('completed');
-    }
+    // The run is endless: it ends only on death. There is no timer end.
+    if (!this.player.isAlive) this.endRound('defeated');
   }
 
   // ---------------------------------------------------------------- events
@@ -682,14 +677,15 @@ export class GameScene extends Phaser.Scene {
     this.player.setRangeRingState(false, false, 0);
     this.player.stop();
 
+    const previousBest = RunHistory.summary(DIFFICULTY.growth).best;
     this.result = {
       outcome,
       stageReached: this.director.stage,
-      stageCount: this.director.stageCount,
       waveReached: this.director.wave,
       wavesInStage: this.director.wavesInStage,
       wavesCleared: this.director.wavesCleared,
-      wavesTotal: this.director.wavesTotal,
+      previousBest,
+      newBest: previousBest === null || this.director.stage > previousBest,
       runTimeSeconds: this.clock.now / 1000,
       score: Math.round(this.scoring.score),
       hitsLanded: this.scoring.hitsLanded,
@@ -744,7 +740,6 @@ export class GameScene extends Phaser.Scene {
       attackMovePending: this.inputs ? this.inputs.attackMovePending : false,
       apm: this.apm && this.clock ? this.apm.valueAt(this.clock.now) : 0,
       stage: this.director ? this.director.stage : 1,
-      stageCount: this.director ? this.director.stageCount : 0,
       wave: this.director ? this.director.wave : 1,
       wavesInStage: this.director ? this.director.wavesInStage : 0,
       enemiesRemaining: this.director ? this.director.enemiesRemaining : 0,

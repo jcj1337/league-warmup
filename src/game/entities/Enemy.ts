@@ -1,13 +1,13 @@
 import Phaser from 'phaser';
-import { DIFFICULTY, SKILLSHOT_W } from '../../config/balance';
+import { DIFFICULTY, SKILLSHOT_W, type EnemyId } from '../../config/balance';
 import { scaled } from '../systems/Difficulty';
 import type { GameClock } from '../systems/GameClock';
 import type { HostileSpellSink } from '../systems/HostileSpellSystem';
 import type { AttackTokens } from '../systems/AttackTokens';
 import type { EnemyView } from '../view/EnemyView';
 
-/** Identifies an archetype for spawn weighting, scoring and kill tallies. */
-export type EnemyArchetype = 'basic' | 'pursuer' | 'magus';
+/** Identifies an archetype for spawn weighting, scoring and kill tallies: a key of ENEMIES. */
+export type EnemyArchetype = EnemyId;
 
 /**
  * Where an enemy is in its life, as far as gameplay is concerned.

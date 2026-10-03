@@ -5,7 +5,7 @@ import { pixelText } from '../art/font';
 import { pixelPanel } from '../view/pixelDraw';
 
 /** What a message is. Only decides its colour. */
-export type ChatKind = 'welcome' | 'mission' | 'complete';
+export type ChatKind = 'welcome' | 'mission' | 'complete' | 'threat';
 
 interface ChatEntry {
   text: string;

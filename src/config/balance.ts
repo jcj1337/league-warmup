@@ -184,6 +184,11 @@ export const DEBUG = {
   showTargetMarker: true,
   /** Floating "-1" pip-loss numbers over targets. */
   showDamageNumbers: true,
+  /**
+   * Enemy health bars: 'damaged' shows a bar only once an enemy has lost a pip,
+   * so a big swarm is not a wall of bars; 'always' shows every bar.
+   */
+  healthBars: 'damaged' as 'damaged' | 'always',
 };
 
 /**
@@ -503,16 +508,12 @@ export const MAGUS = {
 } as const;
 
 // ============================================================================
-// THE RUN — stages and waves. Every progression knob lives in RUN and STAGES.
+// RUN — breathers and arrivals.
 // ============================================================================
 //
-// A run fights STAGES in order. Each stage is a list of waves; each wave is a
-// finite, authored roster whose enemies arrive one by one (see RUN.spawn).
+// Each wave is a finite roster whose enemies arrive one by one (see RUN.spawn).
 // Killed enemies never respawn: the next wave spawns only after every enemy of
-// the current one has arrived and died and the breather elapses, and clearing a
-// stage's last wave moves to the next stage. Clearing the last wave of the last
-// stage completes the run; dying ends it. Elapsed time never advances a wave or
-// stage — progression is kills alone (see WaveDirector).
+// the current one has arrived and died and the breather elapses (see WaveDirector).
 
 export const RUN = {
   /** Breather after clearing a wave, before the next wave of the same stage spawns. */
@@ -530,6 +531,8 @@ export const RUN = {
   spawn: {
     gapJitter: 1 / 3,
     manifestMs: 300,
+    /** Members of one pack (DIFFICULTY.packSize) arrive this far apart, around one spot. */
+    packMemberGapMs: 90,
   },
 } as const;
 
@@ -572,90 +575,110 @@ export const DIFFICULTY = {
   damage: { base: 1, k: 0.2 } as Curve,
   /** How many basics may be winding up a spit at once (see AttackTokens). */
   attackTokens: { base: 2, k: 0.5, min: 2, max: 10 } as Curve,
-  /** Most Magi per wave, rounded down: 1 until about Stage 13. Never adds a Magus to a wave that has none. */
-  magusPerWave: { base: 1, k: 0.3, max: 3 } as Curve,
+  /** Enemies arrive in packs of this many (rounded) at nearby spots: 1 until about Stage 8. */
+  packSize: { base: 1, k: 0.4, min: 1, max: 5 } as Curve,
   /** HP restored when a stage is cleared (capped at full). */
   stageClearHeal: 25,
 };
 
-/** How many of each archetype a wave spawns. Omitted archetypes spawn none. */
-export interface WaveRoster {
-  basic?: number;
-  pursuer?: number;
-  magus?: number;
+// ============================================================================
+// ENEMIES — the registry. One entry per mob: how waves pick it, when it
+// unlocks and how tough it is. Its behaviour numbers live in its own block
+// (TARGETS / PURSUER / MAGUS); the class that builds it is registered in
+// WaveDirector's ARCHETYPES. See "Adding a mob" in the README.
+// ============================================================================
+
+export interface EnemyEntry {
+  /** How the chat names it ("New threat: Magus."). */
+  name: string;
+  /** Budget points per body in a generated wave: heavier mobs mean fewer bodies. */
+  cost: number;
+  /**
+   * First stage it can appear on. On a generated stage, that stage's first
+   * wave fields exactly one of it, so you meet it alone first.
+   */
+  unlockStage: number;
+  /** Relative pick chance among the unlocked mobs of a generated wave. */
+  weight: number;
+  /** Most of a generated wave's budget it may take, as a fraction (at least one body). */
+  maxShare: number;
+  /** Optional cap per wave (rounded down), authored waves included. */
+  maxPerWave?: Curve;
+  /** Health pips: `start` on Stage 1, +1 every `every` stages, never above `max`. */
+  pips: { start: number; every: number; max: number };
 }
 
-/**
- * Enemy health in PIPS, per archetype. Every auto, Q hit and E bolt hit removes
- * exactly one pip; a W-mark detonation removes one more. Whole numbers >= 1.
- */
-export interface EnemyPips {
-  basic: number;
-  pursuer: number;
-  magus: number;
-}
+export const ENEMIES = {
+  basic: {
+    name: 'Slime', cost: 1, unlockStage: 1, weight: 3, maxShare: 1,
+    pips: { start: 1, every: 3, max: 3 },
+  },
+  pursuer: {
+    name: 'Pursuer', cost: 1.5, unlockStage: 2, weight: 2, maxShare: 0.6,
+    pips: { start: 2, every: 3, max: 4 },
+  },
+  magus: {
+    name: 'Magus', cost: 2, unlockStage: 5, weight: 0.6, maxShare: 0.25,
+    maxPerWave: { base: 1, k: 0.3, max: 3 },
+    pips: { start: 1, every: 3, max: 3 },
+  },
+} satisfies Record<string, EnemyEntry>;
+
+/** Every mob id. Adding a key to ENEMIES adds it everywhere this type is used. */
+export type EnemyId = keyof typeof ENEMIES;
+
+/** How many of each mob a wave fields. Omitted mobs field none. */
+export type WaveRoster = Partial<Record<EnemyId, number>>;
+
+// ============================================================================
+// THE RUN — endless. Stages 1-5 are hand-written; every later stage is
+// generated (see WaveDirector). Clear a stage's last wave to move on; the run
+// ends only when you die. Elapsed time never advances a wave or stage —
+// progression is kills alone.
+// ============================================================================
 
 export interface StageDefinition {
-  /** How many hits each archetype takes to kill during this stage. */
-  enemyPips: EnemyPips;
-  /**
-   * The player's base auto cycle (windup + recovery) during this stage, before
-   * passive stacks. Higher stage → faster autos; time spent never changes it.
-   */
-  baseAttackCooldownMs: number;
-  /**
-   * Edge-projectile pressure: 0..1 along the ENEMY_PROJECTILES start → end
-   * ramps (spawn interval, speed, size, damage, volley size).
-   */
-  enemyFire: number;
-  /** The stage's waves, fought in order. Add or remove entries freely. */
+  /** The stage's waves, fought in order: each one's MIX of mobs. */
   waves: WaveRoster[];
 }
 
 /**
- * The stage table. A provisional first balance pass:
- *   - enemyPips: basic 1 / 2 / 3 pips across Stages 1-3 / 4-6 / 7-10 (capped at
- *     3), Pursuer always one more (2 / 3 / 4), Magus the same as basic — it is
- *     dangerous at range and fragile once reached.
- *   - baseAttackCooldownMs: 700ms → 420ms in even steps, the old ramp's endpoints.
- *   - enemyFire: from the calm opening (0) to full strength (1).
- *   - waves: short early stages (a single wave each for 1-3), two waves for 4-6,
- *     three for 7-9, and a four-wave final gauntlet at Stage 10 — 22 in all.
- *     Bodies on the field are the main pressure: 3-4 enemies early, 4-5 mid,
- *     5-6 late. Pursuers arrive in Stage 2 and take a growing share, but late
- *     waves swing between basic-heavy crowds and Pursuer-heavy brawls rather
- *     than repeating one mixture. The Magus joins at Stage 5, at most one per
- *     wave, taking a body's place so wave sizes are unchanged.
- *
- * The rosters here are each wave's MIX. Its actual size follows
- * DIFFICULTY.waveSize (never smaller than authored), so later stages field
- * many more enemies in the same proportions. See WaveDirector.rosterFor().
+ * The hand-written intro. Each roster is a wave's MIX; its actual size
+ * follows DIFFICULTY.waveSize (never smaller than authored), so it grows in
+ * the same proportions. See WaveDirector.rosterFor().
+ *   - Stage 1 is basic slimes only; Pursuers arrive in Stage 2, the Magus in 5.
+ *   - Single waves for Stages 1-3, two for 4-5.
+ * Add, remove or edit stages freely: everything past the table is generated.
  */
 export const STAGES: StageDefinition[] = [
-  /* 1 */ { enemyPips: { basic: 1, pursuer: 2, magus: 1 }, baseAttackCooldownMs: 700, enemyFire: 0,
-    waves: [{ basic: 3 }] },
-  /* 2 */ { enemyPips: { basic: 1, pursuer: 2, magus: 1 }, baseAttackCooldownMs: 669, enemyFire: 0.1,
-    waves: [{ basic: 3, pursuer: 1 }] },
-  /* 3 */ { enemyPips: { basic: 1, pursuer: 2, magus: 1 }, baseAttackCooldownMs: 638, enemyFire: 0.2,
-    waves: [{ basic: 2, pursuer: 2 }] },
-  /* 4 */ { enemyPips: { basic: 2, pursuer: 3, magus: 2 }, baseAttackCooldownMs: 607, enemyFire: 0.3,
-    waves: [{ basic: 3, pursuer: 1 }, { basic: 3, pursuer: 2 }] },
-  /* 5 */ { enemyPips: { basic: 2, pursuer: 3, magus: 2 }, baseAttackCooldownMs: 576, enemyFire: 0.4,
-    waves: [{ basic: 2, pursuer: 1, magus: 1 }, { basic: 2, pursuer: 3 }] },
-  /* 6 */ { enemyPips: { basic: 2, pursuer: 3, magus: 2 }, baseAttackCooldownMs: 544, enemyFire: 0.5,
-    waves: [{ basic: 4, pursuer: 1 }, { basic: 2, pursuer: 2, magus: 1 }] },
-  /* 7 */ { enemyPips: { basic: 3, pursuer: 4, magus: 3 }, baseAttackCooldownMs: 513, enemyFire: 0.6,
-    waves: [{ basic: 3, pursuer: 1, magus: 1 }, { basic: 2, pursuer: 3 }, { basic: 3, pursuer: 2, magus: 1 }] },
-  /* 8 */ { enemyPips: { basic: 3, pursuer: 4, magus: 3 }, baseAttackCooldownMs: 482, enemyFire: 0.7,
-    waves: [{ basic: 2, pursuer: 3 }, { basic: 4, pursuer: 1, magus: 1 }, { basic: 2, pursuer: 3, magus: 1 }] },
-  /* 9 */ { enemyPips: { basic: 3, pursuer: 4, magus: 3 }, baseAttackCooldownMs: 451, enemyFire: 0.85,
-    waves: [{ basic: 3, pursuer: 2, magus: 1 }, { basic: 2, pursuer: 3 }, { basic: 2, pursuer: 3, magus: 1 }] },
-  /* 10 */ { enemyPips: { basic: 3, pursuer: 4, magus: 3 }, baseAttackCooldownMs: 420, enemyFire: 1,
-    waves: [
-      { basic: 4, pursuer: 1, magus: 1 }, { basic: 3, pursuer: 3 },
-      { basic: 4, pursuer: 1, magus: 1 }, { basic: 2, pursuer: 3, magus: 1 },
-    ] },
+  /* 1 */ { waves: [{ basic: 3 }] },
+  /* 2 */ { waves: [{ basic: 3, pursuer: 1 }] },
+  /* 3 */ { waves: [{ basic: 2, pursuer: 2 }] },
+  /* 4 */ { waves: [{ basic: 3, pursuer: 1 }, { basic: 3, pursuer: 2 }] },
+  /* 5 */ { waves: [{ basic: 2, pursuer: 1, magus: 1 }, { basic: 2, pursuer: 3 }] },
 ];
+
+/** Generated stages (everything past STAGES). */
+export const ENDLESS = {
+  wavesPerStage: 3,
+};
+
+/**
+ * Per-stage ramps for the player's pacing and the edge fire, indexed by
+ * stage - 1. Past the end, the last value holds.
+ */
+export const STAGE_RAMPS = {
+  /**
+   * The player's base auto cycle (windup + recovery) before passive stacks:
+   * 700ms at Stage 1 → 420ms from Stage 10. Time spent never changes it.
+   */
+  baseAttackCooldownMs: [700, 669, 638, 607, 576, 544, 513, 482, 451, 420],
+  /**
+   * Edge-projectile pressure: 0..1 along the ENEMY_PROJECTILES start → end
+   * ramps (spawn interval, speed, size, damage, volley size).
+   */
+  enemyFire: [0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.85, 1],
+};
 
 export const SCORE = {
   /** Base kill value; each archetype multiplies this by its scoreMultiplier. */

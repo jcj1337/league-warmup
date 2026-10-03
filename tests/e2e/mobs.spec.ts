@@ -56,7 +56,8 @@ test('mobs: passive stacks, Q cooldown refund, Pursuer AI, stage pips + segmente
     passive: window.__balance.PASSIVE,
     pursuer: window.__balance.PURSUER,
     playerSpeed: window.__balance.PLAYER.moveSpeed,
-    stages: window.__balance.STAGES,
+    // The first ten stages as played: hand-written ones, then generated ones.
+    stages: Array.from({ length: 10 }, (_, s) => window.__warmup.scene.getScene('GameScene').director.describeStage(s)),
     obsolete: {
       targetsMaxHp: 'maxHp' in window.__balance.TARGETS,
       pursuerHpMult: 'baseHpMultiplier' in window.__balance.PURSUER,
@@ -327,7 +328,7 @@ test('mobs: passive stacks, Q cooldown refund, Pursuer AI, stage pips + segmente
   const pipTable = await page.evaluate(() => {
     const d = window.__warmup.scene.getScene('GameScene').director;
     const out = [];
-    for (let s = 0; s < window.__balance.STAGES.length; s++) {
+    for (let s = 0; s < 10; s++) {
       d.stageIndex = s;
       const b = d.spawnEnemy('basic');
       const p = d.spawnEnemy('pursuer');
@@ -346,7 +347,7 @@ test('mobs: passive stacks, Q cooldown refund, Pursuer AI, stage pips + segmente
     : fail(`pursuer pips: ${JSON.stringify(pipTable)}`);
   pipTable.every((r) => r.basic === cfg.stages[r.stage - 1].enemyPips.basic
     && r.pursuer === cfg.stages[r.stage - 1].enemyPips.pursuer && r.basicHp === r.basic && r.pursuerHp === r.pursuer)
-    ? pass('spawned pips come straight from STAGES[n].enemyPips, and enemies spawn full')
+    ? pass('spawned pips come straight from the ENEMIES pip ramps, and enemies spawn full')
     : fail(`table vs spawn mismatch: ${JSON.stringify(pipTable)}`);
   Object.values(cfg.obsolete).every((present) => !present)
     ? pass('obsolete damage/HP config removed (damage values, HP multipliers, pointsPerDamage)')
@@ -371,9 +372,16 @@ test('mobs: passive stacks, Q cooldown refund, Pursuer AI, stage pips + segmente
   await page.evaluate(() => { window.__warmup.scene.getScene('GameScene').director.stageIndex = 6; });
   await placeOne('basic', 1000, 200);
   await page.waitForTimeout(80);
+  const hidden = await bar();
+  hidden.visible === false
+    ? pass("an undamaged enemy shows no bar by default (DEBUG.healthBars 'damaged': a swarm is not a wall of bars)")
+    : fail(`full bar drawn by default: ${JSON.stringify(hidden)}`);
+  // The rest of this section checks bar geometry, so draw every bar.
+  await page.evaluate(() => { window.__balance.DEBUG.healthBars = 'always'; });
+  await page.waitForTimeout(80);
   const full = await bar();
   full.max === 3 && full.segments === 3 && full.filled === 3 && full.visible
-    ? pass('Stage 7 basic shows 3 segments, all filled [#][#][#]')
+    ? pass("with DEBUG.healthBars 'always', a Stage 7 basic shows 3 segments, all filled [#][#][#]")
     : fail(`full bar: ${JSON.stringify(full)}`);
   // One hit through the scene's real hit funnel.
   await page.evaluate(() => {

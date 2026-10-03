@@ -237,7 +237,7 @@ blink.update(dt)                   E bolts
 enemyProjectiles.update(dt, now)   wave cleared → clear all shots; else spawn, fly, collide
 hostileSpells.update(dt, now)      wave cleared → clear all; else resolve due zones, fly orbs
 
-end conditions → endRound('defeated' | 'completed')
+end condition → endRound('defeated')   (the run is endless: death is the only end)
 ```
 
 The ①②③ ordering is load-bearing: when `applyAttackVisual` ran *after*
@@ -372,7 +372,7 @@ through the `AttackPacing` interface. Elapsed time plays no part: a player who t
 longer over a stage does not get faster autos for it.
 
 ```
-baseCooldownMs = STAGES[stage].baseAttackCooldownMs                  (700 → 420ms)
+baseCooldownMs = STAGE_RAMPS.baseAttackCooldownMs[stage]             (700 → 420ms, then holds)
 cooldownMs     = baseCooldownMs / passive.attackSpeedMultiplier      ← authoritative
 windupMs       = windupMsOverride ?? max(minWindupMs, cooldownMs * windupPercent)
 ```
@@ -561,39 +561,53 @@ applies on top of whatever base cycle the current stage sets.
 
 ### `WaveDirector`
 
-Owns stage/wave progression and the roster of the wave being fought. There are no
-respawns and no refilling slots:
+Owns stage/wave progression and the roster of the wave being fought. The run is
+**endless** — it ends only on death. There are no respawns and no refilling slots:
 
 ```
-spawnWave() ─► fight ─► last enemy killed ─► intermission (GameClock) ─► next wave / stage ─► spawnWave()
-                               │
-                               └─ it was the final stage's last wave ─► 'complete' → the run ends
+spawnWave() ─► staggered arrivals (packs, maxAlive cap) ─► fight ─► last enemy killed
+     ▲                                                                   │
+     └──── next wave / Wave 1 of the next stage ◄── intermission (GameClock) ◄┘
 ```
 
-- **`spawnWave()`** destroys the previous, fully dead roster and spawns exactly the
-  authored `STAGES[stage].waves[wave]` roster (e.g. `{ basic: 2, pursuer: 2 }`).
-  There are no fixed spawn points: each enemy's position is rejection-sampled away
-  from the player (240px; 360px for Pursuers) and away from enemies already placed,
-  so each gets its own spot. A three-enemy wave is simply three enemies — nothing
-  ever fills a fourth.
+- **Rosters — `rosterFor(s, w)`.** Stages `1..STAGES.length` (5) are hand-written:
+  the authored mix grows to the stage's `DIFFICULTY.waveSize` by largest remainder
+  (ties to basic), each mob held to its `maxPerWave` (never below its authored
+  count; the excess goes to basics). Every later stage is **generated**
+  (`ENDLESS.wavesPerStage` = 3 waves): a budget of `waveSize` points buys mobs —
+  Wave 1 of a mob's `unlockStage` fields exactly one of it first, then mobs are
+  drawn by `weight` among those unlocked whose `cost` still fits, each capped at
+  `max(1, floor(maxShare × budget / cost))` and its `maxPerWave`, until nothing
+  fits. Generated rosters use a per-run seed (`mulberry32(seed ^ f(stage, wave))`)
+  and are cached, so a wave is fixed once rolled.
+- **`spawnWave()`** destroys the previous, fully dead roster, shuffles the new one
+  and groups it into packs of `DIFFICULTY.packSize`: packs are spaced
+  `arrivalGapMs × packSize` (±`gapJitter`), members `RUN.spawn.packMemberGapMs` (90)
+  apart. The first member of a pack picks a spot by rejection sampling (away from
+  the player: 240px, Pursuers 360, Magus 400; away from other bodies); the rest land
+  40–110px from it, clear of every body.
+- **`beginDueArrivals()`** moves due entries onto the field while fewer than
+  `DIFFICULTY.maxAlive` are alive or arriving; the overflow waits for a slot.
+  `arriveAllNow()` (debug / tests) ignores the cap.
 - **`onEnemyKilled()`** is called from the scene's damage funnel. A dead enemy stays
-  in the roster with `active=false`, so its death animation plays out. When no enemy
-  is active, the wave is cleared **on the spot**: the phase becomes `'intermission'`
-  with `intermissionEndsAt = now + RUN.interWaveDelayMs` (400), or
-  `RUN.interStageDelayMs` (700) after a stage's last wave — or `'complete'` after
-  the final wave of the final stage.
+  in the roster with `active=false`, so its death animation plays out. When nothing
+  is pending, arriving or active, the wave is cleared **on the spot**: the phase
+  becomes `'intermission'` with `intermissionEndsAt = now + RUN.interWaveDelayMs`
+  (400), or `RUN.interStageDelayMs` (700) after a stage's last wave, which also
+  calls `onStageCleared()` (the scene heals 25 HP).
 - **`update()`** advances once `now >= intermissionEndsAt` — the next wave, or Wave 1
   of the next stage — then runs enemy AI and separation. The breather is a GameClock
   deadline, so it freezes with a pause.
 
 Nothing here reads elapsed time; the only way forward is killing the wave.
-`validateStages()` runs in the constructor and throws on a stage with no waves, or a
-wave outside 1–`RUN.maxAliveEnemies` (4) enemies.
+`validateConfig()` runs in the constructor and throws on an empty stage or wave, a
+malformed `ENEMIES` entry, or a mob without a class in `ARCHETYPES`.
 
 ```ts
 const ARCHETYPES: Record<EnemyArchetype, ArchetypeSpec> = {
-  basic:   { baseHp: () => TARGETS.maxHp, create: ..., minSpawnDistance: 240 },
-  pursuer: { baseHp: () => TARGETS.maxHp * 2.5, create: ..., minSpawnDistance: 360 },
+  basic:   { create: ..., radius: 18, minSpawnDistance: 240 },
+  pursuer: { create: ..., radius: 26, minSpawnDistance: 360 },
+  magus:   { create: ..., radius: 20, minSpawnDistance: 400 },
 };
 ```
 
@@ -601,31 +615,19 @@ The director is also the single source of stage-scoped tuning for other systems:
 
 | Reader | Through | Value |
 | --- | --- | --- |
-| `AttackSystem` | `AttackPacing.baseAttackCooldownMs` | the stage's base auto cycle |
-| `EnemyProjectileSystem` | `EnemyFirePressure.isWaveActive` / `fireIntensity` | fire on/off, 0..1 ramp position |
-| itself, at spawn | `hpMultiplier` | enemy HP = archetype base × stage multiplier |
+| `AttackSystem` | `AttackPacing.baseAttackCooldownMs` | `STAGE_RAMPS.baseAttackCooldownMs` (700 → 420ms by Stage 10, then holds) |
+| `EnemyProjectileSystem` | `EnemyFirePressure.isWaveActive` / `fireIntensity` | fire on/off, `STAGE_RAMPS.enemyFire` (0 → 1 by Stage 10, then holds) |
+| itself, at spawn | `pipsFor(id, stage)` | `ENEMIES[id].pips`: `min(max, start + floor((stage−1)/every))` |
+| scene, HUD, tests | `difficulty` / `describeStage(i)` | the stage's `DIFFICULTY` numbers / its pips, pacing, fire and rosters |
 
-Adding a third archetype = one entry here + its key in `WaveRoster` + the new `Enemy`
-subclass + using it in `STAGES`. No other system changes, because everything
-downstream types against `Enemy`.
+**Adding a mob** = its config block + an `ENEMIES` entry (its key becomes a valid
+`EnemyArchetype`) + its `Enemy` subclass and view + one `ARCHETYPES` line. Generated
+stages, the "New threat" chat line and the global speed / projectile / damage scaling
+pick it up with no other change, because everything downstream types against `Enemy`.
 
-**The stage table** (`STAGES` in balance.ts; B = basic, P = pursuer):
-
-| Stage | Waves | Wave 1 | Wave 2 | Wave 3 | Wave 4 | HP × | Base auto | Enemy fire |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| 1 | 1 | 3B | — | — | — | 1.00 | 700ms | 0 |
-| 2 | 1 | 3B+1P | — | — | — | 1.00 | 669ms | 0.10 |
-| 3 | 1 | 2B+2P | — | — | — | 1.00 | 638ms | 0.20 |
-| 4 | 2 | 3B+1P | 2B+2P | — | — | 1.05 | 607ms | 0.30 |
-| 5 | 2 | 2B+2P | 1B+3P | — | — | 1.10 | 576ms | 0.40 |
-| 6 | 2 | 1B+3P | 2B+2P | — | — | 1.15 | 544ms | 0.50 |
-| 7 | 3 | 2B+2P | 1B+3P | 1B+3P | — | 1.20 | 513ms | 0.60 |
-| 8 | 3 | 2B+2P | 1B+3P | 1B+3P | — | 1.25 | 482ms | 0.70 |
-| 9 | 3 | 1B+3P | 2B+2P | 1B+3P | — | 1.30 | 451ms | 0.85 |
-| 10 | 4 | 2B+2P | 1B+3P | 2B+2P | 4P | 1.35 | 420ms | 1.00 |
-
-The number of waves is simply each row's `waves.length`; the director, HUD
-(`WAVE X / Y`), end screen and tests all read it from there.
+**The hand-written intro** (`STAGES`; B = basic, P = Pursuer, M = Magus; fielded, with
+the authored mix in brackets): 1: 4B (3B) · 2: 4B+1P (3B+1P) · 3: 3B+2P (2B+2P) ·
+4: 5B+1P (3B+1P), 4B+2P (3B+2P) · 5: 4B+2P+1M (2B+1P+1M), 3B+4P (2B+3P).
 
 **Separation**: overlapping enemies are pushed apart with the share split by radius,
 so a Pursuer shoves a basic target rather than the reverse.
@@ -754,7 +756,7 @@ can therefore never damage the player during the breather.
 ## 10. Difficulty
 
 Difficulty is a property of the **stage**, not of the clock. There is no time ramp:
-the `STAGES` row in play sets everything that scales.
+the stage number sets everything that scales (`DIFFICULTY`, `ENEMIES` pips, `STAGE_RAMPS`).
 
 | What | Column | Stage 1 → Stage 10 |
 | --- | --- | --- |
@@ -822,8 +824,7 @@ spawns), so `attacksFired - attacksLanded` overstates misses.
 **Round flow**
 
 ```
-Running ──(director.isRunComplete)──> Over (completed)
-Running ──(!player.isAlive)─────────> Over (defeated)
+Running ──(!player.isAlive)─────────> Over (defeated)   (no other end: the run is endless)
 Over ──(restartRound)──> scene.restart() → Running at Stage 1 Wave 1
 Running <──> Paused  (setPaused; update() returns early, tweens paused)
 ```
@@ -919,7 +920,7 @@ leads or lags the mechanic.
 | `rangeFromPlayerEdge` | `false` | `true` = edge-to-edge (+14px effective) |
 | `projectileSpeed` / `projectileRadius` | 1150 / 6 | Damage lands sooner |
 
-The base attack cycle is per stage: `STAGES[n].baseAttackCooldownMs`.
+The base attack cycle is per stage: `STAGE_RAMPS.baseAttackCooldownMs`.
 
 The attack animation knobs live in `THEME.player.attack`: `windupLeanPx` 6,
 `releaseKickPx/Ms` 6/120, `chargeRingStartPad/EndPad` 20/3, `releaseRingRadius/Ms` 30/180.
@@ -952,15 +953,19 @@ scaled stats once, at spawn, from the stage it spawned on.
 
 Wave rosters: `WaveDirector.rosterFor(s, w)` keeps the authored mix and grows it to
 `max(authored, waveSize)` by largest remainder (ties to basic), caps Magi at
-`max(magusPerWave, authored)` and gives the excess to basics. Arrivals wait while
+each mob's `maxPerWave` (never below authored) and gives the excess to basics; generated
+stages buy their rosters from the same `waveSize` budget (see §9). Arrivals wait while
 `maxAlive` enemies are on the field (`arriveAllNow()`, the debug hook, ignores the cap).
 Enemy damage (swings, spit, Magus spells) goes through `GameScene.onEnemyHit()`, which
 multiplies by the stage's `damage`; edge fire keeps its own ramp. Clearing a stage's
 last wave calls `onStageCleared()`, which heals the player.
 
-`STAGES`: one row per stage — `enemyHpMultiplier`, `baseAttackCooldownMs`,
-`enemyFire`, and `waves` (each a `WaveRoster` such as `{ basic: 2, pursuer: 2 }`).
-Values in §9.
+`STAGES`: the hand-written intro, one row per stage — `waves`, each a `WaveRoster` mix
+such as `{ basic: 2, pursuer: 2 }`. `ENDLESS.wavesPerStage` 3 for generated stages.
+`STAGE_RAMPS`: `baseAttackCooldownMs` and `enemyFire` per stage, last value holding.
+`ENEMIES`: per mob `name`, `cost`, `unlockStage`, `weight`, `maxShare`, optional
+`maxPerWave`, `pips { start, every, max }` (basic 1/3/3, Pursuer 2/3/4, Magus 1/3/3).
+`DIFFICULTY.packSize` 1 / k 0.4 / 1–5; `RUN.spawn.packMemberGapMs` 90. Values in §9.
 
 Banner durations are presentation: `THEME.banners` (`stageMs` 1500, `waveMs` 900).
 
@@ -977,7 +982,7 @@ edgeMargin 60. (Hit flash / death pop timings: `THEME.enemy`.)
 `spellGapMs` 1400, `aimLeadMs` 0; `lance` / `eye` / `orb` / `rite` blocks hold each
 spell's timings, sizes, damage and cooldown (see §9).
 
-`ENEMY_PROJECTILES` ramps (position set by `STAGES[n].enemyFire`): interval
+`ENEMY_PROJECTILES` ramps (position set by `STAGE_RAMPS.enemyFire`): interval
 2600→700, speed 250→520, radius 10→16, damage 8→16, volley 1→1.5,
 `aimJitterDegrees` 3, `cullMargin` 80.
 
@@ -1000,12 +1005,12 @@ action already work.
 movement        step = moveSpeed * dt;  position += normalize(dest - pos) * step
 attack reach    reach = ATTACK.range + enemy.radius + (rangeFromPlayerEdge ? player.radius : 0)
                 inRange ⟺ (dx² + dy²) <= reach²
-attack speed    cd  = STAGES[stage].baseAttackCooldownMs / (1 + stacks * 0.10)
+attack speed    cd  = STAGE_RAMPS.baseAttackCooldownMs[stage] / (1 + stacks * 0.10)
                 wind= max(90, cd * 0.25)
 cast progress   1 - (endsAt - now) / durationMs          (animation uses pow(·, 0.55))
 cooldown refund readyAt[id] = max(now, readyAt[id] - 750)   for q, w, e
-enemy fire      param = lerp(start, end, STAGES[stage].enemyFire)
-enemy hp        hp = round(archetypeBaseHp * STAGES[stage].enemyHpMultiplier)
+enemy fire      param = lerp(start, end, STAGE_RAMPS.enemyFire[stage])
+enemy pips      pips = min(max, start + floor((stage - 1) / every))   (ENEMIES[id].pips)
 wave clear      no enemy active → intermissionEndsAt = now + (last wave of stage ? 700 : 400)
 blink dest      d = cursor - player; dest = |d| > range ? player + normalize(d)*range : cursor
                 dest = clamp(dest, arena padding + player radius)
@@ -1052,8 +1057,8 @@ nothing scheduled → the HUD polls `wavePhase` → "WAVE CLEAR" / "STAGE CLEAR"
 deadline `director.update` → `advance()` → `spawnWave()` destroys the dead roster and
 spawns the next authored one → the HUD sees the new wave or stage → "WAVE N" /
 "STAGE N" banner → the first volley follows one spawn interval later. After the final
-stage's last wave the phase becomes `complete` instead, and the frame's end check calls
-`endRound('completed')`.
+stage's last wave the director also calls `onStageCleared()` (the player heals 25 HP).
+Clearing Stage 5's last wave leads into the first generated stage; there is no last stage.
 
 **Player hit.** Spawn on a random edge → aimed at the player's position at spawn ±3° →
 straight line → overlap with the player → missile killed unconditionally →
@@ -1145,11 +1150,13 @@ loop, per-ability config + on-hit effect. Add a config block, a `SPECS` entry, a
 `AbilityId`, a keybind, a `CommandHandler` method and an `AbilityBar` slot. Cast
 windows come free via `beginCastOrResolve`.
 
-**More enemies.** One `Enemy` subclass + one `ARCHETYPES` entry in `WaveDirector` +
-its key in `WaveRoster` + using it in `STAGES`. Nothing else changes.
+**More enemies.** Its config block + an `ENEMIES` entry + one `Enemy` subclass and view
++ one `ARCHETYPES` line in `WaveDirector`. Generated stages pick it up from its
+`unlockStage`. Nothing else changes.
 
-**More stages or waves.** Edit `STAGES`: add rows, or add/remove entries in a stage's
-`waves`. `validateStages()` rejects empty stages and over-cap waves at startup.
+**More stages or waves.** Edit `STAGES` to change the hand-written intro (any stage past
+it is generated), or `ENDLESS.wavesPerStage` for generated stages. `validateConfig()`
+rejects empty stages and malformed registry entries at startup.
 
 **Configurable keybinds.** Already 90% there: `KEYBINDS` is the only source,
 `InputController` the only reader, every action takes an array.

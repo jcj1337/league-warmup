@@ -6,9 +6,13 @@ test('pressure: wave sizes, staggered arrival + activation window, no premature 
   const { pass, fail, section, finish } = await startSuite(page, testInfo, 400, { arriveAll: false });
 
   const cfg = await page.evaluate(() => ({
-    rosters: window.__balance.STAGES.map((st, s) => st.waves.map((_, w) => window.__warmup.scene.getScene('GameScene').director.rosterFor(s, w))),
+    // The first ten stages as played: the hand-written intro, then generated stages.
+    rosters: Array.from({ length: 10 }, (_, s) => window.__warmup.scene.getScene('GameScene').director.describeStage(s).waves),
+    authored: window.__balance.STAGES,
+    enemies: window.__balance.ENEMIES,
+    endless: window.__balance.ENDLESS,
+    difficulty: Array.from({ length: 10 }, (_, s) => { const d = window.__warmup.scene.getScene('GameScene').director; const i = d.stageIndex; d.stageIndex = s; const out = d.difficulty; d.stageIndex = i; return out; }),
     run: window.__balance.RUN,
-    stages: window.__balance.STAGES,
     fire: window.__balance.ENEMY_PROJECTILES,
     pursuer: window.__balance.PURSUER,
     targets: window.__balance.TARGETS,
@@ -69,21 +73,32 @@ test('pressure: wave sizes, staggered arrival + activation window, no premature 
 
   // === 1. Wave sizes and pressure config =====================================
   section('1. Wave sizes and pressure config');
-  const sizes = cfg.stages.map((s) => s.waves.map(sizeOf));
-  cfg.stages.map((s) => s.waves.length).join('/') === '1/1/1/2/2/2/3/3/3/4'
-    ? pass('waves per stage unchanged: 1/1/1/2/2/2/3/3/3/4')
-    : fail(`waves per stage: ${cfg.stages.map((s) => s.waves.length).join('/')}`);
+  const sizes = cfg.authored.map((s) => s.waves.map(sizeOf));
+  const perStage = cfg.rosters.map((st) => st.length).join('/');
+  const wantPerStage = [...cfg.authored.map((s) => s.waves.length), ...Array(10 - cfg.authored.length).fill(cfg.endless.wavesPerStage)].join('/');
+  perStage === wantPerStage
+    ? pass(`waves per stage: ${perStage} (hand-written, then ${cfg.endless.wavesPerStage} per generated stage)`)
+    : fail(`waves per stage: ${perStage}, want ${wantPerStage}`);
   const inBand = (from, to, lo, hi) => sizes.slice(from, to).flat().every((n) => n >= lo && n <= hi);
-  inBand(0, 3, 3, 4) && inBand(3, 6, 4, 5) && inBand(6, 10, 5, 6)
-    ? pass('authored mixes: early stages 3-4 enemies, mid 4-5, late 5-6')
+  inBand(0, 3, 3, 4) && inBand(3, cfg.authored.length, 4, 5)
+    ? pass('hand-written mixes: Stages 1-3 field 3-4 enemies, 4-5 field 4-5')
     : fail(`size bands: ${JSON.stringify(sizes)}`);
   {
     const scaled = cfg.rosters.map((st) => st.map(sizeOf));
-    scaled.every((st, i) => st.every((n, w) => n >= sizes[i][w])) && Math.max(...scaled[9]) > Math.max(...sizes[9])
-      ? pass(`the difficulty curve grows them without shrinking any (fielded: ${scaled.map((st) => st.join('+')).join(' / ')})`)
+    scaled.slice(0, cfg.authored.length).every((st, i) => st.every((n, w) => n >= sizes[i][w]))
+      ? pass(`the difficulty curve grows hand-written waves without shrinking any (fielded: ${scaled.map((st) => st.join('+')).join(' / ')})`)
       : fail(`scaled sizes: ${JSON.stringify(scaled)}`);
+    // A generated wave spends its budget (DIFFICULTY.waveSize) until no mob fits.
+    const costOf = (r) => Object.entries(r).reduce((n, [id, c]) => n + (c as number) * cfg.enemies[id].cost, 0);
+    const maxCost = Math.max(...Object.values(cfg.enemies).map((e: any) => e.cost));
+    const badBudget = cfg.rosters.flatMap((st, i) => st.map((r) => ({ stage: i + 1, cost: costOf(r), budget: cfg.difficulty[i].waveSize })))
+      .slice(cfg.authored.reduce((n, st) => n + st.waves.length, 0))
+      .find((b) => b.cost > b.budget + 1e-9 || b.cost <= b.budget - maxCost);
+    !badBudget
+      ? pass('every generated wave spends its budget: within one mob\'s cost of DIFFICULTY.waveSize, never over')
+      : fail(`budget: ${JSON.stringify(badBudget)}`);
   }
-  const lateMixes = new Set(cfg.stages.slice(6).flatMap((s) => s.waves.map((w) => `${w.basic ?? 0}B${w.pursuer ?? 0}P${w.magus ?? 0}M`)));
+  const lateMixes = new Set(cfg.rosters.slice(6).flatMap((st) => st.map((w) => `${w.basic ?? 0}B${w.pursuer ?? 0}P${w.magus ?? 0}M`)));
   lateMixes.size >= 3
     ? pass(`late waves vary their mixture (${[...lateMixes].join(', ')})`)
     : fail(`late waves repeat one mixture: ${[...lateMixes].join(', ')}`);
@@ -178,8 +193,8 @@ test('pressure: wave sizes, staggered arrival + activation window, no premature 
   const table = await page.evaluate(() => {
     const d = window.__warmup.scene.getScene('GameScene').director;
     const out = [];
-    for (let s = 0; s < window.__balance.STAGES.length; s++) {
-      for (let w = 0; w < window.__balance.STAGES[s].waves.length; w++) {
+    for (let s = 0; s < 10; s++) {
+      for (let w = 0; w < d.wavesIn(s); w++) {
         d.stageIndex = s; d.waveIndex = w;
         d.spawnWave();
         d.arriveAllNow();
@@ -197,7 +212,7 @@ test('pressure: wave sizes, staggered arrival + activation window, no premature 
   const capped = await page.evaluate(() => new Promise<any>((res) => {
     const g = window.__warmup.scene.getScene('GameScene');
     const d = g.director;
-    d.stageIndex = 9; d.waveIndex = 0;   // Stage 10 Wave 1: more enemies than the cap
+    d.stageIndex = 14; d.waveIndex = 0;  // Stage 15 Wave 1: far more enemies than the cap
     d.spawnWave();
     const cap = d.difficulty.maxAlive;
     const t0 = g.clock.now;
@@ -220,7 +235,7 @@ test('pressure: wave sizes, staggered arrival + activation window, no premature 
     tick();
   }));
   capped.peak === capped.cap && capped.pendingAtCap && capped.refilled
-    ? pass(`Stage 10 fields at most ${capped.cap} at once; the rest wait, and one arrives as soon as a slot frees`)
+    ? pass(`Stage 15 fields at most ${capped.cap} at once; the rest wait, and one arrives as soon as a slot frees`)
     : fail(`cap: ${JSON.stringify(capped)}`);
 
   // === 3. An arriving enemy is untargetable, undamageable and inert ==========
@@ -449,7 +464,7 @@ test('pressure: wave sizes, staggered arrival + activation window, no premature 
     const g = window.__warmup.scene.getScene('GameScene');
     const d = g.director;
     const out = [];
-    for (let s = 0; s < window.__balance.STAGES.length; s++) {
+    for (let s = 0; s < 10; s++) {
       d.stageIndex = s;
       out.push({ interval: g.enemyProjectiles.spawnIntervalMs, volley: g.enemyProjectiles.volleySize });
     }

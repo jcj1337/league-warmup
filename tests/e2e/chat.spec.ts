@@ -1,24 +1,29 @@
 import { test } from '@playwright/test';
 import { startSuite } from './support/harness';
 
-test('chat: system messages, missions from STAGES, Z light/dark toggle, bottom-edge drag + input isolation, restart', async ({ page }, testInfo) => {
+test('chat: system messages, missions + new threats, Z light/dark toggle, bottom-edge drag + input isolation, restart', async ({ page }, testInfo) => {
   const { pass, fail, section, finish } = await startSuite(page, testInfo, 400);
 
   const cfg = await page.evaluate(() => ({
-    stages: window.__balance.STAGES,
+    // The first ten stages as played: hand-written ones, then generated ones.
+    stages: Array.from({ length: 10 }, (_, s) => window.__warmup.scene.getScene('GameScene').director.describeStage(s)),
     run: window.__balance.RUN,
+    enemies: window.__balance.ENEMIES,
+    spitFrom: window.__balance.TARGETS.spit.fromStage,
+    dashFrom: window.__balance.PURSUER.dash.fromStage,
     arena: window.__balance.ARENA,
     chat: window.__theme.chat,
   }));
   // Expected wording, built from the stage table the test reads itself.
   const WELCOME = "Welcome to qwer's Backyard!";
   const waves = (n) => `${n} wave${n === 1 ? '' : 's'}`;
-  const briefing = (stage) => {
-    const n = cfg.stages[stage - 1].waves.length;
-    return stage === cfg.stages.length
-      ? `Mission ${stage}: Final mission — clear ${waves(n)}.`
-      : `Mission ${stage}: Clear ${waves(n)}.`;
-  };
+  const briefing = (stage) => `Mission ${stage}: Clear ${waves(cfg.stages[stage - 1]?.waves.length ?? 3)}.`;
+  /** What a stage introduces, in order: new mobs, then new attacks. */
+  const threats = (stage) => stage <= 1 ? [] : [
+    ...Object.values(cfg.enemies).filter((e: any) => e.unlockStage === stage).map((e: any) => `New threat: ${e.name}.`),
+    ...(cfg.spitFrom === stage ? ['New threat: slimes now spit.'] : []),
+    ...(cfg.dashFrom === stage ? ['New threat: Pursuers now dash.'] : []),
+  ];
 
   const chat = () => page.evaluate(() => {
     const c = window.__warmup.scene.getScene('UIScene').chat;
@@ -251,8 +256,9 @@ test('chat: system messages, missions from STAGES, Z light/dark toggle, bottom-e
     ? pass(`Stage 2 beginning appends "${briefing(2)}"`)
     : fail(`no Mission 2 briefing: ${JSON.stringify((await chat()).messages)}`);
   const m2 = (await chat()).messages;
-  m2.slice(-2).join(' | ') === `Mission 1 complete! | ${briefing(2)}`
-    ? pass('completion then briefing, in order')
+  const want2 = ['Mission 1 complete!', briefing(2), ...threats(2)];
+  m2.slice(-want2.length).join(' | ') === want2.join(' | ') && threats(2).length > 0
+    ? pass(`completion, briefing, then what Stage 2 introduces: ${JSON.stringify(threats(2))}`)
     : fail(`order: ${JSON.stringify(m2)}`);
 
   const multi = cfg.stages.findIndex((s) => s.waves.length > 1) + 1;
@@ -267,15 +273,22 @@ test('chat: system messages, missions from STAGES, Z light/dark toggle, bottom-e
     ? pass(`clearing wave 1 of ${cfg.stages[multi - 1].waves.length} is not a mission completion`)
     : fail('a mid-stage wave clear posted a mission completion');
 
+  const magusStage = (cfg.enemies as any).magus.unlockStage;
+  await jumpTo(magusStage, 1);
+  (await hasMessage(`New threat: ${(cfg.enemies as any).magus.name}.`))
+    ? pass(`Stage ${magusStage} announces the Magus as a new threat`)
+    : fail(`no Magus announcement: ${JSON.stringify((await chat()).messages)}`);
+
+  // The run is endless: Stage 10 is briefed like any other and leads to a generated Stage 11.
   const last = cfg.stages.length;
   await jumpTo(last, cfg.stages[last - 1].waves.length);
-  (await hasMessage(briefing(last))) && briefing(last).includes('Final mission')
-    ? pass(`Stage ${last} is briefed as the final mission: "${briefing(last)}"`)
-    : fail(`final briefing missing: ${JSON.stringify((await chat()).messages)}`);
+  (await hasMessage(briefing(last))) && !briefing(last).includes('Final')
+    ? pass(`Stage ${last} is briefed like any other: "${briefing(last)}"`)
+    : fail(`Stage ${last} briefing missing: ${JSON.stringify((await chat()).messages)}`);
   await killAll();
-  (await hasMessage(`Mission ${last} complete!`))
-    ? pass(`completing the run posts "Mission ${last} complete!"`)
-    : fail(`no final completion: ${JSON.stringify((await chat()).messages)}`);
+  (await hasMessage(`Mission ${last} complete!`)) && (await hasMessage(briefing(last + 1), cfg.run.interStageDelayMs + 3000))
+    ? pass(`clearing it posts "Mission ${last} complete!" and the run goes on: "${briefing(last + 1)}"`)
+    : fail(`after Stage ${last}: ${JSON.stringify((await chat()).messages)}`);
   const finalMsgs = (await chat()).messages;
   finalMsgs.filter((m) => m === briefing(last)).length === 1 && finalMsgs.filter((m) => m === `Mission ${last} complete!`).length === 1
     ? pass('each mission message is posted exactly once')
@@ -283,6 +296,12 @@ test('chat: system messages, missions from STAGES, Z light/dark toggle, bottom-e
 
   // === 5. Restart ============================================================
   section('5. Restart');
+  // The run only ends on death.
+  await page.evaluate(() => {
+    const g = window.__warmup.scene.getScene('GameScene');
+    g.player.hp = 1; g.player.lastHitAt = Number.NEGATIVE_INFINITY;
+    g.onPlayerHit(5, 'edgeFire');
+  });
   const ended = await waitFor(() => window.__warmup.scene.getScene('GameScene').getRoundResult() !== null);
   const darkBefore = await pressZ(true);     // choose dark mode before restarting
   const round0 = await page.evaluate(() => window.__warmup.scene.getScene('GameScene').getHudState().round);

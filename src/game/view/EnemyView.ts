@@ -148,7 +148,7 @@ export class EnemyView {
 
     this.shadow.setVisible(true).setPosition(bx, by + this.art.shadowOffsetY);
 
-    this.hpBar.setVisible(true);
+    this.hpBar.setVisible(DEBUG.healthBars === 'always' || e.hp < e.maxHp);
     this.hpBar.update(e.x, e.y + this.art.hpBarOffsetY, e.hp, e.maxHp, deltaSeconds);
 
     this.overlay.clear();

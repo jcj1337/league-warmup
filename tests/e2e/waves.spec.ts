@@ -1,16 +1,20 @@
 import { test } from '@playwright/test';
 import { startSuite } from './support/harness';
 
-test('waves: stage/wave progression, variable waves per stage, finite rosters, breathers, run end, restart', async ({ page }, testInfo) => {
+test('waves: stage/wave progression, variable waves per stage, finite rosters, breathers, endless run, death, restart', async ({ page }, testInfo) => {
   const { pass, fail, section, finish } = await startSuite(page, testInfo, 400);
 
   const cfg = await page.evaluate(() => {
     const d = window.__warmup.scene.getScene('GameScene').director;
+    // The first ten stages as played: the hand-written intro, then generated stages.
+    const stages = Array.from({ length: 10 }, (_, s) => d.describeStage(s));
     return {
       run: window.__balance.RUN,
-      stages: window.__balance.STAGES,
-      // What each wave actually fields: the authored mix, grown by the difficulty curve.
-      rosters: window.__balance.STAGES.map((st, s) => st.waves.map((_, w) => d.rosterFor(s, w))),
+      endless: window.__balance.ENDLESS,
+      authored: window.__balance.STAGES,
+      stages,
+      // What each wave actually fields.
+      rosters: stages.map((st) => st.waves),
     };
   });
   // Progression is under test here, not survival: Pursuer swings land for 0, so
@@ -40,7 +44,7 @@ test('waves: stage/wave progression, variable waves per stage, finite rosters, b
     const hud = g.getHudState();
     return {
       stage: hud.stage, wave: hud.wave, phase: hud.wavePhase, next: hud.nextTransition,
-      remaining: hud.enemiesRemaining, stageCount: hud.stageCount, wavesInStage: hud.wavesInStage,
+      remaining: hud.enemiesRemaining, wavesInStage: hud.wavesInStage,
       runTime: hud.runTime, clock: g.clock.now, hp: g.player.hp,
       baseCd: g.attacks.baseCooldownMs, shots: g.enemyProjectiles.activeCount,
       result: g.getRoundResult(),
@@ -167,14 +171,14 @@ test('waves: stage/wave progression, variable waves per stage, finite rosters, b
   fresh.stage === 1 && fresh.wave === 1 && fresh.phase === 'wave' && fresh.result === null
     ? pass('run starts at Stage 1 Wave 1, fighting, not over')
     : fail(`fresh run: stage ${fresh.stage} wave ${fresh.wave} phase ${fresh.phase} result ${JSON.stringify(fresh.result)}`);
-  fresh.stageCount === lastStage && fresh.wavesInStage === waveCounts[0]
-    && fresh.progress.includes(`WAVE 1 / ${waveCounts[0]}`) && fresh.progress.includes(`STAGE 1 / ${lastStage}`)
-    ? pass(`HUD reads "${fresh.progress.replace(/\s+/g, ' ')}" — totals straight from the stage table`)
-    : fail(`HUD progress "${fresh.progress}" vs ${lastStage} stages, ${waveCounts[0]} waves in Stage 1`);
+  fresh.wavesInStage === waveCounts[0]
+    && fresh.progress.includes(`WAVE 1 / ${waveCounts[0]}`) && /STAGE 1\s/.test(fresh.progress) && !fresh.progress.includes('STAGE 1 /')
+    ? pass(`HUD reads "${fresh.progress.replace(/\s+/g, ' ')}" — the stage has no total (the run is endless), the wave total comes from the stage`)
+    : fail(`HUD progress "${fresh.progress}" vs ${waveCounts[0]} waves in Stage 1`);
   new Set(waveCounts).size > 1
     && waveCounts[lastStage - 1] === Math.max(...waveCounts) && waveCounts[lastStage - 1] > waveCounts[0]
     && waveCounts[0] === Math.min(...waveCounts)
-    ? pass(`stages vary in length (${waveCounts.join(', ')} waves; ${wavesTotal} in all): the first is the shortest, the last the longest`)
+    ? pass(`stages vary in length (${waveCounts.join(', ')} waves over the first ${lastStage}): the first is the shortest, generated ones the longest`)
     : fail(`wave counts per stage: ${waveCounts.join(', ')}`);
   const avgSize = (stages) => {
     const sizes = stages.flatMap((s) => s.waves.map(sizeOf));
@@ -188,7 +192,7 @@ test('waves: stage/wave progression, variable waves per stage, finite rosters, b
     ? pass(`Stage 1 Wave 1 spawns exactly its scaled roster ${JSON.stringify(countTypes(fresh.roster))}`)
     : fail(`Stage 1 Wave 1 roster ${JSON.stringify(countTypes(fresh.roster))} vs ${JSON.stringify(rosterOf(1, 1))}`);
   {
-    const authored = sizeOf(cfg.stages[0].waves[0]);
+    const authored = sizeOf(cfg.authored[0].waves[0]);
     fresh.roster.length >= authored && fresh.roster.length <= 6
       ? pass(`Stage 1 Wave 1 fields ${fresh.roster.length} (authored ${authored}, grown by the difficulty curve)`)
       : fail(`Stage 1 Wave 1 fielded ${fresh.roster.length} enemies`);
@@ -361,13 +365,13 @@ test('waves: stage/wave progression, variable waves per stage, finite rosters, b
     : fail(`Stage ${pNext.stage} Wave ${pNext.wave} never began after resuming`);
 
   // === 7. Every authored wave spawns exactly its roster =======================
-  section('7. Every authored wave spawns exactly its roster');
+  section('7. Every wave (hand-written or generated) spawns exactly its roster');
   const table = await page.evaluate(() => {
     const g = window.__warmup.scene.getScene('GameScene');
     const d = g.director;
     const out = [];
-    for (let s = 0; s < window.__balance.STAGES.length; s++) {
-      for (let w = 0; w < window.__balance.STAGES[s].waves.length; w++) {
+    for (let s = 0; s < 10; s++) {
+      for (let w = 0; w < d.wavesIn(s); w++) {
         d.stageIndex = s; d.waveIndex = w;
         d.spawnWave();
         d.arriveAllNow();
@@ -391,10 +395,12 @@ test('waves: stage/wave progression, variable waves per stage, finite rosters, b
     : fail(`HUD wave total ${badTotal?.of} on stage ${badTotal?.s + 1}, table says ${waveCounts[badTotal?.s]}`);
   {
     // Each wave keeps its authored mix and never shrinks below it.
-    const short = table.find((t) => t.roster.length < sizeOf(cfg.stages[t.s].waves[t.w]) || !t.roster.every((e) => e.active));
+    const short = table.find((t) => (t.s < cfg.authored.length && t.roster.length < sizeOf(cfg.authored[t.s].waves[t.w])) || !t.roster.every((e) => e.active));
+    // Generated waves buy mobs from a budget, so heavier picks mean fewer bodies:
+    // sizes trend upward rather than rising every single stage.
     const firstSizes = cfg.rosters.map((st) => sizeOf(st[0]));
-    !short && firstSizes.every((n, i) => i === 0 || n >= firstSizes[i - 1])
-      ? pass(`waves never shrink below their authored size, and grow with the stage (Wave 1 sizes ${firstSizes.join(' / ')})`)
+    !short && firstSizes[firstSizes.length - 1] >= 2 * firstSizes[0]
+      ? pass(`hand-written waves never shrink below their authored size, and waves grow with the stage (Wave 1 sizes ${firstSizes.join(' / ')})`)
       : fail(`wave sizes: ${JSON.stringify(short ?? firstSizes)}`);
   }
   const overlapping = table.find((t) => minGap(t.roster) <= 0);
@@ -413,27 +419,32 @@ test('waves: stage/wave progression, variable waves per stage, finite rosters, b
     ? pass(`later stages: tougher enemies (basic ${pips[0]} → ${pips[pips.length - 1]} pips) and faster base autos (${cds[0]} → ${cds[cds.length - 1]}ms)`)
     : fail(`stage scaling: basic pips ${JSON.stringify(pips)}, base autos ${JSON.stringify(cds)}`);
 
-  // === 8. Clearing the final stage's last wave completes the run ==============
-  section("8. Clearing the final stage's last wave completes the run");
+  // === 8. The run is endless: Stage 10 leads on to a generated Stage 11 ========
+  section('8. The run is endless: Stage 10 leads on to a generated Stage 11');
   await calm();
-  const finale = await S();                 // section 7 left the final wave freshly spawned
-  finale.stage === lastStage && finale.wave === waveCounts[lastStage - 1] && finale.wavesInStage === waveCounts[lastStage - 1]
-    ? pass(`on Stage ${lastStage} Wave ${finale.wave} of ${finale.wavesInStage}`)
-    : fail(`expected Stage ${lastStage} Wave ${waveCounts[lastStage - 1]}, on stage ${finale.stage} wave ${finale.wave} of ${finale.wavesInStage}`);
+  const tenth = await S();                  // section 7 left Stage 10's last wave freshly spawned
+  tenth.stage === lastStage && tenth.wave === waveCounts[lastStage - 1]
+    ? pass(`on Stage ${lastStage} Wave ${tenth.wave} of ${tenth.wavesInStage}`)
+    : fail(`expected Stage ${lastStage} Wave ${waveCounts[lastStage - 1]}, on stage ${tenth.stage} wave ${tenth.wave} of ${tenth.wavesInStage}`);
   await kill();
-  const completed = await waitFor(() => window.__warmup.scene.getScene('GameScene').getRoundResult() !== null);
+  const onward = await waitFor(() => {
+    const d = window.__warmup.scene.getScene('GameScene').director;
+    return d.stage === 11 && d.phase === 'wave';
+  }, null, cfg.run.interStageDelayMs + 3000);
+  // Generated waves can outnumber the stage's cap on enemies alive at once: bring it all in.
+  await page.evaluate(() => window.__warmup.scene.getScene('GameScene').director.arriveAllNow());
+  const eleventh = await S();
+  const want11 = await page.evaluate(() => window.__warmup.scene.getScene('GameScene').director.rosterFor(10, 0));
+  onward && eleventh.result === null && eleventh.wavesInStage === cfg.endless.wavesPerStage && matches(eleventh.roster, want11)
+    ? pass(`no run end: a generated Stage 11 (${eleventh.wavesInStage} waves) begins, fielding ${JSON.stringify(countTypes(eleventh.roster))}`)
+    : fail(`after Stage ${lastStage}: ${JSON.stringify({ onward, stage: eleventh.stage, result: eleventh.result, of: eleventh.wavesInStage, roster: countTypes(eleventh.roster), want11 })}`);
+  // The run only ends on death.
+  await page.evaluate(() => { window.__warmup.scene.getScene('GameScene').player.hp = 0; });
+  const ended = await waitFor(() => window.__warmup.scene.getScene('GameScene').getRoundResult()?.outcome === 'defeated');
   const done = await S();
-  completed && done.result?.outcome === 'completed'
-    && done.result.stageReached === lastStage && done.result.stageCount === lastStage
-    && done.result.waveReached === waveCounts[lastStage - 1] && done.result.wavesInStage === waveCounts[lastStage - 1]
-    && done.result.wavesCleared === wavesTotal && done.result.wavesTotal === wavesTotal
-    ? pass(`run ends as COMPLETED at Stage ${lastStage} Wave ${done.result.waveReached} / ${done.result.wavesInStage} (${done.result.wavesCleared}/${done.result.wavesTotal} waves cleared)`)
-    : fail(`completion result: ${JSON.stringify(done.result)}`);
-  const completeScreen = await waitFor(() => {
-    const ui = window.__warmup.scene.getScene('UIScene');
-    return ui.overlay.visible && ui.overlay.getByName('title').text === 'RUN COMPLETE';
-  });
-  completeScreen ? pass('end screen reads RUN COMPLETE') : fail('end screen did not show RUN COMPLETE');
+  ended && done.result.stageReached === 11 && done.result.wavesCleared === wavesTotal
+    ? pass(`it ends on death: DEFEATED at Stage 11 with all ${wavesTotal} waves of Stages 1-${lastStage} cleared`)
+    : fail(`death result: ${JSON.stringify(done.result)}`);
 
   // === 9. Restart returns to a clean Stage 1 Wave 1 ===========================
   section('9. Restart returns to a clean Stage 1 Wave 1');

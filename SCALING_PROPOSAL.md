@@ -152,30 +152,28 @@ Waves are generated from a **budget**, so adding a mob never means rewriting a s
 
 ## Adding a mob
 
-One registry entry plus the entity and its view:
+As built: a config block, one `ENEMIES` entry, the entity + view, and one line in
+`WaveDirector`'s `ARCHETYPES`:
 
 ```ts
 // balance.ts
 export const ENEMIES = {
   pursuer: {
+    name: 'Pursuer',     // "New threat: Pursuer." in the chat
     cost: 1.5,           // budget points per body (heavier mobs = fewer bodies)
-    unlockStage: 2,
-    weight: 1,
-    maxShare: 0.5,
-    pips: 2,             // grows with the stage up to the cap
-    pipCap: 4,
-    scale: {             // its own stats; base value comes from PURSUER
-      dashCooldownMs:   { k: -0.2, min: 2500 },
-      attackCooldownMs: { k: -0.15, min: 800 },
-    },
+    unlockStage: 2,      // first stage; Wave 1 of a generated unlock stage fields exactly one
+    weight: 2,           // pick chance among unlocked mobs
+    maxShare: 0.6,       // most of a wave's budget it may take
+    pips: { start: 2, every: 3, max: 4 },
   },
 };
+// Its own scaled stats live in its config block:
+//   PURSUER.scaling = { dashCooldownMs: { k: -0.2, min: 2500 }, attackCooldownMs: { k: -0.15, min: 800 } }
 ```
 
-At spawn the director resolves the mob's stats for the current stage into `enemy.stats`.
-Entities read `this.stats.x` instead of `PURSUER.x`. Movement speed, projectile speed and
-damage multipliers are applied centrally, so a new mob gets those without declaring
-anything.
+The entity resolves its scaled stats once, at spawn, from the stage it spawned on.
+Movement speed, projectile speed and damage multipliers are applied centrally, so a new
+mob gets those without declaring anything.
 
 ## Player side
 
@@ -219,7 +217,7 @@ attack tokens), plus per-mob scaled stats (`enemy.stats`), applied to the
 hand-written stage table. Health pips stop growing at the Stage 7 values. Also +25 HP
 on each stage clear.
 
-**Phase 3 — endless.** `ENEMIES` registry, wave generator with packs and first
+**Phase 3 — endless.** *(done)* `ENEMIES` registry, wave generator with packs and first
 appearances, Stages 1–5 kept hand-written, no "run complete", stage shown without a
 total, personal best, "New threat" chat message, health bars only on damaged enemies.
 

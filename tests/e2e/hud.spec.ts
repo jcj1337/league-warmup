@@ -394,7 +394,7 @@ test('hud: contextual range ring, pause freeze + input gate, Q slot, settings me
   // every new run. Each scenario leaves a run at a LATER stage, restarts through
   // a real supported input, then checks the new run's opening frames and a
   // genuine stage transition inside it.
-  const cfg6 = await page.evaluate(() => ({ stages: window.__balance.STAGES, run: window.__balance.RUN }));
+  const cfg6 = await page.evaluate(() => ({ stages: Array.from({ length: 10 }, (_, s) => window.__warmup.scene.getScene('GameScene').director.describeStage(s)), run: window.__balance.RUN }));
   const lastStage = cfg6.stages.length;
   const lastWaveOf = (stage) => cfg6.stages[stage - 1].waves.length;
   // What Stage 1 Wave 1 really fields: its authored mix, grown by the difficulty curve.
@@ -493,16 +493,20 @@ test('hud: contextual range ring, pause freeze + input gate, Q slot, settings me
       : fail(`${label}: no "STAGE 2" banner (stage text ${await bannerNow()})`);
   };
 
-  // A: complete the run (the final stage's last wave cleared), then R on the end screen.
+  // A: die at Stage 10 (the run only ends on death), then R on the end screen.
   await jumpTo(lastStage, lastWaveOf(lastStage));
   const trackedA = await uiTracks(lastStage, lastWaveOf(lastStage));
-  await clearWave();
+  await page.evaluate(() => {
+    const g = window.__warmup.scene.getScene('GameScene');
+    g.player.hp = 1; g.player.lastHitAt = Number.NEGATIVE_INFINITY;
+    g.onPlayerHit(5, 'edgeFire');
+  });
   const endedA = await waitFor(() =>
-    window.__warmup.scene.getScene('GameScene').getRoundResult()?.outcome === 'completed'
+    window.__warmup.scene.getScene('GameScene').getRoundResult()?.outcome === 'defeated'
     && window.__warmup.scene.getScene('UIScene').overlay.visible);
   trackedA && endedA
-    ? pass(`A: run completed at Stage ${lastStage} with the UI tracking Stage ${lastStage}`)
-    : fail(`A: setup — UI tracked=${trackedA}, completed=${endedA}`);
+    ? pass(`A: run ended by death at Stage ${lastStage} with the UI tracking Stage ${lastStage}`)
+    : fail(`A: setup — UI tracked=${trackedA}, ended=${endedA}`);
   await watchRestart();
   await page.keyboard.press('r');
   checkFreshRound(await restartProbe(), 'A: R on the end screen');

@@ -6,7 +6,7 @@ import { pixelText, setPixelScale } from '../art/font';
 import { ensureArt } from '../art/textures';
 import { AbilityBar } from '../ui/AbilityBar';
 import { ChatBox } from '../ui/ChatBox';
-import { missionBriefing, missionComplete, welcomeMessage } from '../ui/missionMessages';
+import { missionBriefing, missionComplete, stageThreats, welcomeMessage } from '../ui/missionMessages';
 import { PassiveDisplay } from '../ui/PassiveDisplay';
 import { PauseMenu } from '../ui/PauseMenu';
 import { PixelBar } from '../view/PixelBar';
@@ -240,7 +240,8 @@ export class UIScene extends Phaser.Scene {
     this.chat.push(welcomeMessage(), 'welcome');
     this.chatStage = hud.stage;
     this.chatClearedStage = 0;
-    this.chat.push(missionBriefing(hud.stage, hud.wavesInStage, hud.stage === hud.stageCount), 'mission');
+    this.chat.push(missionBriefing(hud.stage, hud.wavesInStage), 'mission');
+    for (const threat of stageThreats(hud.stage)) this.chat.push(threat, 'threat');
   }
 
   override update(): void {
@@ -250,7 +251,7 @@ export class UIScene extends Phaser.Scene {
     this.timeText.setText(formatRunTime(hud.runTime));
     this.scoreText.setText(`SCORE ${hud.score}`);
     this.progressText.setText(
-      `STAGE ${hud.stage} / ${hud.stageCount}    WAVE ${hud.wave} / ${hud.wavesInStage}    ENEMIES ${hud.enemiesRemaining}`,
+      `STAGE ${hud.stage}    WAVE ${hud.wave} / ${hud.wavesInStage}    ENEMIES ${hud.enemiesRemaining}`,
     );
 
     const hpPct = Phaser.Math.Clamp(hud.hp / hud.maxHp, 0, 1);
@@ -338,21 +339,22 @@ export class UIScene extends Phaser.Scene {
   /**
    * Mission messages, derived purely from the polled snapshot (the same state
    * the stage banner reads — no gameplay events):
-   *   hud.stage changes            → "Mission N: Clear W waves." (W = hud.wavesInStage,
-   *                                  i.e. the live STAGES row; final stage worded as such)
+   *   hud.stage changes            → "Mission N: Clear W waves." (W = hud.wavesInStage),
+   *                                  then a "New threat: …" line for each mob or attack
+   *                                  that stage introduces
    *   the stage's last wave clears → "Mission N complete!" — the breather before the
-   *                                  next stage, or the run completing
+   *                                  next stage
    * Kills, hits and ordinary wave clears say nothing.
    */
   private updateChat(hud: Hud): void {
     if (hud.stage !== this.chatStage) {
       this.chatStage = hud.stage;
       this.chatClearedStage = 0;
-      this.chat.push(missionBriefing(hud.stage, hud.wavesInStage, hud.stage === hud.stageCount), 'mission');
+      this.chat.push(missionBriefing(hud.stage, hud.wavesInStage), 'mission');
+      for (const threat of stageThreats(hud.stage)) this.chat.push(threat, 'threat');
     }
 
-    const stageCleared =
-      (hud.wavePhase === 'intermission' && hud.nextTransition === 'stage') || hud.wavePhase === 'complete';
+    const stageCleared = hud.wavePhase === 'intermission' && hud.nextTransition === 'stage';
     if (stageCleared && this.chatClearedStage !== hud.stage) {
       this.chatClearedStage = hud.stage;
       this.chat.push(missionComplete(hud.stage), 'complete');
@@ -368,12 +370,9 @@ export class UIScene extends Phaser.Scene {
     this.overlay.setVisible(shouldShow);
     if (!result) return;
 
-    const completed = result.outcome === 'completed';
     const accuracy = result.qFired > 0 ? Math.round((result.qHit / result.qFired) * 100) : 0;
     const title = this.overlay.getByName('title') as Phaser.GameObjects.BitmapText;
-    title
-      .setText(completed ? 'RUN COMPLETE' : 'DEFEATED')
-      .setTint(completed ? THEME.ui.accent : THEME.ui.danger);
+    title.setText('DEFEATED').setTint(THEME.ui.danger);
 
     const row = (label: string, value: string) => `${label.padEnd(24, ' ')}${value}`;
     const secs = (ms: number) => `${(ms / 1000).toFixed(1)}s`;
@@ -382,9 +381,9 @@ export class UIScene extends Phaser.Scene {
       [
         row(
           'STAGE REACHED',
-          `${result.stageReached} / ${result.stageCount}   (wave ${result.waveReached} / ${result.wavesInStage})`,
+          `${result.stageReached}   (wave ${result.waveReached} / ${result.wavesInStage})${result.newBest ? '   NEW BEST!' : ''}`,
         ),
-        row('WAVES CLEARED', `${result.wavesCleared} / ${result.wavesTotal}`),
+        row('WAVES CLEARED', `${result.wavesCleared}`),
         row('RUN TIME', formatRunTime(result.runTimeSeconds)),
         row('SCORE', `${result.score}`),
         row(

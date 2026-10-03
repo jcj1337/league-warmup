@@ -6,7 +6,8 @@ test('magus: roster + pips, spacing, Lance / Eye / Orb / Rite, stun rules, zones
 
   const cfg = await page.evaluate(() => ({
     magus: window.__balance.MAGUS,
-    stages: window.__balance.STAGES,
+    // The first ten stages as played: hand-written ones, then generated ones.
+    stages: Array.from({ length: 10 }, (_, s) => window.__warmup.scene.getScene('GameScene').director.describeStage(s)),
     playerSpeed: window.__balance.PLAYER.moveSpeed,
   }));
 

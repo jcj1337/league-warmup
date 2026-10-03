@@ -155,24 +155,37 @@ test('smoke: movement, attack, Q, enemy fire, context menu, run end + restart, d
 
   // --- 6. run end + restart ----------------------------------------------------
   section('6. run end + restart');
-  // End the run the way it ends for real: jump to the final wave and clear it
-  // through the scene's hit funnel.
+  // The run is endless: clearing Stage 10 leads on to a generated Stage 11.
   await page.evaluate(() => {
     const g = window.__warmup.scene.getScene('GameScene');
     const d = g.director;
-    d.stageIndex = d.stageCount - 1;
-    d.waveIndex = d.stageDefinition.waves.length - 1;
+    d.stageIndex = 9;
+    d.waveIndex = d.wavesInStage - 1;
     d.spawnWave();
     d.arriveAllNow();
     for (const e of d.enemies) {
       while (e.active) g.onTargetHit(e, e.takeHit());
     }
   });
+  const onward = await page.waitForFunction(() => {
+    const d = window.__warmup.scene.getScene('GameScene').director;
+    return d.stage === 11 && d.phase === 'wave' && d.enemiesRemaining > 0;
+  }, null, { timeout: 4000 }).then(() => true).catch(() => false);
+  const notOver = await state();
+  onward && notOver.result === null
+    ? pass('clearing Stage 10 does not end the run: a generated Stage 11 begins')
+    : fail(`after Stage 10: onward=${onward}, result ${JSON.stringify(notOver.result)}`);
+  // It ends on death.
+  await page.evaluate(() => {
+    const g = window.__warmup.scene.getScene('GameScene');
+    g.player.hp = 1; g.player.lastHitAt = Number.NEGATIVE_INFINITY;
+    g.onPlayerHit(5, 'edgeFire');
+  });
   await page.waitForFunction(() => window.__warmup.scene.getScene('GameScene').getRoundResult() !== null, null, { timeout: 3000 }).catch(() => {});
   const over = await state();
-  over.result && over.result.outcome === 'completed'
-    ? pass(`run ends on clearing the final wave (score ${over.result.score}, kills ${over.result.targetsKilled}, hits taken ${over.result.projectileHitsTaken}, Q ${over.result.qHit}/${over.result.qFired})`)
-    : fail(`run did not end as completed: ${JSON.stringify(over.result)}`);
+  over.result && over.result.outcome === 'defeated' && over.result.stageReached === 11
+    ? pass(`the run ends on death, at Stage ${over.result.stageReached} (score ${over.result.score}, kills ${over.result.targetsKilled})`)
+    : fail(`run did not end on death: ${JSON.stringify(over.result)}`);
   const overlayVisible = await page.evaluate(() => window.__warmup.scene.getScene('UIScene').overlay.visible);
   overlayVisible ? pass('end screen shown') : fail('end screen not shown');
 

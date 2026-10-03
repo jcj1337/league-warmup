@@ -50,7 +50,7 @@ test('feel: windup animation timing, release/impact, cancel, kill feedback + no 
   const cfg = await page.evaluate(() => ({
     windupMs: window.__warmup.scene.getScene('GameScene').attacks.windupMs,
     projSpeed: window.__balance.ATTACK.projectileSpeed,
-    stage1Pips: window.__balance.STAGES[0].enemyPips.basic,
+    stage1Pips: window.__warmup.scene.getScene('GameScene').director.pipsFor('basic', 1),
     spawnStart: window.__balance.ENEMY_PROJECTILES.spawnIntervalMs.start,
   }));
   cfg.stage1Pips === 1

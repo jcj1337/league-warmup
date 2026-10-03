@@ -35,7 +35,8 @@ test('scaling: stage-based attack speed, measured cycle, passive on top, cancel 
   const rclick = (x, y) => page.mouse.click(x, y, { button: 'right' });
 
   const cfg = await page.evaluate(() => ({
-    stages: window.__balance.STAGES,
+    // The first ten stages as played: hand-written ones, then generated ones.
+    stages: Array.from({ length: 10 }, (_, s) => window.__warmup.scene.getScene('GameScene').director.describeStage(s)),
     windupPct: window.__balance.ATTACK.windupPercent,
     minWindup: window.__balance.ATTACK.minWindupMs,
     spawn: window.__balance.ENEMY_PROJECTILES.spawnIntervalMs,

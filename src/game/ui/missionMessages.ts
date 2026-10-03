@@ -1,3 +1,5 @@
+import { ENEMIES, PURSUER, TARGETS, type EnemyEntry } from '../../config/balance';
+
 /** The game's name as players see it. */
 export const GAME_TITLE = "qwer's Backyard";
 
@@ -10,9 +12,23 @@ export function welcomeMessage(): string {
   return `Welcome to ${GAME_TITLE}!`;
 }
 
-export function missionBriefing(mission: number, waves: number, isFinal: boolean): string {
-  const count = `${waves} wave${waves === 1 ? '' : 's'}`;
-  return isFinal ? `Mission ${mission}: Final mission — clear ${count}.` : `Mission ${mission}: Clear ${count}.`;
+export function missionBriefing(mission: number, waves: number): string {
+  return `Mission ${mission}: Clear ${waves} wave${waves === 1 ? '' : 's'}.`;
+}
+
+/**
+ * What a stage introduces: mobs on their unlock stage, and new attacks on the
+ * stage they switch on. Stage 1 introduces nothing (the opening is the intro).
+ */
+export function stageThreats(stage: number): string[] {
+  if (stage <= 1) return [];
+  const out: string[] = [];
+  for (const e of Object.values(ENEMIES) as EnemyEntry[]) {
+    if (e.unlockStage === stage) out.push(`New threat: ${e.name}.`);
+  }
+  if (TARGETS.spit.fromStage === stage) out.push('New threat: slimes now spit.');
+  if (PURSUER.dash.fromStage === stage) out.push('New threat: Pursuers now dash.');
+  return out;
 }
 
 export function missionComplete(mission: number): string {
