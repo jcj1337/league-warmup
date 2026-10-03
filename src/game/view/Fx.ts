@@ -300,12 +300,20 @@ export class Fx {
     this.sparks(endX, endY, [f.core, f.color, f.deep], 8, 220, f.ms * 1.3, 3, angle, 1.4);
   }
 
-  /** A Magus Eye / Rite circle landing. */
-  arcaneBurst(x: number, y: number, radius: number): void {
-    const f = THEME.spellZone.strike;
+  /** A Magus Eye / Rite circle landing, or a Sovereign sphere (style 'void'). */
+  arcaneBurst(x: number, y: number, radius: number, style: 'arcane' | 'void' = 'arcane'): void {
+    const f = style === 'void' ? THEME.spellZone.voidStrike : THEME.spellZone.strike;
     this.ring(x, y, radius * 0.3, radius, f.ms, f.core, 1, 6);
     this.ring(x, y, radius * 0.8, radius * 1.15, f.ms * 1.2, f.color, 0.9, 3);
     this.sparks(x, y, [f.core, f.color, f.deep], 12, 260, f.ms * 1.4, 3);
+  }
+
+  /** A Sovereign Scatter cone landing: arcs sweeping out across the cone. */
+  coneBurst(x: number, y: number, angle: number, radius: number, halfAngle: number, style: 'arcane' | 'void' = 'void'): void {
+    const f = style === 'void' ? THEME.spellZone.voidStrike : THEME.spellZone.strike;
+    this.ring(x, y, radius * 0.3, radius, f.ms, f.core, 1, 6, angle - halfAngle, angle + halfAngle);
+    this.ring(x, y, radius * 0.2, radius * 0.8, f.ms * 1.2, f.color, 0.9, 3, angle - halfAngle, angle + halfAngle);
+    this.sparks(x + Math.cos(angle) * radius * 0.5, y + Math.sin(angle) * radius * 0.5, [f.core, f.color], 8, 220, f.ms * 1.3, 3, angle, halfAngle * 2);
   }
 
   trail(x: number, y: number, style: { color: number; life: number; size: number }): void {

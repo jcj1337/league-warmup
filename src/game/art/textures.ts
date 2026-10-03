@@ -26,6 +26,10 @@ export const TEX = {
     slam: 'pursuer_slam',
     alert: 'fx_alert',
   },
+  sovereign: {
+    idle: ['sovereign_0', 'sovereign_1'],
+    cast: 'sovereign_cast',
+  },
   magus: {
     idle: ['magus_0', 'magus_1'],
     cast: 'magus_cast',
@@ -40,6 +44,7 @@ export const TEX = {
     hostile: ['proj_hostile_0', 'proj_hostile_1'],
     orb: ['proj_orb_0', 'proj_orb_1'],
     glob: 'proj_glob',
+    sphere: 'proj_sphere',
   },
   fx: {
     flashStar: 'fx_flash_star',

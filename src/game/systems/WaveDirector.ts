@@ -5,6 +5,7 @@ import {
   ENEMIES,
   MAGUS,
   PURSUER,
+  SOVEREIGN,
   RUN,
   SCORE,
   STAGES,
@@ -17,6 +18,7 @@ import { Enemy, type EnemyArchetype, type EnemyContext } from '../entities/Enemy
 import { Target } from '../entities/Target';
 import { Pursuer } from '../entities/Pursuer';
 import { Magus } from '../entities/Magus';
+import { Sovereign } from '../entities/Sovereign';
 import { mulberry32 } from '../art/pixel';
 import type { GameClock } from './GameClock';
 import type { EnemyFirePressure } from './EnemyProjectileSystem';
@@ -53,6 +55,11 @@ const ARCHETYPES: Record<EnemyArchetype, ArchetypeSpec> = {
     radius: MAGUS.radius,
     // An artillery caster: it arrives roughly where it wants to stand.
     minSpawnDistance: TARGETS.minSpawnDistanceFromPlayer + 160,
+  },
+  sovereign: {
+    create: (scene, clock, x, y, pips, stage) => new Sovereign(scene, clock, x, y, pips, stage),
+    radius: SOVEREIGN.radius,
+    minSpawnDistance: TARGETS.minSpawnDistanceFromPlayer + 120,
   },
 };
 
@@ -594,11 +601,11 @@ export class WaveDirector implements EnemyFirePressure {
 
     for (let i = 0; i < list.length; i++) {
       const a = list[i];
-      if (!a.active) continue;
+      if (!a.active || a.held) continue;
 
       for (let j = i + 1; j < list.length; j++) {
         const b = list[j];
-        if (!b.active) continue;
+        if (!b.active || b.held) continue;
 
         const dx = b.x - a.x;
         const dy = b.y - a.y;

@@ -154,7 +154,7 @@ the authored mix is in brackets.
 | 5 | 2 | 6B + 3P + 1M (2B + 1P + 1M) | 4B + 6P (2B + 3P) |
 
 **Generated stages** buy each wave from its budget: mobs are drawn by weight among those
-unlocked, each costing points (basic 1, Pursuer 1.5, Magus 2 — heavier mobs mean fewer
+unlocked, each costing points (basic 1, Pursuer 1.5, Magus 2, Sovereign 2 — heavier mobs mean fewer
 bodies) and held to its share of the budget and its per-wave cap (Magi: 1 per wave until
 about Stage 17, then more). A mob's first stage fields exactly one of it in Wave 1, so you
 meet it alone. Rosters are rolled once per run, so a wave never changes under you.
@@ -266,9 +266,10 @@ Orbwalk loop: `T` (or `A` + click) → auto fires → right-click away → repea
 | Basic target | red slime with glowing eyes and a fanged snarl | 1 / 2 / 3 | always aggroed: walks toward you, then hovers 150–230px away inside your attack range, sidestepping around you. From Stage 2 it **spits** (below) |
 | Pursuer | larger purple slime with devil horns | basic + 1 | walks you down at 55% of your speed; melee swing for **25** (a quarter of your HP) after a 400ms telegraph. From Stage 4 it **dashes** (below) |
 | Magus | tall slate slime in a brass crest and mask, rune tablets floating at its sides | same as basic | artillery caster with a Xerath-style kit (below); holds 360–480px from you, backs off at 60% of your speed, never moves while casting |
+| Sovereign | indigo slime under a silver diadem, two dark orbs circling her head | 2 (3 from Stage 11) | sphere mage with a Syndra-style kit (below); holds 280–380px from you, at most one per wave, from Stage 9 |
 
 Pips follow each mob's `ENEMIES` pip ramp (see above). Pursuers first appear in
-Stage 2, the Magus in Stage 5. A Pursuer's swing only lands if you are still in reach when it
+Stage 2, the Magus in Stage 5, the Sovereign in Stage 9. A Pursuer's swing only lands if you are still in reach when it
 resolves — walking or blinking out during the telegraph makes it miss. A Pursuer
 never starts a swing while you are stunned.
 
@@ -315,6 +316,25 @@ a Lance still charging dies with it. Clearing the wave fizzles everything pendin
 All of it is tuned in `MAGUS` in [balance.ts](src/config/balance.ts), including
 `aimLead` (0 = it aims where you are now; 1 = exactly where you'll be).
 
+### The Sovereign
+
+A mid-range sphere mage. She builds a board of **Dark Spheres** that stay on the ground,
+then uses them. Never stand **behind a sphere** on the line from her. **Killing her
+deletes every sphere she has out.** One spell at a time, at least 1.2s apart; she aims
+where you're heading (like the Magus) at a random spot within 40px.
+
+| Spell | Telegraph | Hit |
+| --- | --- | --- |
+| Dark Sphere (Q) | a void-edged circle on where you're heading, landing after 600ms | 12; then a **Dark Sphere** sits there for 6s (at most 3 of hers at once, 4 from Stage 14, 5 from 19; a new one replaces her oldest) |
+| Force of Will (W) | she lifts one of her spheres — or **one of her basic slimes** — within 280px over her head (300ms), then throws it at where you're heading: a circle that lands 500ms later | 12 + 30% slow for 1s. A thrown slime lands **live** where it hits, dazed for 400ms. Pop it in her hands and the throw fizzles |
+| Scatter (E) | a short cone in front of her fills for 350ms; every sphere inside it shows the **exit line** it will fly along, outward from her through the sphere | cone 10; each flung sphere 8 + a **600ms stun** |
+
+She casts Scatter when a sphere lines up with you, or when you're inside the cone. With
+both ready, 60% of the time she plays **Q→E**: a sphere dropped between you and her, then
+Scattered into you. The sphere landing on that line is your warning. Her spells use the
+same red ground, edged in void lavender instead of the Magus's gold. Tuned in
+`SOVEREIGN`. Pursuers became rarer when she joined (weight 1.5, at most half a wave).
+
 **Stunned** means: no movement, no autos, no Q/W/E, and no Flash. An uncommitted
 auto windup is cancelled and a Q/W/E cast window is interrupted, both with their
 cooldowns refunded. Move / attack / attack-move orders issued while stunned are
@@ -353,6 +373,9 @@ stay out of the HUD strips and always draw beneath combatants.
 | Magus | tall slate slime, brass crest and mask with burning eye slits, two brass rune tablets bobbing at its sides; casting, it draws up tall, the tablets rise and flare, and energy gathers over its crest |
 | Magus zones | red ground edged in gold dots: a strip filling from the Magus outward (Lance), a disc with a ring closing inward and a white sweet spot (Eye / Rite) |
 | Magus orb | white-gold crackling spark with a gold trail |
+| Sovereign | indigo slime, silver diadem with a tall spike, pale lavender eyes, two dark orbs circling; casting, she draws up tall and the orbs spin fast |
+| Dark Sphere | a near-black orb with a pale rim on the ground, gently pulsing; it flickers through its last second |
+| Scatter | a red wedge from her edged in lavender, plus a red strip from each sphere it will fling |
 | Stunned / slowed | gold stars circling over your head / a gold dotted ring at your feet |
 | W-marked enemy | violet rune bobbing overhead + magenta dotted ring at its feet (blinks as it lapses) |
 | Your auto | small cyan bolt with a short trail, homes |

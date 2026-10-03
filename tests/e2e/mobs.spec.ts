@@ -457,9 +457,11 @@ test('mobs: passive stacks, Q cooldown refund, Pursuer AI, stage pips + segmente
   pursuersIn(cfg.stages[0]) === 0 && cfg.stages.slice(1).every((s) => pursuersIn(s) > 0)
     ? pass('Stage 1 fields basic targets only; every later stage includes Pursuers')
     : fail(`pursuers per stage: ${cfg.stages.map(pursuersIn).join(', ')}`);
-  share(cfg.stages.slice(0, 3)) < share(cfg.stages.slice(-3))
-    ? pass(`Pursuer share grows: ${Math.round(share(cfg.stages.slice(0, 3)) * 100)}% in Stages 1-3 -> ${Math.round(share(cfg.stages.slice(-3)) * 100)}% in the last three`)
-    : fail('Pursuer share did not grow across the run');
+  // Generated stages (6+) hold Pursuers to their maxShare of each wave (lowered when the Sovereign joined).
+  const generatedShare = share(cfg.stages.slice(5));
+  generatedShare > 0 && generatedShare <= 0.5
+    ? pass(`Pursuers stay a minority in generated stages: ${Math.round(generatedShare * 100)}% of basic + Pursuer bodies in Stages 6-10`)
+    : fail(`Pursuer share in generated stages: ${generatedShare}`);
   cfg.stages.every((s) => basicsIn(s) > 0)
     ? pass('basic targets appear in every stage (mixed pressure throughout)')
     : fail(`basics per stage: ${cfg.stages.map(basicsIn).join(', ')}`);

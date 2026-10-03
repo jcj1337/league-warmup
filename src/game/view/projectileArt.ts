@@ -16,5 +16,6 @@ export const PROJECTILE_ART = {
   e: { frames: [TEX.proj.e], rotate: true, trail: T.e, depth: D.projectiles },
   hostile: { frames: TEX.proj.hostile, frameMs: 110, rotate: false, trail: T.hostile, depth: D.hostileProjectiles },
   glob: { frames: [TEX.proj.glob], rotate: false, trail: T.glob, depth: D.hostileProjectiles },
+  sphere: { frames: [TEX.proj.sphere], rotate: false, trail: T.sphere, depth: D.hostileProjectiles },
   orb: { frames: TEX.proj.orb, frameMs: 70, rotate: false, trail: T.orb, depth: D.hostileProjectiles },
 } satisfies Record<string, ProjectileArt>;

@@ -403,7 +403,7 @@ export class UIScene extends Phaser.Scene {
         row('SCORE', `${result.score}`),
         row(
           'KILLS',
-          `${result.targetsKilled}   (basic ${result.killsByType.basic ?? 0}, pursuer ${result.killsByType.pursuer ?? 0}, magus ${result.killsByType.magus ?? 0})`,
+          `${result.targetsKilled}   (${killsLine(result.killsByType)})`,
         ),
         row('HITS LANDED', `${result.hitsLanded}   (mark procs ${result.markProcs})`),
         row('SCORE FROM', `kills ${result.scoreFrom.kills}  speed ${result.scoreFrom.speed}  hp ${result.scoreFrom.hp}`),
@@ -426,7 +426,14 @@ export class UIScene extends Phaser.Scene {
 const SOURCE_NAMES: Record<string, string> = {
   pursuer: 'pursuer', basic: 'spit', magus: 'magus', edgeFire: 'fire',
   basicContact: 'slime touch', pursuerContact: 'pursuer touch', magusContact: 'magus touch',
+  sovereign: 'sovereign', sovereignContact: 'sovereign touch',
 };
+
+/** "basic 12, pursuer 3, sovereign 1": only the mobs actually killed, most first. */
+function killsLine(kills: Record<string, number>): string {
+  const parts = Object.entries(kills).filter(([, n]) => n > 0).sort((a, b) => b[1] - a[1]).map(([id, n]) => `${id} ${n}`);
+  return parts.length ? parts.join(', ') : 'none';
+}
 const sourceName = (source: string) => SOURCE_NAMES[source] ?? source;
 
 /** "pursuer 64 spit 12 fire 8", biggest first. */

@@ -520,6 +520,63 @@ export const MAGUS = {
   rite: { leadInMs: 500, shots: 3, intervalMs: 800, delayMs: 600, radius: 70, damage: 15 },
 } as const;
 
+/**
+ * The Sovereign: a mid-range sphere mage with a Syndra-style kit. She litters
+ * the arena with Dark Spheres that stay put, then uses them: Force of Will
+ * throws one (or one of her own basic slimes) at you, and Scatter flings every
+ * sphere in a short cone outward along the line from her — a sphere that hits
+ * you stuns. The skill it drills is reading the board: never stand behind a
+ * sphere on her line. Killing her deletes all her spheres.
+ */
+export const SOVEREIGN = {
+  radius: 20,
+  /** Kill score relative to a basic target. */
+  scoreMultiplier: 1.75,
+  /** Fraction of PLAYER.moveSpeed (≈168px/s). Below 1, so you can always run her down. */
+  moveSpeedFraction: 0.6,
+  /** Closer than the Magus: inside your Q range, just outside your autos. */
+  spacing: { min: 280, max: 380 },
+  replanMs: 220,
+  openingDelayMs: 900,
+  /** Minimum gap between spell STARTS. */
+  spellGapMs: 1200,
+  /** She aims where you are heading, like the Magus (see MAGUS.aimLead)… */
+  aimLead: 0.85,
+  /** …at a random spot within this radius of it, rolled once per cast. */
+  aimSpreadPx: 40,
+  scaling: {
+    spellGapMs: { k: -0.3, min: 600 } as Curve,
+  },
+  /** Dark Spheres of hers on the ground at once: `cap`, +1 from each stage in `extraFromStage`. */
+  spheres: { cap: 3, extraFromStage: [14, 19], lifeMs: 6000 },
+  /** Q — Dark Sphere: a led circle that lands after `delayMs`, then leaves a sphere. */
+  sphere: { castMs: 250, delayMs: 600, range: 520, radius: 55, damage: 12, cooldownMs: 2500 },
+  /**
+   * W — Force of Will: she grabs one of her spheres or one of her basic slimes
+   * within `grabRange` (a slime `slimeChance` of the time when both are there)
+   * and throws it at a led spot. It lands `delayMs` later: damage + slow. A
+   * thrown slime lands live, dazed for `slimeDazedMs`.
+   */
+  will: {
+    grabMs: 300, grabRange: 280, slimeChance: 0.5, slimeDazedMs: 400,
+    delayMs: 500, range: 480, radius: 70, damage: 12, slowFraction: 0.3, slowMs: 1000, cooldownMs: 6000,
+  },
+  /**
+   * E — Scatter: a short cone in front of her. Every sphere inside it when she
+   * starts the cast is flung outward along the line from her through it, and
+   * stuns you on contact. She casts it when a sphere lines up with you (within
+   * `lineUpPx` of where you're heading), or when you're inside the cone. With Q
+   * and E both ready, `comboChance` of the time she places a sphere between you
+   * and her first (`comboDistancePx` out) — the Q→E combo.
+   */
+  scatter: {
+    windupMs: 350, radius: 220, angleDeg: 60, wideAngleDeg: 80, wideFromStage: 14, damage: 10,
+    lineUpPx: 60, comboChance: 0.6, comboDistancePx: 160,
+    launch: { range: 450, speed: 900, radius: 14, damage: 8, stunMs: 600 },
+    cooldownMs: 7000,
+  },
+} as const;
+
 // ============================================================================
 // RUN — breathers and arrivals.
 // ============================================================================
@@ -604,7 +661,7 @@ export const DIFFICULTY = {
  * Bumped whenever tuning changes how hard a run is. The run log tags each run
  * with it, and its summary only compares runs from the same version.
  */
-export const BALANCE_VERSION = 6;
+export const BALANCE_VERSION = 7;
 
 /**
  * The player's level, League style: kills give XP (ENEMIES[id].xp) and each
@@ -671,7 +728,8 @@ export const ENEMIES = {
     xp: 1,
   },
   pursuer: {
-    name: 'Pursuer', cost: 1.5, unlockStage: 2, weight: 2, maxShare: 0.6,
+    // Fewer since the Sovereign joined: weight 2 → 1.5, share 0.6 → 0.5.
+    name: 'Pursuer', cost: 1.5, unlockStage: 2, weight: 1.5, maxShare: 0.5,
     pips: { start: 2, every: 10, max: 3 },
     contactDamage: 10,
     xp: 2,
@@ -680,6 +738,13 @@ export const ENEMIES = {
     name: 'Magus', cost: 2, unlockStage: 5, weight: 0.6, maxShare: 0.25,
     maxPerWave: { base: 1, k: 0.3, max: 3 },
     pips: { start: 1, every: 10, max: 2 },
+    contactDamage: 6,
+    xp: 3,
+  },
+  sovereign: {
+    name: 'Sovereign', cost: 2, unlockStage: 9, weight: 0.6, maxShare: 0.25,
+    maxPerWave: { base: 1, k: 0, max: 1 },
+    pips: { start: 2, every: 10, max: 3 },
     contactDamage: 6,
     xp: 3,
   },

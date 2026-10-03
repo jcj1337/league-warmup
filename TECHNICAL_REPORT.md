@@ -136,6 +136,8 @@ object, and an event-wired HUD kept breaking across restarts).
   `TARGETS.spit.fromStage` it spits (token-gated windup → glob via `HostileSpellSystem`).
 - **`Pursuer.ts`** — melee brute (horned purple slime) with a four-state AI (§9): chase, swing
   windup, dash windup, dash. Tells its `PursuerView` when a swing resolves and whether it landed.
+- **`Caster.ts`** — shared base for the ranged casters: spacing band, leading aim with a
+  per-cast random offset (`aimPoint`, `rollAimOffset`).
 - **`Magus.ts`** — artillery caster (brass-masked slate slime) with a Xerath-style kit (§9).
   Owns spacing, spell choice and charge states; the spells it places belong to
   `HostileSpellSystem`.
@@ -159,7 +161,7 @@ object, and an event-wired HUD kept breaking across restarts).
 | `PassiveSystem.ts` | Stack count, shared expiry, attack-speed multiplier |
 | `WaveDirector.ts` | Stages, waves, finite rosters, breathers, stage tuning (HP / attack speed / fire), separation |
 | `EnemyProjectileSystem.ts` | Dodge pressure — fires only during a wave, cleared when a wave is cleared |
-| `HostileSpellSystem.ts` | Magus zones (line / circle), Magus orbs and basic spit globs: resolves them, applies damage, stun and slow; cleared when a wave is cleared |
+| `HostileSpellSystem.ts` | Zones (line / circle / cone, styled arcane or void), Magus orbs, basic spit globs and the Sovereign's **Dark Spheres** (persistent ground objects: owner, lifetime, cap; `takeSphere`, `launchSphere`): resolves them, applies damage, stun and slow; spheres vanish when their owner dies; everything clears on wave clear |
 | `Progression.ts` | The player's level: XP from kills (`ENEMIES[id].xp`), levels 1-18 (`LEVELS`), ability haste for Q/W/E cooldowns, the base auto cycle (it is the `AttackPacing` source) and the Q rank-up |
 | `Difficulty.ts` | `threat(stage)`, `scaled(curve, stage, base)`, `stageDifficulty(stage)`: the per-stage curve every scaled number reads |
 | `AttackTokens.ts` | Turn-taking pool (`DIFFICULTY.attackTokens` for the stage): an enemy holds a token through a token-gated windup; tokens of inactive enemies are reclaimed |
@@ -736,6 +738,20 @@ buffered order moves to the stun buffer). While stunned, `issueOrder()` holds
 move / attack / attack-move orders (latest wins), `canAct` blocks Q/W/E and Flash,
 `AttackSystem` starts no windup, and the Pursuer starts no swing. A slow only scales
 `Player.moveSpeed`.
+
+### Sovereign AI
+
+`Sovereign extends Caster`. States: `reposition`, `sphere` (250ms pose after a Q),
+`grab` (300ms lift), `throw` (500ms flight), `scatter` (350ms cone). Priority on each
+cast check: Scatter if `linedUpSphere()` finds a sphere within the cone radius whose
+flight line passes within 60px of the led player, or the player is inside the cone;
+Q→E (`comboChance` 0.6) with Q and E ready — a sphere 160px toward the player; Force of
+Will if a sphere of hers or a basic slime is within 280px (slime `slimeChance` 0.5 when
+both); else Dark Sphere. Scatter snapshots the spheres inside the cone at cast start
+(`exitLines`) and launches exactly those along her→sphere angle at the end. A thrown slime
+is `held` (no AI, no contact, skipped by separation), moved by her, then released with
+`dazedUntil`; dying mid-throw (`onDeath`) drops it. `EnemyContext.allies` is the roster
+she grabs from.
 
 ### Enemy projectiles
 

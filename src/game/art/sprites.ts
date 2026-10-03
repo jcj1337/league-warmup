@@ -129,6 +129,34 @@ const MAGUS_BODY = [
 ];
 const MAGUS_H = 18;
 
+// ---- sovereign: indigo-black slime under a silver diadem ------------------------------
+// The sphere mage: a tall silver spike over a dark dome, a diadem band across
+// the brow and pale lavender eyes. Two dark orbs circle her (SovereignView).
+//   S silver · W silver shine · y lavender eyes
+
+const SOV_PAL = {
+  k: P.ink, m: P.sov, L: P.sovLight, w: P.sovShine, d: P.sovDark, D: P.sovDeep,
+  S: P.silver, s: P.silverDark, W: P.white, y: P.voidRim,
+};
+
+const SOV_BODY = [
+  '......kk......',
+  '.....kWsk.....',
+  '....kkWskk....',
+  '..kkmmkkmmkk..',
+  '.kmwLmmmmmmmk.',
+  '.kmwLmmmmmmmk.',
+  'kmmLmmmmmmmmmk',
+  'kSSSSSSSSSSSsk',
+  'kmmmmymmmmymmk',
+  'kmmmmmmmmmmmmk',
+  'kdmmmmmmmmmmdk',
+  'kddmmmmmmmmddk',
+  '.kDddddddddDk.',
+  '..kkkkkkkkkk..',
+];
+const SOV_H = 16;
+
 export const SPRITES: Record<string, PixelSprite> = {
   // ---- utility -------------------------------------------------------------
   px: { rows: ['w'], pal: { w: P.white } },
@@ -178,6 +206,10 @@ export const SPRITES: Record<string, PixelSprite> = {
   magus_1: { rows: frame(without(MAGUS_BODY, 11), MAGUS_H), pal: MAGUS_PAL },
   /** Casting: drawn up tall, eye slits and core white-hot. */
   magus_cast: { rows: frame(doubled(MAGUS_BODY, 6), MAGUS_H), pal: { ...MAGUS_PAL, y: P.white, o: P.arcaneCore } },
+  sovereign_0: { rows: frame(SOV_BODY, SOV_H), pal: SOV_PAL },
+  sovereign_1: { rows: frame(without(SOV_BODY, 9), SOV_H), pal: SOV_PAL },
+  /** Casting: drawn up tall, eyes white-hot. */
+  sovereign_cast: { rows: frame(doubled(SOV_BODY, 5), SOV_H), pal: { ...SOV_PAL, y: P.white } },
   magus_rune: {
     rows: ['.kkk.', 'kBGgk', 'kGygk', 'kGGgk', 'kGygk', 'kgggk', '.kkk.'],
     pal: { k: P.ink, B: P.brassLight, G: P.brass, g: P.brassDark, y: P.arcane },
@@ -228,6 +260,11 @@ export const SPRITES: Record<string, PixelSprite> = {
   proj_glob: {
     rows: ['.kkk.', 'kdrdk', 'krwrk', 'kdrdk', '.kkk.'],
     pal: { k: P.ink, d: P.redDeep, r: P.red, w: P.redShine },
+  },
+  /** A launched Dark Sphere: a near-black core in a pale lavender rim. */
+  proj_sphere: {
+    rows: ['..ggg..', '.gkkkg.', 'gkdddkg', 'gkdddkg', 'gkdddkg', '.gkkkg.', '..ggg..'],
+    pal: { g: P.voidGlow, k: P.voidRim, d: P.voidCore },
   },
   /** Magus orb: a crackling white-gold sphere — paler and spikier than the edge fireball. */
   proj_orb_0: {

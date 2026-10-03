@@ -86,6 +86,19 @@ export const PALETTE = {
   arcane: 0xfff27a,
   arcaneCore: 0xfffdf0,
 
+  // ---- sovereign: indigo-black slime, silver diadem, void spheres ---------------
+  sovDeep: 0x14102a,
+  sovDark: 0x251f45,
+  sov: 0x3a3266,
+  sovLight: 0x5f5598,
+  sovShine: 0xc4bbea,
+  silver: 0xd3d9e6,
+  silverDark: 0x8a92a6,
+  /** Dark Spheres: near-black cores with a pale rim, so they read on the ash. */
+  voidCore: 0x0b0910,
+  voidRim: 0xe6defc,
+  voidGlow: 0xa894e6,
+
   // ---- player combat colours ----------------------------------------------
   autoDeep: 0x2f8fd8,
   auto: 0x6fd0ff,
@@ -299,6 +312,23 @@ export const THEME = {
     lanceCharge: { color: P.arcane, alphaStart: 0.25, alphaEnd: 0.75 },
   },
 
+  sovereign: {
+    originY: 0.6,
+    shadowOffsetY: 17,
+    frameMs: 300,
+    hpBarOffsetY: 24,
+    burst: [P.sov, P.silver, P.voidGlow],
+    /** Two small dark orbs circling her head. */
+    orbs: { count: 2, orbitPx: 24, liftPx: 6, spinMs: 2000, radius: 7 },
+    /** A grabbed sphere or slime floats this far over her head before the throw. */
+    holdLiftPx: 38,
+    /** Scatter's exit lines: where each sphere will fly. */
+    exitLine: { color: P.voidGlow, fill: P.warning, fillAlphaStart: 0.08, fillAlphaEnd: 0.24 },
+  },
+
+  /** A Dark Sphere on the ground. It flickers through its last `warnMs`. */
+  darkSphere: { radius: 12, core: P.voidCore, rim: P.voidRim, glow: P.voidGlow, pulseMs: 900, warnMs: 1000 },
+
   /**
    * Hostile ground zones (Magus Lance / Eye / Rite). The same language as the
    * Pursuer telegraph — red ground hurts — edged in the Magus's arcane gold.
@@ -313,6 +343,9 @@ export const THEME = {
     /** The Eye's sweet spot. */
     centre: P.arcaneCore,
     strike: { color: P.arcane, core: P.arcaneCore, deep: P.arcaneDeep, ms: 240 },
+    /** The Sovereign's spells: the same red ground, edged in void lavender. */
+    voidEdge: P.voidGlow,
+    voidStrike: { color: P.voidGlow, core: P.voidRim, deep: P.sov, ms: 240 },
   },
 
   /** Compact pixel health bars under each unit. */
@@ -377,6 +410,7 @@ export const THEME = {
       e: { color: P.e, spacing: 10, life: 160, size: 3 },
       hostile: { color: P.fireOrange, spacing: 16, life: 220, size: 6 },
       orb: { color: P.arcane, spacing: 10, life: 200, size: 4 },
+      sphere: { color: P.voidGlow, spacing: 10, life: 220, size: 5 },
       glob: { color: P.redDeep, spacing: 10, life: 160, size: 3 },
     },
   },

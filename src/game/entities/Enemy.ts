@@ -52,6 +52,8 @@ export interface EnemyContext {
   attackTokens: AttackTokens;
   /** Enemies still between the player and a wave clear (pending + arriving + alive), the caller included. */
   enemiesRemaining: number;
+  /** The current wave's enemies (the caller included), for mobs that act on their allies. */
+  allies: readonly Enemy[];
 }
 
 export interface EnemyOptions {
@@ -141,6 +143,14 @@ export abstract class Enemy {
   /** Clock time this enemy may next bump the player (see checkContact). */
   private nextContactAt = 0;
 
+  /**
+   * Picked up by a Sovereign's Force of Will: no AI and no contact while held —
+   * the holder moves it. It stays targetable, so you can pop it in her hands.
+   */
+  held = false;
+  /** After being thrown: no AI and no contact until this clock time. */
+  dazedUntil = 0;
+
   constructor(scene: Phaser.Scene, clock: GameClock, x: number, y: number, opts: EnemyOptions) {
     this.scene = scene;
     this.clock = clock;
@@ -228,6 +238,7 @@ export abstract class Enemy {
       this.lifecycle = 'dead';
       this.clearMark();
       this.view.onDeath();
+      this.onDeath();
       return true;
     }
     return false;
@@ -236,9 +247,11 @@ export abstract class Enemy {
   update(deltaSeconds: number, nowMs: number, ctx: EnemyContext): void {
     // Activation happens at the GameClock deadline — never on an animation.
     if (this.spawning && nowMs >= this.activeAt) this.lifecycle = 'active';
-    if (this.active) {
+    if (this.active && !this.held && nowMs >= this.dazedUntil) {
       this.updateAi(deltaSeconds, nowMs, ctx);
       this.checkContact(nowMs, ctx);
+    } else if (this.held) {
+      this.pose.moving = false;
     }
     this.view.sync(nowMs, deltaSeconds);
   }
@@ -263,6 +276,9 @@ export abstract class Enemy {
     );
     ctx.damagePlayer(ENEMIES[this.archetype].contactDamage, this.archetype, 'contact');
   }
+
+  /** Called once, the moment this enemy dies. Default: nothing. */
+  protected onDeath(): void {}
 
   /** Behaviour. Default: stand still. */
   protected updateAi(_deltaSeconds: number, _nowMs: number, _ctx: EnemyContext): void {}

@@ -6,7 +6,10 @@ import { PROJECTILE_ART } from '../view/projectileArt';
 import type { ProjectileArt } from '../view/ProjectileView';
 import { THEME } from '../../config/theme';
 import type { Player } from '../entities/Player';
-import type { EnemyArchetype } from '../entities/Enemy';
+import type { Enemy, EnemyArchetype } from '../entities/Enemy';
+
+/** Telegraph colouring: the Magus's arcane gold (default) or the Sovereign's void lavender. */
+export type SpellStyle = 'arcane' | 'void';
 
 /** A line that lands `delayMs` after it is placed (Magus Lance). */
 export interface LineSpell {
@@ -20,6 +23,7 @@ export interface LineSpell {
   halfWidth: number;
   delayMs: number;
   damage: number;
+  style?: SpellStyle;
 }
 
 /** A circle that lands `delayMs` after it is placed (Magus Eye, Rite). */
@@ -33,6 +37,45 @@ export interface CircleSpell {
   damage: number;
   /** Optional sweet spot: the player's CENTRE inside `radius` takes this instead. */
   centre?: { radius: number; damage: number; slowFraction: number; slowMs: number };
+  /** Optional slow on any hit (not just the sweet spot). */
+  slow?: { fraction: number; ms: number };
+  /** Leave a Dark Sphere where it lands (Sovereign Q): owned by `owner`, at most `cap` of theirs at once. */
+  leaveSphere?: { owner: Enemy; lifeMs: number; cap: number };
+  style?: SpellStyle;
+}
+
+/** A cone from (x, y) toward `angle` that lands `delayMs` after it is placed (Sovereign Scatter). */
+export interface ConeSpell {
+  source: EnemyArchetype;
+  x: number;
+  y: number;
+  angle: number;
+  radius: number;
+  /** Half the cone's opening, in radians. */
+  halfAngle: number;
+  delayMs: number;
+  damage: number;
+  style?: SpellStyle;
+}
+
+/** A Dark Sphere resting on the ground. Its owner's other spells use it. */
+export interface DarkSphere {
+  id: number;
+  owner: Enemy;
+  x: number;
+  y: number;
+  landedAt: number;
+  expiresAt: number;
+}
+
+/** A launched sphere: a straight shot that stuns on contact for a fixed time. */
+export interface SphereShot {
+  source: EnemyArchetype;
+  speed: number;
+  radius: number;
+  range: number;
+  damage: number;
+  stunMs: number;
 }
 
 /** A straight, visible projectile that only deals damage (basic spit). */
@@ -58,11 +101,21 @@ export interface OrbSpell extends GlobSpell {
 export interface HostileSpellSink {
   castLine(spell: LineSpell, nowMs: number): void;
   castCircle(spell: CircleSpell, nowMs: number): void;
+  castCone(spell: ConeSpell, nowMs: number): void;
   fireOrb(spell: OrbSpell): void;
   fireGlob(spell: GlobSpell): void;
+  /** `owner`'s Dark Spheres on the ground, oldest first. */
+  spheresOf(owner: Enemy): readonly DarkSphere[];
+  /** Pick a sphere up off the ground (Force of Will). @returns whether it was still there. */
+  takeSphere(sphere: DarkSphere): boolean;
+  /** Fling a sphere off the ground along `angle` as a stunning shot (Scatter). */
+  launchSphere(sphere: DarkSphere, angle: number, shot: SphereShot): void;
 }
 
-export type ZoneShape = ({ kind: 'line' } & LineSpell) | ({ kind: 'circle' } & CircleSpell);
+export type ZoneShape =
+  | ({ kind: 'line' } & LineSpell)
+  | ({ kind: 'circle' } & CircleSpell)
+  | ({ kind: 'cone' } & ConeSpell);
 
 /** A placed zone and its deadline. Read by HostileSpellView. */
 export type SpellZone = ZoneShape & { placedAt: number; resolveAt: number };
@@ -72,6 +125,8 @@ interface LiveShot {
   spell: GlobSpell;
   /** Orbs only: the stun range, by distance flown. */
   stun?: { minMs: number; maxMs: number };
+  /** A launched Dark Sphere (drawn and counted apart from Magus orbs). */
+  sphere?: boolean;
 }
 
 interface HostileSpellCallbacks {
@@ -95,7 +150,10 @@ interface HostileSpellCallbacks {
  */
 export class HostileSpellSystem implements HostileSpellSink {
   readonly zones: SpellZone[] = [];
+  /** Dark Spheres resting on the ground (Sovereign), oldest first. */
+  readonly spheres: DarkSphere[] = [];
   private readonly shots: LiveShot[] = [];
+  private nextSphereId = 1;
   private readonly view: HostileSpellView;
   private now = 0;
 
@@ -120,6 +178,11 @@ export class HostileSpellSystem implements HostileSpellSink {
     return this.shots.filter((s) => !s.stun).length;
   }
 
+  /** Launched spheres in flight. */
+  get sphereShotCount(): number {
+    return this.shots.filter((s) => s.sphere).length;
+  }
+
   // ------------------------------------------------------------ sink
 
   castLine(spell: LineSpell, nowMs: number): void {
@@ -128,6 +191,35 @@ export class HostileSpellSystem implements HostileSpellSink {
 
   castCircle(spell: CircleSpell, nowMs: number): void {
     this.zones.push({ kind: 'circle', ...spell, placedAt: nowMs, resolveAt: nowMs + spell.delayMs });
+  }
+
+  castCone(spell: ConeSpell, nowMs: number): void {
+    this.zones.push({ kind: 'cone', ...spell, placedAt: nowMs, resolveAt: nowMs + spell.delayMs });
+  }
+
+  spheresOf(owner: Enemy): readonly DarkSphere[] {
+    return this.spheres.filter((s) => s.owner === owner);
+  }
+
+  takeSphere(sphere: DarkSphere): boolean {
+    const i = this.spheres.indexOf(sphere);
+    if (i < 0) return false;
+    this.spheres.splice(i, 1);
+    return true;
+  }
+
+  launchSphere(sphere: DarkSphere, angle: number, shot: SphereShot): void {
+    if (!this.takeSphere(sphere)) return;
+    const spell: OrbSpell = {
+      source: shot.source, x: sphere.x, y: sphere.y, angle, speed: shot.speed, radius: shot.radius,
+      range: shot.range, damage: shot.damage, stunMinMs: shot.stunMs, stunMaxMs: shot.stunMs,
+    };
+    this.shots.push({
+      missile: this.launch(spell, PROJECTILE_ART.sphere),
+      spell,
+      stun: { minMs: shot.stunMs, maxMs: shot.stunMs },
+      sphere: true,
+    });
   }
 
   fireOrb(spell: OrbSpell): void {
@@ -161,8 +253,14 @@ export class HostileSpellSystem implements HostileSpellSink {
   update(deltaSeconds: number, nowMs: number): void {
     this.now = nowMs;
     if (!this.wave.isWaveActive) {
-      if (this.zones.length > 0 || this.shots.length > 0) this.clear();
+      if (this.zones.length > 0 || this.shots.length > 0 || this.spheres.length > 0) this.clear();
       return;
+    }
+
+    // Spheres expire, and vanish with their owner: killing the Sovereign clears her board.
+    for (let i = this.spheres.length - 1; i >= 0; i--) {
+      const s = this.spheres[i];
+      if (nowMs >= s.expiresAt || s.owner.dead) this.spheres.splice(i, 1);
     }
 
     for (let i = this.zones.length - 1; i >= 0; i--) {
@@ -180,7 +278,7 @@ export class HostileSpellSystem implements HostileSpellSink {
         if (stun) {
           const t = Phaser.Math.Clamp(missile.distanceTravelled / spell.range, 0, 1);
           this.callbacks.onPlayerStunned(Phaser.Math.Linear(stun.minMs, stun.maxMs, t));
-          Fx.of(this.scene).arcaneBurst(missile.x, missile.y, spell.radius * 2.5);
+          Fx.of(this.scene).arcaneBurst(missile.x, missile.y, spell.radius * 2.5, this.shots[i].sphere ? 'void' : 'arcane');
         } else {
           Fx.of(this.scene).hit(missile.x, missile.y, THEME.basic.burst);
         }
@@ -189,7 +287,7 @@ export class HostileSpellSystem implements HostileSpellSink {
       if (!missile.alive) this.shots.splice(i, 1);
     }
 
-    this.view.draw(this.zones, nowMs);
+    this.view.draw(this.zones, this.spheres, nowMs);
   }
 
   /** The zone's deadline: is the player inside it right now? */
@@ -200,6 +298,8 @@ export class HostileSpellSystem implements HostileSpellSink {
     const pr = this.player.radius;
     const fx = Fx.of(this.scene);
 
+    const style = zone.style ?? 'arcane';
+
     if (zone.kind === 'line') {
       fx.arcaneBeam(zone.x, zone.y, zone.angle, zone.length);
       if (distanceToSegment(px, py, zone) <= zone.halfWidth + pr) {
@@ -209,7 +309,22 @@ export class HostileSpellSystem implements HostileSpellSink {
       return;
     }
 
-    fx.arcaneBurst(zone.x, zone.y, zone.radius);
+    if (zone.kind === 'cone') {
+      fx.coneBurst(zone.x, zone.y, zone.angle, zone.radius, zone.halfAngle, style);
+      const dist = Math.hypot(px - zone.x, py - zone.y);
+      // Inside the cone if the player's body reaches into it: within range, and
+      // within the half-angle widened by the body's angular size at that distance.
+      const off = Math.abs(Phaser.Math.Angle.Wrap(Math.atan2(py - zone.y, px - zone.x) - zone.angle));
+      const widen = dist > pr ? Math.asin(Math.min(1, pr / dist)) : Math.PI;
+      if (dist <= zone.radius + pr && off <= zone.halfAngle + widen) {
+        this.zonesHit++;
+        this.callbacks.onPlayerHit(zone.damage, zone.source);
+      }
+      return;
+    }
+
+    fx.arcaneBurst(zone.x, zone.y, zone.radius, style);
+    if (zone.leaveSphere && !zone.leaveSphere.owner.dead) this.placeSphere(zone, zone.leaveSphere);
     const dist = Math.hypot(px - zone.x, py - zone.y);
     if (dist > zone.radius + pr) return;
     this.zonesHit++;
@@ -219,15 +334,27 @@ export class HostileSpellSystem implements HostileSpellSink {
       this.callbacks.onPlayerSlowed(centre.slowFraction, centre.slowMs);
     } else {
       this.callbacks.onPlayerHit(zone.damage, zone.source);
+      if (zone.slow) this.callbacks.onPlayerSlowed(zone.slow.fraction, zone.slow.ms);
     }
+  }
+
+  /** A Dark Sphere comes to rest; past its owner's cap, their oldest goes. */
+  private placeSphere(at: { x: number; y: number }, spec: NonNullable<CircleSpell['leaveSphere']>): void {
+    const mine = this.spheresOf(spec.owner);
+    // Oldest first: drop from the front until there is room for this one.
+    for (let i = 0; i <= mine.length - spec.cap; i++) this.takeSphere(mine[i]);
+    this.spheres.push({
+      id: this.nextSphereId++, owner: spec.owner, x: at.x, y: at.y, landedAt: this.now, expiresAt: this.now + spec.lifeMs,
+    });
   }
 
   /** Drop everything without resolving it (wave clear, restart). */
   clear(): void {
     this.zones.length = 0;
+    this.spheres.length = 0;
     for (const { missile } of this.shots) missile.kill();
     this.shots.length = 0;
-    this.view.draw(this.zones, this.now);
+    this.view.draw(this.zones, this.spheres, this.now);
   }
 }
 

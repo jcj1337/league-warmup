@@ -581,6 +581,7 @@ export class GameScene extends Phaser.Scene {
       spells: this.hostileSpells,
       attackTokens: this.attackTokens,
       enemiesRemaining: this.director.enemiesRemaining,
+      allies: this.director.enemies,
     });
     this.enemies = this.director.enemies;
 

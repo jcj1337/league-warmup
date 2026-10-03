@@ -1,10 +1,11 @@
 import Phaser from 'phaser';
-import { ARENA, MAGUS, PLAYER, TARGETS } from '../../config/balance';
+import { MAGUS } from '../../config/balance';
 import { THEME } from '../../config/theme';
 import { TEX } from '../art/textures';
 import { MagusView } from '../view/MagusView';
 import type { EnemyArt } from '../view/EnemyView';
-import { Enemy, type EnemyArchetype, type EnemyContext } from './Enemy';
+import type { EnemyArchetype, EnemyContext } from './Enemy';
+import { Caster, type CasterTuning } from './Caster';
 import { projectileSpeed, scaled } from '../systems/Difficulty';
 import type { GameClock } from '../systems/GameClock';
 
@@ -50,7 +51,7 @@ const ART: EnemyArt = {
  * zones is the intended answer. It is a normal `Enemy`, so every player tool
  * works on it unchanged.
  */
-export class Magus extends Enemy {
+export class Magus extends Caster {
   readonly archetype: EnemyArchetype = 'magus';
   declare view: MagusView;
 
@@ -60,8 +61,6 @@ export class Magus extends Enemy {
   aimAngle = 0;
   /** Where the Eye will go down: tracked through its targeting phase. Read by the view. */
   eyeTarget: { x: number; y: number } | null = null;
-  /** This cast's random aim offset (MAGUS.aimSpreadPx), added to every aim point. */
-  aimOffset = { x: 0, y: 0 };
   /** True once it has spent its Rite. */
   riteUsed = false;
   /** Its stage's spell gap and orb speed (see DIFFICULTY). */
@@ -76,17 +75,15 @@ export class Magus extends Enemy {
   private riteShotsLeft = 0;
   private nextRiteShotAt = 0;
 
-  private goalX: number;
-  private goalY: number;
-  private nextPlanAt = 0;
-
   constructor(scene: Phaser.Scene, clock: GameClock, x: number, y: number, pips: number, stage: number) {
     super(scene, clock, x, y, { radius: MAGUS.radius, maxHp: pips, scoreMultiplier: MAGUS.scoreMultiplier, stage });
     this.spellGapMs = scaled(MAGUS.scaling.spellGapMs, stage, MAGUS.spellGapMs);
     this.orbSpeed = projectileSpeed(MAGUS.orb.speed, stage);
-    this.goalX = x;
-    this.goalY = y;
     this.view = new MagusView(scene, this, ART);
+  }
+
+  protected get tuning(): CasterTuning {
+    return MAGUS;
   }
 
   /** 0..1 through the current cast, or -1 while repositioning. Read by the view. */
@@ -255,27 +252,6 @@ export class Magus extends Enemy {
     this.stateEndsAt = nowMs + durationMs;
   }
 
-  /**
-   * Where it aims: where the player will be `impactMs` from now at their
-   * current velocity, MAGUS.aimLead of the way, plus this cast's random
-   * offset, kept in the arena.
-   */
-  private aimPoint(ctx: EnemyContext, impactMs: number): { x: number; y: number } {
-    const lead = (MAGUS.aimLead * impactMs) / 1000;
-    const m = ARENA.padding + ctx.player.radius;
-    return {
-      x: Phaser.Math.Clamp(ctx.player.x + ctx.player.vx * lead + this.aimOffset.x, m, ARENA.width - m),
-      y: Phaser.Math.Clamp(ctx.player.y + ctx.player.vy * lead + this.aimOffset.y, m, ARENA.height - m),
-    };
-  }
-
-  /** Pick this cast's aim offset: a uniformly random point within `radius`. */
-  rollAimOffset(radius: number): void {
-    const r = radius * Math.sqrt(Math.random());
-    const a = Math.random() * Math.PI * 2;
-    this.aimOffset = { x: Math.cos(a) * r, y: Math.sin(a) * r };
-  }
-
   /** Where the Eye would go down now: led by its delay, clamped to its reach. */
   private eyeSpot(ctx: EnemyContext): { x: number; y: number } {
     const E = MAGUS.eye;
@@ -290,74 +266,5 @@ export class Magus extends Enemy {
     const first = (Math.hypot(ctx.player.x - this.x, ctx.player.y - this.y) / this.orbSpeed) * 1000;
     const ahead = this.aimPoint(ctx, first);
     return (Math.hypot(ahead.x - this.x, ahead.y - this.y) / this.orbSpeed) * 1000;
-  }
-
-  // ------------------------------------------------------------ movement
-
-  private reposition(deltaSeconds: number, nowMs: number, ctx: EnemyContext, dist: number): void {
-    if (nowMs >= this.nextPlanAt) this.plan(nowMs, ctx, dist);
-
-    const dx = this.goalX - this.x;
-    const dy = this.goalY - this.y;
-    const toGoal = Math.hypot(dx, dy);
-    if (toGoal > 2) {
-      const step = Math.min(PLAYER.moveSpeed * MAGUS.moveSpeedFraction * this.moveScale * deltaSeconds, toGoal);
-      this.x += (dx / toGoal) * step;
-      this.y += (dy / toGoal) * step;
-      this.pose.moving = true;
-    }
-
-    const m = ARENA.padding + this.radius;
-    this.x = Phaser.Math.Clamp(this.x, m, ARENA.width - m);
-    this.y = Phaser.Math.Clamp(this.y, m, ARENA.height - m);
-  }
-
-  /**
-   * Choose where to stand: walk in when you are beyond the band, back off when
-   * you are inside it (sliding along a wall if straight back is blocked), and
-   * otherwise hold still. Cornered with nowhere to go, it stands its ground.
-   */
-  private plan(nowMs: number, ctx: EnemyContext, dist: number): void {
-    this.nextPlanAt = nowMs + MAGUS.replanMs;
-    const { min, max } = MAGUS.spacing;
-    const px = ctx.player.x;
-    const py = ctx.player.y;
-    const bearing = Math.atan2(this.y - py, this.x - px);
-
-    if (dist > max) {
-      if (!this.setGoal(px, py, [bearing], max - 20)) {
-        const m = ARENA.padding + TARGETS.edgeMargin * 0.5;
-        this.goalX = Phaser.Math.Clamp(px + Math.cos(bearing) * (max - 20), m, ARENA.width - m);
-        this.goalY = Phaser.Math.Clamp(py + Math.sin(bearing) * (max - 20), m, ARENA.height - m);
-      }
-    } else if (dist < min) {
-      const fan = [0, 0.6, -0.6, 1.2, -1.2, 1.8, -1.8].map((d) => bearing + d);
-      if (!this.setGoal(px, py, fan, min + 30)) {
-        this.goalX = this.x;
-        this.goalY = this.y;
-      }
-    } else {
-      this.goalX = this.x;
-      this.goalY = this.y;
-    }
-  }
-
-  /**
-   * Aim at the first point `radius` from the player along one of `angles` that
-   * lies inside the arena.
-   * @returns whether one was found.
-   */
-  private setGoal(px: number, py: number, angles: number[], radius: number): boolean {
-    const m = ARENA.padding + TARGETS.edgeMargin * 0.5;
-    for (const a of angles) {
-      const x = px + Math.cos(a) * radius;
-      const y = py + Math.sin(a) * radius;
-      if (x >= m && x <= ARENA.width - m && y >= m && y <= ARENA.height - m) {
-        this.goalX = x;
-        this.goalY = y;
-        return true;
-      }
-    }
-    return false;
   }
 }
