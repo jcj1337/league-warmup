@@ -60,6 +60,8 @@ export class Magus extends Enemy {
   aimAngle = 0;
   /** Where the Eye will go down: tracked through its targeting phase. Read by the view. */
   eyeTarget: { x: number; y: number } | null = null;
+  /** This cast's random aim offset (MAGUS.aimSpreadPx), added to every aim point. */
+  aimOffset = { x: 0, y: 0 };
   /** True once it has spent its Rite. */
   riteUsed = false;
   /** Its stage's spell gap and orb speed (see DIFFICULTY). */
@@ -147,6 +149,7 @@ export class Magus extends Enemy {
       case 'rite':
         if (this.riteShotsLeft > 0 && nowMs >= this.nextRiteShotAt) {
           const R = MAGUS.rite;
+          this.rollAimOffset(MAGUS.aimSpreadPx.spell);
           const aim = this.aimPoint(ctx, R.delayMs);
           this.aimAngle = Math.atan2(aim.y - this.y, aim.x - this.x);
           ctx.spells.castCircle({ source: this.archetype, x: aim.x, y: aim.y, radius: R.radius, delayMs: R.delayMs, damage: R.damage }, nowMs);
@@ -221,6 +224,7 @@ export class Magus extends Enemy {
     this.readyAt[id] = nowMs + MAGUS[id].cooldownMs;
     this.nextCastAt = nowMs + this.spellGapMs;
 
+    this.rollAimOffset(id === 'orb' ? MAGUS.aimSpreadPx.orb : MAGUS.aimSpreadPx.spell);
     const aim = this.aimPoint(ctx, 0);
     this.aimAngle = Math.atan2(aim.y - this.y, aim.x - this.x);
 
@@ -253,15 +257,23 @@ export class Magus extends Enemy {
 
   /**
    * Where it aims: where the player will be `impactMs` from now at their
-   * current velocity, MAGUS.aimLead of the way, kept in the arena.
+   * current velocity, MAGUS.aimLead of the way, plus this cast's random
+   * offset, kept in the arena.
    */
   private aimPoint(ctx: EnemyContext, impactMs: number): { x: number; y: number } {
     const lead = (MAGUS.aimLead * impactMs) / 1000;
     const m = ARENA.padding + ctx.player.radius;
     return {
-      x: Phaser.Math.Clamp(ctx.player.x + ctx.player.vx * lead, m, ARENA.width - m),
-      y: Phaser.Math.Clamp(ctx.player.y + ctx.player.vy * lead, m, ARENA.height - m),
+      x: Phaser.Math.Clamp(ctx.player.x + ctx.player.vx * lead + this.aimOffset.x, m, ARENA.width - m),
+      y: Phaser.Math.Clamp(ctx.player.y + ctx.player.vy * lead + this.aimOffset.y, m, ARENA.height - m),
     };
+  }
+
+  /** Pick this cast's aim offset: a uniformly random point within `radius`. */
+  rollAimOffset(radius: number): void {
+    const r = radius * Math.sqrt(Math.random());
+    const a = Math.random() * Math.PI * 2;
+    this.aimOffset = { x: Math.cos(a) * r, y: Math.sin(a) * r };
   }
 
   /** Where the Eye would go down now: led by its delay, clamped to its reach. */

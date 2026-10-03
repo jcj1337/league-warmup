@@ -478,6 +478,13 @@ export const MAGUS = {
    * you run into it; change direction or stop to dodge.
    */
   aimLead: 0.85,
+  /**
+   * Aim spread: each cast aims at a random point within this radius of where it
+   * means to aim, rolled once per cast (per circle for the Rite) so the Lance
+   * line and the Eye reticle stay steady while they track. The Orb, a thin
+   * projectile, uses the smaller `orb` radius.
+   */
+  aimSpreadPx: { spell: 50, orb: 20 },
   /** Per-stage scaling of its own stats (see DIFFICULTY). Movement and orb speed scale globally. */
   scaling: {
     spellGapMs: { k: -0.3, min: 700 } as Curve,
@@ -597,7 +604,7 @@ export const DIFFICULTY = {
  * Bumped whenever tuning changes how hard a run is. The run log tags each run
  * with it, and its summary only compares runs from the same version.
  */
-export const BALANCE_VERSION = 5;
+export const BALANCE_VERSION = 6;
 
 /**
  * The player's level, League style: kills give XP (ENEMIES[id].xp) and each

@@ -10,6 +10,10 @@ test('magus: roster + pips, spacing, Lance / Eye / Orb / Rite, stun rules, zones
     stages: Array.from({ length: 10 }, (_, s) => window.__warmup.scene.getScene('GameScene').director.describeStage(s)),
     playerSpeed: window.__balance.PLAYER.moveSpeed,
   }));
+  // Most checks below need exact aim: switch the random spread off, and back on in 4c.
+  const spread = { ...cfg.magus.aimSpreadPx };
+  const setSpread = (s) => page.evaluate((s) => { Object.assign(window.__balance.MAGUS.aimSpreadPx, s); }, s);
+  await setSpread({ spell: 0, orb: 0 });
 
   /** Quiet arena: no edge fire, player parked at (px, py), healthy, free of crowd control. */
   const calm = (px = 640, py = 360, hp = 100) => page.evaluate(({ px, py, hp }) => {
@@ -244,6 +248,62 @@ test('magus: roster + pips, spacing, Lance / Eye / Orb / Rite, stun rules, zones
   ranLance.hp === 100 - cfg.magus.lance.damage
     ? pass(`the Lance locks where a runner is heading: hit for ${cfg.magus.lance.damage}`)
     : fail(`led lance: hp ${ranLance.hp}`);
+
+  // === 4c. Aim spread ==========================================================
+  section('4c. Aim spread');
+  await setSpread(spread);
+  const offsets = await page.evaluate((r) => {
+    const d = window.__warmup.scene.getScene('GameScene').director;
+    const m = d.spawnEnemy('magus');
+    const out = [];
+    for (let i = 0; i < 600; i++) { m.rollAimOffset(r); out.push({ ...m.aimOffset }); }
+    m.destroy();
+    return out;
+  }, spread.spell);
+  {
+    const radii = offsets.map((o) => Math.hypot(o.x, o.y));
+    const quadrants = new Set(offsets.map((o) => `${o.x >= 0}${o.y >= 0}`));
+    const meanR = radii.reduce((a, b) => a + b, 0) / radii.length;
+    Math.max(...radii) <= spread.spell + 1e-9 && quadrants.size === 4 && Math.abs(meanR - (2 / 3) * spread.spell) < spread.spell * 0.06
+      ? pass(`each cast rolls an offset uniformly within ${spread.spell}px (600 rolls: max ${Math.max(...radii).toFixed(0)}px, mean ${meanR.toFixed(0)}px ≈ ⅔ r)`)
+      : fail(`offsets: max ${Math.max(...radii)}, mean ${meanR}, quadrants ${quadrants.size}`);
+  }
+  // Live: three Eyes on a standing player land near, but not exactly on, them.
+  const eyeSpots = [];
+  for (let i = 0; i < 3; i++) {
+    await calm();
+    await place([{ type: 'magus', x: 1040, y: 360 }]);
+    await castNow('eye');
+    await page.waitForFunction(() => window.__warmup.scene.getScene('GameScene').hostileSpells.zones.length > 0, null, { timeout: 3000 });
+    eyeSpots.push(await page.evaluate(() => {
+      const z = window.__warmup.scene.getScene('GameScene').hostileSpells.zones[0];
+      return { x: z.x, y: z.y };
+    }));
+  }
+  {
+    const off = eyeSpots.map((p) => Math.hypot(p.x - 640, p.y - 360));
+    off.every((d) => d <= spread.spell + 0.5) && new Set(eyeSpots.map((p) => `${Math.round(p.x)},${Math.round(p.y)}`)).size === 3
+      ? pass(`three Eyes on a standing player land at different spots within ${spread.spell}px (${off.map((d) => Math.round(d)).join(', ')}px off)`)
+      : fail(`eye spots: ${JSON.stringify(eyeSpots)}`);
+  }
+  // The reticle holds its offset while it tracks: it doesn't jitter frame to frame.
+  await calm();
+  await place([{ type: 'magus', x: 1040, y: 360 }]);
+  await castNow('eye');
+  const steady = await page.evaluate(() => new Promise<any>((res) => {
+    const g = window.__warmup.scene.getScene('GameScene');
+    const m = g.director.enemies[0];
+    const seen = [];
+    const tick = () => {
+      if (m.state === 'eye' && m.eyeTarget) seen.push(`${m.eyeTarget.x.toFixed(2)},${m.eyeTarget.y.toFixed(2)}`);
+      if (g.hostileSpells.zones.length > 0 || seen.length > 60) res(seen); else requestAnimationFrame(tick);
+    };
+    tick();
+  }));
+  steady.length > 3 && new Set(steady).size === 1
+    ? pass(`the reticle stays put on a standing player across ${steady.length} targeting frames`)
+    : fail(`reticle moved: ${new Set(steady).size} distinct spots`);
+  await setSpread({ spell: 0, orb: 0 });
 
   section('5. Orb and the stun');
   await calm();

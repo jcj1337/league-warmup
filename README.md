@@ -298,7 +298,9 @@ One spell at a time, at least 1.4s apart. Every spell is a telegraph: a zone hit
 only if you are inside it at the instant it lands. Like a real Xerath, it **aims where
 you're heading**: where you'd be when the spell lands at your current velocity
 (`MAGUS.aimLead`, 85% of the way). Running in a straight line walks you into it; change
-direction or stop to dodge.
+direction or stop to dodge. Each cast also aims at a **random spot near** that point
+(within 50px, or 20px for the Orb; `MAGUS.aimSpreadPx`), rolled once per cast so the
+Lance line and the Eye reticle still show exactly where it will land.
 
 | Spell | Telegraph | Hit |
 | --- | --- | --- |

@@ -716,7 +716,9 @@ RITE        rooted; 3 circles at 500 / 1300 / 2100ms, each led by its 600ms dela
 ```
 
 Aim leads the player: `aimPoint(ctx, impactMs)` = position + velocity ×
-`MAGUS.aimLead` (0.85) × the time until the spell lands, clamped to the arena. A
+`MAGUS.aimLead` (0.85) × the time until the spell lands, plus the cast's random
+offset (`rollAimOffset`: uniform in a disc of `MAGUS.aimSpreadPx.spell` 50px, or `.orb`
+20px; rolled at cast start, and per circle for the Rite), clamped to the arena. A
 straight-line runner is hit; a direction change or a stop dodges.
 
 `HostileSpellSystem` owns every placed zone and orb, so a zone outlives its caster;
