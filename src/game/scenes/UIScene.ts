@@ -16,6 +16,9 @@ import type { GameScene } from './GameScene';
 type Hud = ReturnType<GameScene['getHudState']>;
 
 const HP_BAR_WIDTH = 200;
+/** End screen: panel width and the text's left / right margin inside it. */
+const END_PANEL_WIDTH = 1040;
+const END_PANEL_MARGIN = 64;
 
 /**
  * HUD + end screen. Runs as a parallel scene on top of GameScene and polls it
@@ -75,7 +78,8 @@ export class UIScene extends Phaser.Scene {
     const M = 40;
 
     // ---- top-left: run time + score, on one compact plate ----------------
-    this.panel(M, 30, 300, 46);
+    // Wide enough for an 8-digit score; stops short of the centre plate (x 390).
+    this.panel(M, 30, 340, 46);
     this.timeText = pixelText(this, M + 14, 41, '', 3).setDepth(101);
     this.scoreText = pixelText(this, M + 146, 45, '', 2, THEME.ui.accent).setDepth(101);
 
@@ -201,15 +205,23 @@ export class UIScene extends Phaser.Scene {
   private buildOverlay(): void {
     const bg = this.add.rectangle(0, 0, ARENA.width, ARENA.height, THEME.ui.scrim, 0.8).setOrigin(0, 0);
 
+    // Wide enough for the longest rows (kills by every mob type); the text is
+    // left-aligned at a fixed margin so a long row can never push the columns
+    // off the panel, and anything longer still wraps inside it.
+    const panelW = END_PANEL_WIDTH;
+    const panelX = ARENA.width / 2 - panelW / 2;
     const plate = this.add.graphics();
-    pixelPanel(plate, ARENA.width / 2 - 380, 56, 760, 616, {
+    pixelPanel(plate, panelX, 56, panelW, 616, {
       fill: THEME.ui.panel, fillAlpha: 0.96, edge: THEME.ui.panelEdge, highlight: THEME.ui.panelHighlight, border: 3,
     });
 
     const title = pixelText(this, ARENA.width / 2, 110, '', 6).setOrigin(0.5);
     title.setName('title');
 
-    this.resultText = pixelText(this, ARENA.width / 2, 368, '', 2).setOrigin(0.5).setLineSpacing(2);
+    this.resultText = pixelText(this, panelX + END_PANEL_MARGIN, 368, '', 2)
+      .setOrigin(0, 0.5)
+      .setLineSpacing(2)
+      .setMaxWidth(panelW - END_PANEL_MARGIN * 2);
 
     const button = this.add
       .rectangle(ARENA.width / 2, 626, 280, 48, THEME.menu.button)
@@ -401,10 +413,8 @@ export class UIScene extends Phaser.Scene {
         row('WAVES CLEARED', `${result.wavesCleared}`),
         row('RUN TIME', formatRunTime(result.runTimeSeconds)),
         row('SCORE', `${result.score}`),
-        row(
-          'KILLS',
-          `${result.targetsKilled}   (${killsLine(result.killsByType)})`,
-        ),
+        row('KILLS', `${result.targetsKilled}`),
+        row('KILLS BY TYPE', killsLine(result.killsByType)),
         row('HITS LANDED', `${result.hitsLanded}   (mark procs ${result.markProcs})`),
         row('SCORE FROM', `kills ${result.scoreFrom.kills}  speed ${result.scoreFrom.speed}  hp ${result.scoreFrom.hp}`),
         row('Q ACCURACY', `${result.qHit}/${result.qFired}  (${accuracy}%)`),
@@ -429,17 +439,19 @@ const SOURCE_NAMES: Record<string, string> = {
   sovereign: 'sovereign', sovereignContact: 'sovereign touch',
 };
 
-/** "basic 12, pursuer 3, sovereign 1": only the mobs actually killed, most first. */
+/** "basic 12  pursuer 3  sovereign 1": only the mobs actually killed, most first. */
 function killsLine(kills: Record<string, number>): string {
   const parts = Object.entries(kills).filter(([, n]) => n > 0).sort((a, b) => b[1] - a[1]).map(([id, n]) => `${id} ${n}`);
-  return parts.length ? parts.join(', ') : 'none';
+  return parts.length ? parts.join('  ') : 'none';
 }
 const sourceName = (source: string) => SOURCE_NAMES[source] ?? source;
 
-/** "pursuer 64 spit 12 fire 8", biggest first. */
+/** "pursuer 64  spit 12  fire 8  +2 more": the three biggest sources, so the row fits. */
 function damageLine(taken: Record<string, number>): string {
-  const parts = Object.entries(taken).sort((a, b) => b[1] - a[1]).map(([s, n]) => `${sourceName(s)} ${n}`);
-  return parts.length ? parts.join(' ') : 'none';
+  const parts = Object.entries(taken).filter(([, n]) => n > 0).sort((a, b) => b[1] - a[1]).map(([s, n]) => `${sourceName(s)} ${n}`);
+  if (parts.length === 0) return 'none';
+  const shown = parts.slice(0, 3).join('  ');
+  return parts.length > 3 ? `${shown}  +${parts.length - 3} more` : shown;
 }
 
 /** "7 RUNS MED S11 BEST S14 HI 52340". */
