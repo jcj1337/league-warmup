@@ -221,6 +221,90 @@ on each stage clear.
 appearances, Stages 1–5 kept hand-written, no "run complete", stage shown without a
 total, personal best, "New threat" chat message, health bars only on damaged enemies.
 
+**Phase 4 — more, weaker enemies, and contact damage.** *(proposed, below)*
+
+## Phase 4 — more, weaker enemies, and contact damage
+
+Feedback after playing Phase 3: still a little slow, and a 3-pip basic at Stage 7 is a
+chore to kill, not fun. The fix: trade health for numbers, and make the swarm's bodies
+dangerous in themselves.
+
+### 4a. Trade health for numbers
+
+Health pips step up every **10** stages instead of every 3, and stop lower. Wave budgets,
+the cap on enemies alive at once and the arrival rate all rise to fill the field with
+more of them.
+
+| | Today | Proposed |
+| --- | --- | --- |
+| Basic pips | 1 → 2 (S4) → 3 (S7) | **1 until Stage 10**, then 2 (max) |
+| Pursuer pips | 2 → 3 → 4 | **2 until Stage 10**, then 3 (max) |
+| Magus pips | 1 → 2 → 3 | **1 until Stage 10**, then 2 (max) |
+| Wave budget `waveSize` | 4 × T | **6 × T** |
+| Max alive at once `maxAlive` | 6 × T^0.6, max 30 | **8 × T^0.6, max 40** |
+| Arrival gap `arrivalGapMs` | 300 × T^−0.5, min 60 | **250 × T^−0.5, min 50** |
+
+What that means in play:
+
+| Stage | 1 | 5 | 7 | 10 | 12 | 15 | 20 |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| Budget (≈ bodies) today → proposed | 4 → 6 | 7 → 10 | 9 → 14 | 14 → 21 | 19 → 28 | 28 → 42 | 57 → 85 |
+| On the field at once | 6 → 8 | 8 → 11 | 10 → 13 | 13 → 17 | 15 → 20 | 19 → 26 | 30 → 39 |
+| Basic / Pursuer pips | 1/2 → 1/2 | 2/3 → 1/2 | 3/4 → **1/2** | 3/4 → **1/2** | 3/4 → 2/3 | 3/4 → 2/3 | 3/4 → 2/3 |
+
+**Stage 7 Wave 1, today:** 6 basics + 2 Pursuers + 1 Magus = 9 bodies, 29 pips.
+**Proposed:** 10 basics + 3 Pursuers + 1 Magus = 14 bodies, **17 pips**. That's about 55%
+more bodies but 40% fewer hits to clear. Most autos kill something, so it feels like
+mowing down a swarm rather than chipping at a few tanks.
+
+The basic's spit tokens already scale with the stage (not with the body count), so
+doubling the basics doesn't double the fire.
+
+### 4b. Contact damage
+
+An enemy whose body touches yours hurts you.
+
+| | Value |
+| --- | --- |
+| Touching | an **active** enemy whose circle overlaps yours (arriving enemies are inert, as today) |
+| Damage | per mob, a new `contactDamage` in `ENEMIES`: basic **4**, Pursuer **8**, Magus **4**; new mobs declare their own |
+| Ramp | its own curve, `DIFFICULTY.contactDamage` (k **0.35**), steeper than other damage (k 0.2) as you asked: ×1.34 at Stage 7, ×1.55 at 10, ×2.0 at 15, ×2.5 at 20 (basic touch 4 → 6 → 8 → 10) |
+| Rate | each enemy can bump you at most once per **800ms**; the existing 250ms invulnerability after any hit still applies, so a crowd can't shred you in one frame |
+| Feedback | a small spark where the bodies touch, plus the usual hit flash; the run log records it separately (`basic contact`, `pursuer contact`) from spit and swings |
+
+**When it happens.** Basics hover 150–230px away and Pursuers stop at swing range, so
+nothing walks into you on purpose. Contact comes from walking into or through the
+swarm, packs landing around you, or getting boxed in. The lesson is "don't path through
+the crowd". You can still walk through it, at a price; making enemies actually block
+your movement remains a possible later step.
+
+### Side effects to know about
+
+- **W loses value against 1-pip basics.** The mark's bonus pip needs a second hit, and a
+  1-pip enemy dies on the first. W stays strong against Pursuers and the Magus.
+- **Q stops at the first enemy.** Against a swarm of 1-pip enemies, making Q pierce
+  (keep flying after a kill) would feel great, but it's a kit change, so it's an open
+  question rather than part of this phase.
+- **The run log groups runs by growth setting only,** and Phase 4 changes balance
+  without touching growth. I'd add a `balanceVersion` tag (bumped on any tuning change)
+  so the median isn't mixed with pre-Phase-4 runs. The alternative is `__runs.clear()`.
+
+### Build order
+
+1. **4a**: config only (pip ramps, three curve bases) plus updating the tests that pin
+   them. Playable right away.
+2. **4b**: contact checks in the director's frame, per-enemy cooldown, `contactDamage`
+   in the registry, its curve, the spark, the run-log source.
+3. **`balanceVersion`** on the run log.
+
+### Questions for Phase 4
+
+1. **Q pierce** on kills: yes, no, or later?
+2. **Contact numbers:** basic 4 / Pursuer 8 / Magus 4 at Stage 1 with k 0.35. Harsher or
+   gentler?
+3. **Basic pips past Stage 10:** 2 (proposed), or keep basics at 1 forever and let only
+   numbers grow?
+
 ## Open questions
 
 1. **Growth rate:** 1.15 puts the wall around Stage 15–18. Revisit after playtesting
