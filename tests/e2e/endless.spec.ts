@@ -167,8 +167,8 @@ test('endless: generated stages, budgets + caps, first appearances, packs, pip c
   !lower.result.newBest && lower.result.previousBest === 6 && !/NEW BEST/.test(lower.screen)
     ? pass('a worse run is not')
     : fail(`lower: ${JSON.stringify(lower.result)}`);
-  higher.result.newBest && higher.result.previousBest === 6 && /NEW BEST!/.test(higher.screen) && /BEST S9/.test(higher.screen)
-    ? pass('beating it is, and the runs line updates (BEST S9)')
+  higher.result.newBest && higher.result.previousBest === 6 && /NEW BEST!/.test(higher.screen) && /YOUR BEST\s+STAGE 9\b/.test(higher.screen)
+    ? pass('beating it is, and your best updates (STAGE 9)')
     : fail(`higher: ${JSON.stringify(higher.result)}\n${higher.screen}`);
   /DEFEATED/.test(await page.evaluate(() => window.__warmup.scene.getScene('UIScene').overlay.getByName('title').text))
     ? pass('the end screen always reads DEFEATED: the run only ends on death')

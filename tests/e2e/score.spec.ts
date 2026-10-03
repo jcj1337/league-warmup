@@ -141,10 +141,10 @@ test('score: no points for time alive, kills × stage, wave speed bonus vs par, 
     summary: window.__runs.summary(),
   }));
   const f = end.result.scoreFrom;
-  new RegExp(`SCORE FROM\\s+kills ${f.kills}\\s+speed ${f.speed}\\s+hp ${f.hp}`).test(end.screen)
-    ? pass('the end screen breaks the score down into kills, speed and HP')
+  new RegExp(`SCORE\\s+${end.result.score}\\n`).test(end.screen) && f.kills + f.speed + f.hp === end.result.score && !/SCORE FROM/.test(end.screen)
+    ? pass('the end screen shows the score; its breakdown stays in the result, off the screen')
     : fail(`end screen:\n${end.screen}`);
-  end.summary.bestScore === end.result.score && new RegExp(`HI ${end.result.score}`).test(end.screen)
+  end.summary.bestScore === end.result.score && new RegExp(`YOUR BEST\\s+STAGE \\d+\\s+SCORE ${end.result.score}`).test(end.screen)
     ? pass(`the run log keeps the score: high score ${end.summary.bestScore}`)
     : fail(`summary: ${JSON.stringify(end.summary)}`);
 

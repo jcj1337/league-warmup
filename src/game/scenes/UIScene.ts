@@ -18,7 +18,7 @@ type Hud = ReturnType<GameScene['getHudState']>;
 
 const HP_BAR_WIDTH = 200;
 /** End screen: panel width and the text's left / right margin inside it. */
-const END_PANEL_WIDTH = 1040;
+const END_PANEL_WIDTH = 920;
 const END_PANEL_MARGIN = 64;
 
 /**
@@ -399,8 +399,10 @@ export class UIScene extends Phaser.Scene {
     const title = this.overlay.getByName('title') as Phaser.GameObjects.BitmapText;
     title.setText('DEFEATED').setTint(THEME.ui.danger);
 
-    const row = (label: string, value: string) => `${label.padEnd(24, ' ')}${value}`;
-    const secs = (ms: number) => `${(ms / 1000).toFixed(1)}s`;
+    // Only what tells you how the run went. Tuning data (damage per source, the
+    // score breakdown, the raw attack metrics) stays in the result and the run
+    // log (__runs), off the screen.
+    const row = (label: string, value: string) => `${label.padEnd(16, ' ')}${value}`;
 
     this.resultText.setText(
       [
@@ -408,25 +410,13 @@ export class UIScene extends Phaser.Scene {
           'STAGE REACHED',
           `${result.stageReached}  (wave ${result.waveReached}/${result.wavesInStage})  LV ${result.level}${result.newBest ? '  NEW BEST!' : ''}`,
         ),
-        row('WAVES CLEARED', `${result.wavesCleared}`),
-        row('RUN TIME', formatRunTime(result.runTimeSeconds)),
         row('SCORE', `${result.score}`),
         row('KILLS', `${result.targetsKilled}`),
         row('KILLS BY TYPE', killsLine(result.killsByType)),
-        row('HITS LANDED', `${result.hitsLanded}   (mark procs ${result.markProcs})`),
-        row('SCORE FROM', `kills ${result.scoreFrom.kills}  speed ${result.scoreFrom.speed}  hp ${result.scoreFrom.hp}`),
         row('Q ACCURACY', `${result.qHit}/${result.qFired}  (${accuracy}%)`),
         row('KILLED BY', result.killedBy ? sourceName(result.killedBy) : '-'),
-        row('DAMAGE, FINAL STAGE', damageLine(result.stageDamage)),
-        row(`YOUR RUNS (V${BALANCE_VERSION} G${result.growth})`, runsLine(RunHistory.summary(result.growth, BALANCE_VERSION))),
-        '',
-        '--- MECHANICS (raw, not scored yet) ---',
-        row('AUTOS STARTED', `${result.attacksStarted}`),
-        row('AUTOS FIRED / LANDED', `${result.attacksFired} / ${result.attacksLanded}`),
-        row('AUTOS CANCELLED', `${result.attacksCancelled}`),
-        row('IDLE, TARGET IN RANGE', secs(result.idleInRangeMs)),
-        row('STILL IN RECOVERY', secs(result.wastedRecoveryMs)),
-      ].join('\n'),
+        row('YOUR BEST', bestLine(RunHistory.summary(result.growth, BALANCE_VERSION))),
+      ].join('\n\n'),
     );
   }
 }
@@ -444,18 +434,11 @@ function killsLine(kills: Record<string, number>): string {
 }
 const sourceName = (source: string) => SOURCE_NAMES[source] ?? source;
 
-/** "pursuer 64  spit 12  fire 8  +2 more": the three biggest sources, so the row fits. */
-function damageLine(taken: Record<string, number>): string {
-  const parts = Object.entries(taken).filter(([, n]) => n > 0).sort((a, b) => b[1] - a[1]).map(([s, n]) => `${sourceName(s)} ${n}`);
-  if (parts.length === 0) return 'none';
-  const shown = parts.slice(0, 3).join('  ');
-  return parts.length > 3 ? `${shown}  +${parts.length - 3} more` : shown;
-}
-
-/** "7 RUNS MED S11 BEST S14 HI 52340". */
-function runsLine(s: RunSummary): string {
+/** "STAGE 9  SCORE 45200  (8 RUNS)": your best on the current balance version. */
+function bestLine(s: RunSummary): string {
   if (s.runs === 0) return 'not logged';
-  return `${s.runs} ${s.runs === 1 ? 'RUN' : 'RUNS'} MED S${s.median} BEST S${s.best}${s.bestScore !== null ? ` HI ${s.bestScore}` : ''}`;
+  const score = s.bestScore !== null ? `  SCORE ${s.bestScore}` : '';
+  return `STAGE ${s.best}${score}  (${s.runs} ${s.runs === 1 ? 'RUN' : 'RUNS'})`;
 }
 
 /** 65.34 → "1:05.3". Run time is a statistic, not a countdown. */

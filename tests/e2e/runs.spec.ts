@@ -72,8 +72,8 @@ test('runs: damage by source, killing blow, local run log, end-screen summary, c
     && logged.wave === r.waveReached && logged.growth === r.growth && logged.damageTaken.pursuer === 10 && !Number.isNaN(Date.parse(logged.at))
     ? pass(`the run is saved locally: ${JSON.stringify(logged)}`)
     : fail(`log: ${JSON.stringify(death.runs)}`);
-  /KILLED BY\s+magus/.test(death.screen) && /DAMAGE, FINAL STAGE\s+pursuer 10\s+fire 8\s+magus 5\s+\+1 more/.test(death.screen) && /YOUR RUNS \(V\d+ G[\d.]+\)\s+1 RUN MED S1 BEST S1/.test(death.screen)
-    ? pass('the end screen shows the killer, the damage breakdown and your logged runs')
+  /KILLED BY\s+magus/.test(death.screen) && /YOUR BEST\s+STAGE 1\s.*\(1 RUN\)/.test(death.screen) && !/DAMAGE|MECHANICS/.test(death.screen)
+    ? pass('the end screen shows the killer and your best; the tuning data stays off it')
     : fail(`end screen:\n${death.screen}`);
 
   // === 3. The log persists, per growth setting =============================
@@ -113,7 +113,7 @@ test('runs: damage by source, killing blow, local run log, end-screen summary, c
     Storage.prototype.setItem = () => { throw new Error('storage blocked'); };
   });
   const blocked = await dieTo('pursuer');
-  blocked.result?.outcome === 'defeated' && blocked.runs.length === 0 && /YOUR RUNS.*not logged/.test(blocked.screen)
+  blocked.result?.outcome === 'defeated' && blocked.runs.length === 0 && /YOUR BEST\s+not logged/.test(blocked.screen)
     ? pass('with storage blocked the run still ends normally; it just is not logged')
     : fail(`blocked storage: ${JSON.stringify({ outcome: blocked.result?.outcome, runs: blocked.runs.length })}\n${blocked.screen}`);
 
