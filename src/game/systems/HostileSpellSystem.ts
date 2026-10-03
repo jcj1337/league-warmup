@@ -6,9 +6,12 @@ import { PROJECTILE_ART } from '../view/projectileArt';
 import type { ProjectileArt } from '../view/ProjectileView';
 import { THEME } from '../../config/theme';
 import type { Player } from '../entities/Player';
+import type { EnemyArchetype } from '../entities/Enemy';
 
 /** A line that lands `delayMs` after it is placed (Magus Lance). */
 export interface LineSpell {
+  /** Who cast it, for the damage log. */
+  source: EnemyArchetype;
   /** Where the line starts and which way it points. */
   x: number;
   y: number;
@@ -21,6 +24,8 @@ export interface LineSpell {
 
 /** A circle that lands `delayMs` after it is placed (Magus Eye, Rite). */
 export interface CircleSpell {
+  /** Who cast it, for the damage log. */
+  source: EnemyArchetype;
   x: number;
   y: number;
   radius: number;
@@ -32,6 +37,8 @@ export interface CircleSpell {
 
 /** A straight, visible projectile that only deals damage (basic spit). */
 export interface GlobSpell {
+  /** Who fired it, for the damage log. */
+  source: EnemyArchetype;
   x: number;
   y: number;
   angle: number;
@@ -68,7 +75,7 @@ interface LiveShot {
 }
 
 interface HostileSpellCallbacks {
-  onPlayerHit: (damage: number) => void;
+  onPlayerHit: (damage: number, source: EnemyArchetype) => void;
   onPlayerStunned: (ms: number) => void;
   onPlayerSlowed: (fraction: number, ms: number) => void;
 }
@@ -169,7 +176,7 @@ export class HostileSpellSystem implements HostileSpellSink {
       const { missile, spell, stun } = this.shots[i];
       missile.update(deltaSeconds);
       if (missile.alive && missile.hits(this.player.x, this.player.y, this.player.radius)) {
-        this.callbacks.onPlayerHit(spell.damage);
+        this.callbacks.onPlayerHit(spell.damage, spell.source);
         if (stun) {
           const t = Phaser.Math.Clamp(missile.distanceTravelled / spell.range, 0, 1);
           this.callbacks.onPlayerStunned(Phaser.Math.Linear(stun.minMs, stun.maxMs, t));
@@ -197,7 +204,7 @@ export class HostileSpellSystem implements HostileSpellSink {
       fx.arcaneBeam(zone.x, zone.y, zone.angle, zone.length);
       if (distanceToSegment(px, py, zone) <= zone.halfWidth + pr) {
         this.zonesHit++;
-        this.callbacks.onPlayerHit(zone.damage);
+        this.callbacks.onPlayerHit(zone.damage, zone.source);
       }
       return;
     }
@@ -208,10 +215,10 @@ export class HostileSpellSystem implements HostileSpellSink {
     this.zonesHit++;
     const centre = zone.centre;
     if (centre && dist <= centre.radius) {
-      this.callbacks.onPlayerHit(centre.damage);
+      this.callbacks.onPlayerHit(centre.damage, zone.source);
       this.callbacks.onPlayerSlowed(centre.slowFraction, centre.slowMs);
     } else {
-      this.callbacks.onPlayerHit(zone.damage);
+      this.callbacks.onPlayerHit(zone.damage, zone.source);
     }
   }
 

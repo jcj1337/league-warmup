@@ -3,7 +3,8 @@ import { ARENA, ATTACK, BLINK_E, DEBUG, DIFFICULTY, PLAYER, SKILLSHOT_Q, SKILLSH
 import { THEME } from '../../config/theme';
 import { ensureArt } from '../art/textures';
 import { Player } from '../entities/Player';
-import type { Enemy } from '../entities/Enemy';
+import type { Enemy, EnemyArchetype } from '../entities/Enemy';
+import { RunHistory } from '../RunHistory';
 import { AttackSystem } from '../systems/AttackSystem';
 import { SkillshotSystem } from '../systems/SkillshotSystem';
 import { EnemyProjectileSystem } from '../systems/EnemyProjectileSystem';
@@ -54,6 +55,11 @@ export interface RoundResult {
   wastedRecoveryMs: number;
   /** Kills broken down by enemy archetype. */
   killsByType: Record<string, number>;
+  /** Damage taken per source, and the source of the killing blow (null if not killed). */
+  damageTaken: Record<string, number>;
+  killedBy: string | null;
+  /** DIFFICULTY.growth this run was played on. */
+  growth: number;
 }
 
 /** Snapshot the HUD polls every frame. */
@@ -215,14 +221,14 @@ export class GameScene extends Phaser.Scene {
     });
 
     this.enemyProjectiles = new EnemyProjectileSystem(this, this.player, this.director, {
-      onPlayerHit: (damage) => this.onPlayerHit(damage),
+      onPlayerHit: (damage) => this.onPlayerHit(damage, 'edgeFire'),
     });
 
     this.attackTokens = new AttackTokens(() => this.director.difficulty.attackTokens);
 
     // Hostile spells: Magus zones and orbs, basic spit. They live here, so they outlive their caster.
     this.hostileSpells = new HostileSpellSystem(this, this.player, this.director, {
-      onPlayerHit: (damage) => this.onEnemyHit(damage),
+      onPlayerHit: (damage, source) => this.onEnemyHit(damage, source),
       onPlayerStunned: (ms) => this.stunPlayer(ms),
       onPlayerSlowed: (fraction, ms) => this.player.slow(this.clock.now, fraction, ms),
     });
@@ -553,7 +559,7 @@ export class GameScene extends Phaser.Scene {
         vy: this.player.vy,
         stunned: this.player.isStunned,
       },
-      damagePlayer: (amount) => this.onEnemyHit(amount),
+      damagePlayer: (amount, source) => this.onEnemyHit(amount, source),
       spells: this.hostileSpells,
       attackTokens: this.attackTokens,
       enemiesRemaining: this.director.enemiesRemaining,
@@ -632,8 +638,8 @@ export class GameScene extends Phaser.Scene {
    * Damage from an enemy (a swing, a spit, a Magus spell), scaled by the
    * stage's DIFFICULTY.damage. Edge fire has its own ramp and skips this.
    */
-  private onEnemyHit(damage: number): void {
-    this.onPlayerHit(Math.round(damage * this.director.difficulty.damage));
+  private onEnemyHit(damage: number, source: EnemyArchetype): void {
+    this.onPlayerHit(Math.round(damage * this.director.difficulty.damage), source);
   }
 
   /** A stage was cleared: patch the player up a little before the next one. */
@@ -644,9 +650,13 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
-  private onPlayerHit(damage: number): void {
+  /** Every hit on the player lands here, tagged with its source for the run log. */
+  private onPlayerHit(damage: number, source: string): void {
+    const hpBefore = this.player.hp;
     const taken = this.player.takeDamage(damage, this.clock.now);
     if (taken <= 0) return;
+    // Log the HP actually lost: overkill on the final hit is not damage taken.
+    this.scoring.addDamageTaken(source ?? 'unknown', hpBefore - this.player.hp, !this.player.isAlive);
 
     this.scoring.addProjectileHit();
     this.cameras.main.shake(90, 0.004);
@@ -695,7 +705,22 @@ export class GameScene extends Phaser.Scene {
       idleInRangeMs: Math.round(this.metrics.idleInRangeMs),
       wastedRecoveryMs: Math.round(this.metrics.wastedRecoveryMs),
       killsByType: { ...this.scoring.killsByType },
+      damageTaken: { ...this.scoring.damageTaken },
+      killedBy: this.scoring.killedBy,
+      growth: DIFFICULTY.growth,
     };
+
+    // Local tuning log (see RunHistory). Only finished runs: a restart mid-run is not logged.
+    RunHistory.record({
+      at: new Date().toISOString(),
+      outcome,
+      stage: this.result.stageReached,
+      wave: this.result.waveReached,
+      runTimeSeconds: Math.round(this.result.runTimeSeconds * 10) / 10,
+      growth: DIFFICULTY.growth,
+      killedBy: this.result.killedBy,
+      damageTaken: this.result.damageTaken,
+    });
   }
 
   // ---------------------------------------------------------------- HUD API

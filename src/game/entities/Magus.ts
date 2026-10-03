@@ -112,7 +112,7 @@ export class Magus extends Enemy {
         if (nowMs >= this.stateEndsAt) {
           const L = MAGUS.lance;
           ctx.spells.castLine(
-            { x: this.x, y: this.y, angle: this.aimAngle, length: L.length, halfWidth: L.halfWidth, delayMs: L.lockMs, damage: L.damage },
+            { source: this.archetype, x: this.x, y: this.y, angle: this.aimAngle, length: L.length, halfWidth: L.halfWidth, delayMs: L.lockMs, damage: L.damage },
             nowMs,
           );
           this.enter('lock', nowMs, L.lockMs);
@@ -126,6 +126,7 @@ export class Magus extends Enemy {
         if (nowMs >= this.stateEndsAt) {
           const O = MAGUS.orb;
           ctx.spells.fireOrb({
+            source: this.archetype,
             x: this.x + Math.cos(this.aimAngle) * this.radius,
             y: this.y + Math.sin(this.aimAngle) * this.radius,
             angle: this.aimAngle,
@@ -146,7 +147,7 @@ export class Magus extends Enemy {
           const R = MAGUS.rite;
           const aim = this.aimPoint(ctx);
           this.aimAngle = Math.atan2(aim.y - this.y, aim.x - this.x);
-          ctx.spells.castCircle({ x: aim.x, y: aim.y, radius: R.radius, delayMs: R.delayMs, damage: R.damage }, nowMs);
+          ctx.spells.castCircle({ source: this.archetype, x: aim.x, y: aim.y, radius: R.radius, delayMs: R.delayMs, damage: R.damage }, nowMs);
           this.riteShotsLeft--;
           this.nextRiteShotAt += R.intervalMs;
         }
@@ -209,6 +210,7 @@ export class Magus extends Enemy {
       const reach = Math.min(E.range, Math.hypot(aim.x - this.x, aim.y - this.y));
       ctx.spells.castCircle(
         {
+          source: this.archetype,
           x: this.x + Math.cos(this.aimAngle) * reach,
           y: this.y + Math.sin(this.aimAngle) * reach,
           radius: E.radius,

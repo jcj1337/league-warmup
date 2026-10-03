@@ -130,6 +130,7 @@ export class Target extends Enemy {
         return true;
       }
       ctx.spells.fireGlob({
+        source: this.archetype,
         x: this.x + Math.cos(this.spitAngle) * this.radius,
         y: this.y + Math.sin(this.spitAngle) * this.radius,
         angle: this.spitAngle,

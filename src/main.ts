@@ -4,6 +4,7 @@ import { ARENA } from './config/balance';
 import { THEME } from './config/theme';
 import { GameScene } from './game/scenes/GameScene';
 import { UIScene } from './game/scenes/UIScene';
+import { RunHistory } from './game/RunHistory';
 
 const game = new Phaser.Game({
   type: Phaser.AUTO,
@@ -31,4 +32,11 @@ const game = new Phaser.Game({
 //   __warmup.scene.getScene('GameScene').getHudState()
 //   __balance.ATTACK.range = 400      // most values apply on the next frame
 //   __theme.player.attack.windupLeanPx // presentation values
-Object.assign(window as unknown as Record<string, unknown>, { __warmup: game, __balance: balance, __theme: THEME });
+//   __runs.summary()                   // your logged runs on the current growth setting
+//   __runs.list() / __runs.clear()     // every logged run / delete the log
+const runs = {
+  list: () => RunHistory.list(),
+  summary: (growth: number = balance.DIFFICULTY.growth) => RunHistory.summary(growth),
+  clear: () => RunHistory.clear(),
+};
+Object.assign(window as unknown as Record<string, unknown>, { __warmup: game, __balance: balance, __theme: THEME, __runs: runs });

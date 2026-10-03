@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { RunHistory, type RunSummary } from '../RunHistory';
 import { ARENA, DEBUG } from '../../config/balance';
 import { THEME } from '../../config/theme';
 import { pixelText, setPixelScale } from '../art/font';
@@ -202,7 +203,7 @@ export class UIScene extends Phaser.Scene {
     const title = pixelText(this, ARENA.width / 2, 110, '', 6).setOrigin(0.5);
     title.setName('title');
 
-    this.resultText = pixelText(this, ARENA.width / 2, 368, '', 2).setOrigin(0.5).setLineSpacing(6);
+    this.resultText = pixelText(this, ARENA.width / 2, 368, '', 2).setOrigin(0.5).setLineSpacing(2);
 
     const button = this.add
       .rectangle(ARENA.width / 2, 626, 280, 48, THEME.menu.button)
@@ -393,6 +394,9 @@ export class UIScene extends Phaser.Scene {
         row('HITS LANDED', `${result.hitsLanded}   (mark procs ${result.markProcs})`),
         row('PROJECTILES HIT BY', `${result.projectileHitsTaken}`),
         row('Q ACCURACY', `${result.qHit}/${result.qFired}  (${accuracy}%)`),
+        row('KILLED BY', result.killedBy ? sourceName(result.killedBy) : '-'),
+        row('DAMAGE TAKEN', damageLine(result.damageTaken)),
+        row(`YOUR RUNS (GROWTH ${result.growth})`, runsLine(RunHistory.summary(result.growth))),
         '',
         '--- MECHANICS (raw, not scored yet) ---',
         row('AUTOS STARTED', `${result.attacksStarted}`),
@@ -403,6 +407,21 @@ export class UIScene extends Phaser.Scene {
       ].join('\n'),
     );
   }
+}
+
+const SOURCE_NAMES: Record<string, string> = { pursuer: 'pursuer', basic: 'spit', magus: 'magus', edgeFire: 'fire' };
+const sourceName = (source: string) => SOURCE_NAMES[source] ?? source;
+
+/** "pursuer 64 spit 12 fire 8", biggest first. */
+function damageLine(taken: Record<string, number>): string {
+  const parts = Object.entries(taken).sort((a, b) => b[1] - a[1]).map(([s, n]) => `${sourceName(s)} ${n}`);
+  return parts.length ? parts.join(' ') : 'none';
+}
+
+/** "7 RUNS  MEDIAN S11  BEST S14". */
+function runsLine(s: RunSummary): string {
+  if (s.runs === 0) return 'not logged';
+  return `${s.runs} ${s.runs === 1 ? 'RUN' : 'RUNS'}  MEDIAN S${s.median}  BEST S${s.best}`;
 }
 
 /** 65.34 → "1:05.3". Run time is a statistic, not a countdown. */

@@ -32,8 +32,8 @@ export interface EnemyContext {
     /** True while the player is stunned and cannot act. */
     stunned: boolean;
   };
-  /** Apply damage to the player. Routed through the scene's i-frame logic. */
-  damagePlayer(amount: number): void;
+  /** Apply damage to the player, tagged with who dealt it. Routed through the scene's i-frame logic. */
+  damagePlayer(amount: number, source: EnemyArchetype): void;
   /**
    * Cast hostile spells (ground zones, the Magus orb). The spell system owns
    * them, so a spell already placed still lands after its caster dies.

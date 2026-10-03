@@ -187,7 +187,7 @@ export class Pursuer extends Enemy {
 
     const dist = Math.hypot(ctx.player.x - this.x, ctx.player.y - this.y);
     const landed = dist <= reach;
-    if (landed) ctx.damagePlayer(PURSUER.attackDamage);
+    if (landed) ctx.damagePlayer(PURSUER.attackDamage, this.archetype);
     this.view.strike(landed, ctx.player.x, ctx.player.y, reach);
   }
 

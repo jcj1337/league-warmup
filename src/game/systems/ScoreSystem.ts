@@ -11,6 +11,10 @@ export class ScoreSystem {
   /** Kills broken down by archetype id, for the end screen. */
   public readonly killsByType: Record<string, number> = {};
   public projectileHitsTaken = 0;
+  /** Damage actually taken, per source ('pursuer', 'basic', 'magus', 'edgeFire'). */
+  public readonly damageTaken: Record<string, number> = {};
+  /** Source of the hit that took the last HP, once the player is dead. */
+  public killedBy: string | null = null;
 
   private survivalCredit = 0;
 
@@ -30,6 +34,12 @@ export class ScoreSystem {
     this.targetsKilled++;
     this.killsByType[archetype] = (this.killsByType[archetype] ?? 0) + 1;
     this.score += SCORE.pointsPerKill * scoreMultiplier;
+  }
+
+  /** A hit that got through i-frames. `lethal` = it took the last HP. */
+  addDamageTaken(source: string, amount: number, lethal: boolean): void {
+    this.damageTaken[source] = (this.damageTaken[source] ?? 0) + amount;
+    if (lethal) this.killedBy = source;
   }
 
   addProjectileHit(): void {

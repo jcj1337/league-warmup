@@ -6,6 +6,8 @@ declare global {
     __warmup: any;
     /** The live balance config module, exposed by src/main.ts. */
     __balance: any;
+    /** The local run log console helper (list / summary / clear), exposed by src/main.ts. */
+    __runs: any;
     /** Not exposed by the game; the hud suite falls back when it is absent. */
     __theme?: any;
   }

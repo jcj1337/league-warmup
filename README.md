@@ -70,6 +70,14 @@ score, kills by type, hits landed and W mark procs, Q accuracy and the raw mecha
 metrics. `R` restarts at
 Stage 1 Wave 1.
 
+**Run log.** Every finished run (death or completion; not a mid-run restart) is saved
+in this browser's local storage: stage and wave reached, run time, the growth setting
+it was played on, what dealt the killing blow, and the HP lost to each source (Pursuer,
+basic spit, Magus, edge fire). The end screen shows `KILLED BY`, `DAMAGE TAKEN` and a
+summary of your runs on the current growth setting (count, median and best stage). From
+the console: `__runs.summary()`, `__runs.list()`, and `__runs.clear()` to delete the
+log. It lives in [RunHistory.ts](src/game/RunHistory.ts); nothing leaves the machine.
+
 Later stages are harder, not faster.
 
 **The difficulty curve.** One threat level per stage, `T = 1.15^(stage − 1)` (+15% per

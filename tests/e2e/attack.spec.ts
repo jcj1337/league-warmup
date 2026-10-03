@@ -50,6 +50,15 @@ test('attack: ground move, direct attack + chase, windup/recovery, cancel, post-
 
   // --- 1. right-click ground moves --------------------------------------------
   section('1. right-click ground moves');
+  // Keep the click point clear: an enemy wandering past it would turn the
+  // right-click into an attack order instead of a ground move.
+  await page.evaluate(() => {
+    const g = window.__warmup.scene.getScene('GameScene');
+    g.director.enemies.forEach((e, i) => {
+      e.x = 1100; e.y = 160 + i * 90;
+      e.goalX = e.x; e.goalY = e.y; e.nextPlanAt = Number.POSITIVE_INFINITY;
+    });
+  });
   let s0 = await state();
   await rclick(320, 380);
   await page.waitForTimeout(400);
