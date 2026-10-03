@@ -18,9 +18,10 @@ test('pressure: wave sizes, staggered arrival + activation window, no premature 
     targets: window.__balance.TARGETS,
     playerRadius: window.__balance.PLAYER.radius,
   }));
-  const sizeOf = (w): number => (w.basic ?? 0) + (w.pursuer ?? 0) + (w.magus ?? 0);
+  // Every mob type counts, so a new mob never silently drops out of these totals.
+  const sizeOf = (w): number => Object.values(w).reduce((n: number, c) => n + ((c as number) ?? 0), 0) as number;
   const countTypes = (list) => list.reduce((acc, t) => { acc[t] = (acc[t] ?? 0) + 1; return acc; }, {});
-  const sameCounts = (got, want) => ['basic', 'pursuer', 'magus'].every((k) => (got[k] ?? 0) === (want[k] ?? 0));
+  const sameCounts = (got, want) => [...new Set([...Object.keys(got), ...Object.keys(want)])].every((k) => (got[k] ?? 0) === (want[k] ?? 0));
   const waitFor = (fn, arg: any = null, timeout = 5000) =>
     page.waitForFunction(fn, arg, { timeout }).then(() => true).catch(() => false);
 

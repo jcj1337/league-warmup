@@ -2,7 +2,8 @@
 
 Status: **implemented** 2026-10-03 with these decisions: the name stays **Sovereign**;
 Force of Will **can throw her basic slimes** (they land live, dazed 400ms); **no ultimate**
-(Q, W and E only); a regular mob, not a boss (at most one per wave, from Stage 9); and
+(Q, W and E only); a regular mob, not a boss (at most one per wave, from Stage 7 — moved up
+from the proposed 9 after playtesting); and
 **Pursuers made rarer** to make room (weight 2 → 1.5, max share 0.6 → 0.5). Your autos
 don't pop spheres, and Scatter doesn't knock you back. Dark Sphere's cooldown is 2.5s
 (not 3.5s) so she keeps building her board. See the README's Sovereign section.

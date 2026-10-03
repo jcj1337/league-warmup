@@ -266,10 +266,10 @@ Orbwalk loop: `T` (or `A` + click) → auto fires → right-click away → repea
 | Basic target | red slime with glowing eyes and a fanged snarl | 1 / 2 / 3 | always aggroed: walks toward you, then hovers 150–230px away inside your attack range, sidestepping around you. From Stage 2 it **spits** (below) |
 | Pursuer | larger purple slime with devil horns | basic + 1 | walks you down at 55% of your speed; melee swing for **25** (a quarter of your HP) after a 400ms telegraph. From Stage 4 it **dashes** (below) |
 | Magus | tall slate slime in a brass crest and mask, rune tablets floating at its sides | same as basic | artillery caster with a Xerath-style kit (below); holds 360–480px from you, backs off at 60% of your speed, never moves while casting |
-| Sovereign | indigo slime under a silver diadem, two dark orbs circling her head | 2 (3 from Stage 11) | sphere mage with a Syndra-style kit (below); holds 280–380px from you, at most one per wave, from Stage 9 |
+| Sovereign | indigo slime under a silver diadem, two dark orbs circling her head | 2 (3 from Stage 11) | sphere mage with a Syndra-style kit (below); holds 280–380px from you, at most one per wave, from Stage 7 |
 
 Pips follow each mob's `ENEMIES` pip ramp (see above). Pursuers first appear in
-Stage 2, the Magus in Stage 5, the Sovereign in Stage 9. A Pursuer's swing only lands if you are still in reach when it
+Stage 2, the Magus in Stage 5, the Sovereign in Stage 7. A Pursuer's swing only lands if you are still in reach when it
 resolves — walking or blinking out during the telegraph makes it miss. A Pursuer
 never starts a swing while you are stunned.
 
@@ -307,7 +307,7 @@ Lance line and the Eye reticle still show exactly where it will land.
 | --- | --- | --- |
 | Lance (Q) | rooted, it charges for 900ms while a dotted line tracks where you're heading; the line then **locks** as a red strip (60px wide) and lands 450ms later | 18 |
 | Eye (W) | rooted for 400ms while a reticle tracks where you're heading; then a red circle (radius 95) goes down there, landing after 700ms | 10 on the edge; **18 + 40% slow for 1s** if your centre is in the white sweet spot (radius 32) |
-| Orb (E) | a 300ms windup, then a visible white-gold orb | 8 + a **stun** of 250ms (point-blank) to 750ms (full range) |
+| Orb (E) | a 300ms windup, then a visible white-gold orb (520px/s, 420px range) | 8 + a **stun** of 250ms (point-blank) to 750ms (full range) |
 | Rite (R) | once per life, when it is the **last enemy left in the wave**: rooted, it calls three 70px circles onto you, 800ms apart | 15 each |
 
 Inside 300px it answers with the Orb first. Otherwise it picks at random among the

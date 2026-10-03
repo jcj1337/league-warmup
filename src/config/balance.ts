@@ -510,7 +510,7 @@ export const MAGUS = {
    * `triggerRange` it is the Magus's first answer to being dived.
    */
   orb: {
-    windupMs: 300, triggerRange: 300, speed: 650, radius: 12, range: 520,
+    windupMs: 300, triggerRange: 300, speed: 520, radius: 12, range: 420,
     damage: 8, stunMinMs: 250, stunMaxMs: 750, cooldownMs: 7000,
   },
   /**
@@ -661,7 +661,7 @@ export const DIFFICULTY = {
  * Bumped whenever tuning changes how hard a run is. The run log tags each run
  * with it, and its summary only compares runs from the same version.
  */
-export const BALANCE_VERSION = 7;
+export const BALANCE_VERSION = 8;
 
 /**
  * The player's level, League style: kills give XP (ENEMIES[id].xp) and each
@@ -742,7 +742,7 @@ export const ENEMIES = {
     xp: 3,
   },
   sovereign: {
-    name: 'Sovereign', cost: 2, unlockStage: 9, weight: 0.6, maxShare: 0.25,
+    name: 'Sovereign', cost: 2, unlockStage: 7, weight: 0.6, maxShare: 0.25,
     maxPerWave: { base: 1, k: 0, max: 1 },
     pips: { start: 2, every: 10, max: 3 },
     contactDamage: 6,

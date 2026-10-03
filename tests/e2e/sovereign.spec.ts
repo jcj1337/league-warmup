@@ -74,13 +74,14 @@ test('sovereign: unlock, Dark Sphere + cap + cleanup, Force of Will (sphere and 
 
   // === 1. Registry ==========================================================
   section('1. Registry');
-  const reg = await page.evaluate(() => {
+  const unlock = cfg.E.sovereign.unlockStage;
+  const reg = await page.evaluate((unlock) => {
     const d = window.__warmup.scene.getScene('GameScene').director;
     const count = (s) => d.describeStage(s - 1).waves.map((w) => w.sovereign);
-    return { s8: count(8), s9: count(9), s15: count(15) };
-  });
-  reg.s8.every((n) => n === 0) && reg.s9[0] === 1 && [...reg.s9, ...reg.s15].every((n) => n <= 1)
-    ? pass(`unlocks at Stage ${cfg.E.sovereign.unlockStage}: none before, exactly one in Wave 1 of Stage 9, never more than one per wave`)
+    return { before: count(unlock - 1), first: count(unlock), later: count(15) };
+  }, unlock);
+  unlock === 7 && reg.before.every((n) => n === 0) && reg.first[0] === 1 && [...reg.first, ...reg.later].every((n) => n <= 1)
+    ? pass(`unlocks at Stage ${unlock}: none before, exactly one in Wave 1 of Stage ${unlock}, never more than one per wave`)
     : fail(`sovereigns per wave: ${JSON.stringify(reg)}`);
   cfg.E.pursuer.weight === 1.5 && cfg.E.pursuer.maxShare === 0.5
     ? pass('Pursuers are rarer to make room for her (weight 1.5, share 0.5)')
