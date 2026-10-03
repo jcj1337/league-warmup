@@ -406,7 +406,7 @@ export class UIScene extends Phaser.Scene {
           `${result.targetsKilled}   (basic ${result.killsByType.basic ?? 0}, pursuer ${result.killsByType.pursuer ?? 0}, magus ${result.killsByType.magus ?? 0})`,
         ),
         row('HITS LANDED', `${result.hitsLanded}   (mark procs ${result.markProcs})`),
-        row('PROJECTILES HIT BY', `${result.projectileHitsTaken}`),
+        row('SCORE FROM', `kills ${result.scoreFrom.kills}  speed ${result.scoreFrom.speed}  hp ${result.scoreFrom.hp}`),
         row('Q ACCURACY', `${result.qHit}/${result.qFired}  (${accuracy}%)`),
         row('KILLED BY', result.killedBy ? sourceName(result.killedBy) : '-'),
         row('DAMAGE, FINAL STAGE', damageLine(result.stageDamage)),
@@ -435,10 +435,10 @@ function damageLine(taken: Record<string, number>): string {
   return parts.length ? parts.join(' ') : 'none';
 }
 
-/** "7 RUNS  MEDIAN S11  BEST S14". */
+/** "7 RUNS MED S11 BEST S14 HI 52340". */
 function runsLine(s: RunSummary): string {
   if (s.runs === 0) return 'not logged';
-  return `${s.runs} ${s.runs === 1 ? 'RUN' : 'RUNS'}  MEDIAN S${s.median}  BEST S${s.best}`;
+  return `${s.runs} ${s.runs === 1 ? 'RUN' : 'RUNS'} MED S${s.median} BEST S${s.best}${s.bestScore !== null ? ` HI ${s.bestScore}` : ''}`;
 }
 
 /** 65.34 → "1:05.3". Run time is a statistic, not a countdown. */

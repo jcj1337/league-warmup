@@ -210,7 +210,6 @@ if (state !== 'running' || paused) return      ← pause freezes everything belo
 dt = min(delta, 50) / 1000
 clock.advance(dt * 1000);  now = clock.now
 
-scoring.tickSurvival(dt)       +5 pts/sec
 player.tickStatus(now)         stun / slow clock; a stun that just ended replays its held order
 passive.update(now)            expire stacks
 cooldowns.update(now)          refresh "now"
@@ -804,9 +803,16 @@ radius, so tunnelling is possible on a badly stuttering frame.
 
 ## 12. Score, metrics, round flow
 
-**Score**: `1 × damage`, `100 × archetype scoreMultiplier` per kill, `5/second`
-survival (fractional carry) for as long as the run lasts. `projectileHitsTaken` is
-tracked but does not affect score. `killsByType` tallies per archetype.
+**Score** (`ScoreSystem`, `SCORE`) never pays for time alive. Every award is × the stage
+multiplier `1 + 0.25 (stage − 1)`, and is tallied in `scoreFrom { kills, speed, hp }`:
+- **kills** — `100 × archetype scoreMultiplier` per kill;
+- **speed** — on each wave clear (`WaveDirector.onWaveCleared`): `50 × enemies ×
+  speedFactor`, where par = the wave's last scheduled arrival + its 300ms window +
+  600ms per health pip, and `speedFactor` is 1 up to par, falling linearly to 0 at 2× par;
+- **hp** — on each stage clear, before the full heal: `10 × HP left`, ×1.5 if the stage
+  cost no damage (flawless).
+`projectileHitsTaken` is tracked but does not affect score. `killsByType` tallies per
+archetype. The run log stores each run's score; its summary carries `bestScore`.
 
 **`KitingMetrics`** — four event counters (`attacksStarted`, `attacksFired`,
 `attacksCancelled`, `attacksLanded`) and two per-frame accumulators:

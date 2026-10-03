@@ -16,7 +16,7 @@ import { KitingMetrics } from '../systems/KitingMetrics';
 import { ApmTracker } from '../systems/ApmTracker';
 import { GameClock } from '../systems/GameClock';
 import { PassiveSystem } from '../systems/PassiveSystem';
-import { WaveDirector, type WavePhase } from '../systems/WaveDirector';
+import { WaveDirector, type ClearedWave, type WavePhase } from '../systems/WaveDirector';
 import { AbilityCooldowns } from '../systems/AbilityCooldowns';
 import { BlinkSystem } from '../systems/BlinkSystem';
 import { CastSystem, type CastAbility, type CastPayload } from '../systems/CastSystem';
@@ -57,6 +57,8 @@ export interface RoundResult {
   wastedRecoveryMs: number;
   /** Kills broken down by enemy archetype. */
   killsByType: Record<string, number>;
+  /** Where the score came from: kills, wave speed bonuses, stage HP bonuses. */
+  scoreFrom: { kills: number; speed: number; hp: number };
   /** Damage taken per source over the run, and in the stage that killed you; the source of the killing blow. */
   damageTaken: Record<string, number>;
   stageDamage: Record<string, number>;
@@ -199,7 +201,10 @@ export class GameScene extends Phaser.Scene {
       this,
       this.clock,
       () => ({ x: this.player.x, y: this.player.y }),
-      { onStageCleared: () => this.onStageCleared() },
+      {
+        onWaveCleared: (wave) => this.onWaveCleared(wave),
+        onStageCleared: () => this.onStageCleared(),
+      },
     );
     this.enemies = this.director.enemies;
 
@@ -491,7 +496,6 @@ export class GameScene extends Phaser.Scene {
     this.clock.advance(dt * 1000);
     const now = this.clock.now;
 
-    this.scoring.tickSurvival(dt);
     this.player.tickStatus(now);
     // A stun just wore off: replay the order issued during it.
     if (this.stunBuffered && !this.player.isStunned) {
@@ -617,7 +621,7 @@ export class GameScene extends Phaser.Scene {
    * Pursuer is worth more), the wave's bookkeeping, and the kill's XP.
    */
   private onKill(target: Enemy): void {
-    this.scoring.addKill(target.archetype, target.scoreMultiplier);
+    this.scoring.addKill(target.archetype, target.scoreMultiplier, this.director.stage);
     this.director.onEnemyKilled(target, this.clock.now);
     if (this.progression.addXp(ENEMIES[target.archetype].xp, this.clock.now) > 0) this.onLevelUp();
   }
@@ -667,13 +671,30 @@ export class GameScene extends Phaser.Scene {
     this.onPlayerHit(Math.round(damage * mult), kind === 'contact' ? `${source}Contact` : source);
   }
 
-  /** A stage was cleared: back to full HP (DIFFICULTY.stageClearHeal) before the next one. */
+  /** A wave was cleared: its speed bonus (SCORE.waveClear), shown over the slime when earned. */
+  private onWaveCleared(wave: ClearedWave): void {
+    const points = this.scoring.addWaveClear(wave.enemies, wave.elapsedMs, wave.parMs, wave.stage);
+    if (points > 0) this.scorePopup(`+${points} SPEED`, 2);
+  }
+
+  /**
+   * A stage was cleared: the HP bonus for what you finished it with (before
+   * the heal), then back to full HP (DIFFICULTY.stageClearHeal) for the next.
+   */
   private onStageCleared(): void {
+    const { points, flawless } = this.scoring.addStageClear(this.player.hp, this.director.stage);
+    if (points > 0) this.scorePopup(`+${points} ${flawless ? 'FLAWLESS' : 'HP'}`, 1);
     this.scoring.startStage();
     const healed = this.player.heal(Math.round(this.player.maxHp * DIFFICULTY.stageClearHeal));
     if (healed > 0) {
       this.fx.popup(this.player.x, this.player.y - this.player.radius - 18, `+${healed}`, THEME.ui.good, 800, 26);
     }
+  }
+
+  /** A score bonus over the slime; `row` stacks it above the heal popup. */
+  private scorePopup(text: string, row: number): void {
+    const { x, y, radius } = this.player;
+    this.fx.popup(x, y - radius - 18 - row * 24, text, THEME.ui.accent, 1100, 26);
   }
 
   /** Every hit on the player lands here, tagged with its source for the run log. */
@@ -732,6 +753,7 @@ export class GameScene extends Phaser.Scene {
       idleInRangeMs: Math.round(this.metrics.idleInRangeMs),
       wastedRecoveryMs: Math.round(this.metrics.wastedRecoveryMs),
       killsByType: { ...this.scoring.killsByType },
+      scoreFrom: { ...this.scoring.scoreFrom },
       damageTaken: { ...this.scoring.damageTaken },
       stageDamage: { ...this.scoring.stageDamage },
       killedBy: this.scoring.killedBy,
@@ -749,6 +771,7 @@ export class GameScene extends Phaser.Scene {
       growth: DIFFICULTY.growth,
       balanceVersion: BALANCE_VERSION,
       level: this.result.level,
+      score: this.result.score,
       killedBy: this.result.killedBy,
       damageTaken: this.result.damageTaken,
       stageDamage: this.result.stageDamage,

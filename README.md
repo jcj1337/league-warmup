@@ -89,13 +89,26 @@ version), waves cleared, run time, score, kills by type, hits landed and W mark 
 accuracy, what killed you, the damage you took **in that final stage** by source, and
 the raw mechanical metrics. `R` restarts at Stage 1 Wave 1.
 
+**Score** rewards playing well, never time alive — kiting one enemy forever earns
+nothing. Every award is × a stage multiplier (×1 at Stage 1, ×2 at Stage 5, ×3.25 at 10):
+- **Kills:** 100 × the mob's multiplier (Pursuer ×2.25, Magus ×1.5).
+- **Speed:** clearing a wave pays 50 per enemy in it when you finish within its **par
+  time** — the time its enemies take to arrive plus 0.6s per health pip — sliding to
+  nothing at twice par.
+- **HP:** clearing a stage pays 10 per HP you have left (before the full heal), +50% if
+  the stage cost you no damage at all (**flawless**).
+
+Bonuses pop up over your slime (`+300 SPEED`, `+870 HP`, `+1500 FLAWLESS`), and the end
+screen breaks your score down into kills, speed and HP. Tuned in `SCORE` in
+[balance.ts](src/config/balance.ts).
+
 **Run log.** Every finished run (not a mid-run restart) is saved in this browser's local
 storage: stage, wave and level reached, run time, the growth setting and
 `BALANCE_VERSION` it was played on, what dealt the killing blow, and the HP lost to each
 source over the run and in the final stage (Pursuer, basic spit, Magus, edge fire, and
 each mob's body contact). The end screen shows `KILLED BY`, `DAMAGE, FINAL STAGE` and a
 summary of your runs on the current growth setting and balance version (count, median and
-best stage); runs from older balance versions are kept but left out. From the console:
+best stage, high score); runs from older balance versions are kept but left out. From the console:
 `__runs.summary()`, `__runs.list()`, and `__runs.clear()` to delete the log. It lives in
 [RunHistory.ts](src/game/RunHistory.ts); nothing leaves the machine.
 

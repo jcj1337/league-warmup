@@ -6,6 +6,7 @@ import {
   MAGUS,
   PURSUER,
   RUN,
+  SCORE,
   STAGES,
   STAGE_RAMPS,
   TARGETS,
@@ -73,6 +74,17 @@ interface PendingArrival {
 
 /** What a wave actually fields, per mob. */
 export type ScaledRoster = Record<EnemyArchetype, number>;
+
+/** A wave just cleared, for scoring its speed. */
+export interface ClearedWave {
+  stage: number;
+  wave: number;
+  enemies: number;
+  /** GameClock time from the wave's start to its last kill. */
+  elapsedMs: number;
+  /** Its par time: scheduled arrivals + SCORE.waveClear.parMsPerPip per health pip. */
+  parMs: number;
+}
 
 /** A roster as a flat list of mobs, in registry order. */
 function expandRoster(roster: WaveRoster): EnemyArchetype[] {
@@ -147,6 +159,10 @@ export class WaveDirector implements EnemyFirePressure {
   private currentPhase: WavePhase = 'wave';
   /** GameClock time the current intermission ends. Only meaningful in 'intermission'. */
   private intermissionEndsAt = 0;
+  /** The current wave's start, size and par time (see ClearedWave). */
+  private waveStartedAt = 0;
+  private waveEnemies = 0;
+  private waveParMs = 0;
   /** Seeds generated rosters: fixed for the run, so a generated wave always fields the same mobs. */
   private readonly seed = Math.floor(Math.random() * 0x7fffffff);
   private readonly generated = new Map<string, ScaledRoster>();
@@ -155,7 +171,11 @@ export class WaveDirector implements EnemyFirePressure {
     private readonly scene: Phaser.Scene,
     private readonly clock: GameClock,
     private readonly playerPos: () => { x: number; y: number },
-    private readonly callbacks: { onStageCleared?: () => void } = {},
+    private readonly callbacks: {
+      /** A wave was cleared (before onStageCleared, when it was the stage's last). */
+      onWaveCleared?: (wave: ClearedWave) => void;
+      onStageCleared?: () => void;
+    } = {},
   ) {
     validateConfig();
     this.spawnWave();
@@ -409,6 +429,13 @@ export class WaveDirector implements EnemyFirePressure {
     if (this.currentPhase !== 'wave' || !this.roster.includes(enemy)) return;
     if (!this.isRosterExhausted) return;
 
+    this.callbacks.onWaveCleared?.({
+      stage: this.stage,
+      wave: this.wave,
+      enemies: this.waveEnemies,
+      elapsedMs: nowMs - this.waveStartedAt,
+      parMs: this.waveParMs,
+    });
     if (this.isLastWaveOfStage) this.callbacks.onStageCleared?.();
     this.currentPhase = 'intermission';
     this.intermissionEndsAt =
@@ -468,6 +495,13 @@ export class WaveDirector implements EnemyFirePressure {
       if (i > 0 && inPack === 0) packStart += gap * packSize * Phaser.Math.FloatBetween(1 - jitter, 1 + jitter);
       this.pending.push({ archetype, startsAt: packStart + inPack * RUN.spawn.packMemberGapMs, pack });
     });
+
+    // Par: the last scheduled arrival, its arrival window, then time to take every pip.
+    const lastArrival = this.pending.length ? this.pending[this.pending.length - 1].startsAt : now;
+    const pips = order.reduce((n, id) => n + this.pipsFor(id), 0);
+    this.waveStartedAt = now;
+    this.waveEnemies = order.length;
+    this.waveParMs = lastArrival - now + RUN.spawn.manifestMs + pips * SCORE.waveClear.parMsPerPip;
 
     this.currentPhase = 'wave';
     this.beginDueArrivals(now);

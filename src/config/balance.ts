@@ -723,9 +723,28 @@ export const STAGE_RAMPS = {
   enemyFire: [0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.85, 1],
 };
 
+/**
+ * Score rewards doing things well — never time alive, so kiting one enemy
+ * forever earns nothing. See ScoreSystem.
+ */
 export const SCORE = {
   /** Base kill value; each archetype multiplies this by its scoreMultiplier. */
   pointsPerKill: 100,
-  /** Small trickle just for staying alive; keeps a clean 60s worth something. */
-  pointsPerSecondAlive: 5,
-} as const;
+  /** Every point is worth more on later stages: × (1 + this × (stage − 1)). */
+  stageMultiplierPerStage: 0.25,
+  /** Speed bonus for clearing a wave quickly. */
+  waveClear: {
+    /** Full bonus per enemy in the wave. */
+    pointsPerEnemy: 50,
+    /** A wave's par time: its scheduled arrivals, plus this per health pip in it. */
+    parMsPerPip: 600,
+    /** Full bonus at or under par, sliding to nothing at par × this. */
+    zeroAtParMultiple: 2,
+  },
+  /** HP bonus for finishing a stage healthy (counted before the full heal). */
+  stageClear: {
+    pointsPerHp: 10,
+    /** Extra share of the HP bonus when the stage cost you no damage at all. */
+    flawlessBonus: 0.5,
+  },
+};

@@ -72,7 +72,7 @@ test('runs: damage by source, killing blow, local run log, end-screen summary, c
     && logged.wave === r.waveReached && logged.growth === r.growth && logged.damageTaken.pursuer === 10 && !Number.isNaN(Date.parse(logged.at))
     ? pass(`the run is saved locally: ${JSON.stringify(logged)}`)
     : fail(`log: ${JSON.stringify(death.runs)}`);
-  /KILLED BY\s+magus/.test(death.screen) && /DAMAGE, FINAL STAGE\s+pursuer 10 fire 8 magus 5 spit 4/.test(death.screen) && /YOUR RUNS \(V\d+ G[\d.]+\)\s+1 RUN\s+MEDIAN S1\s+BEST S1/.test(death.screen)
+  /KILLED BY\s+magus/.test(death.screen) && /DAMAGE, FINAL STAGE\s+pursuer 10 fire 8 magus 5 spit 4/.test(death.screen) && /YOUR RUNS \(V\d+ G[\d.]+\)\s+1 RUN MED S1 BEST S1/.test(death.screen)
     ? pass('the end screen shows the killer, the damage breakdown and your logged runs')
     : fail(`end screen:\n${death.screen}`);
 

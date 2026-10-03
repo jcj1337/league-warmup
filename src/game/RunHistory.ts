@@ -25,6 +25,8 @@ export interface RunRecord {
   balanceVersion?: number;
   /** The player's level when the run ended (absent before levels existed). */
   level?: number;
+  /** Final score (absent on runs logged before it was recorded). */
+  score?: number;
   /** Source of the hit that took the last HP ('pursuer', 'basic', 'magus', 'edgeFire'), or null. */
   killedBy: string | null;
   /** Damage actually taken over the run, per source. */
@@ -40,6 +42,8 @@ export interface RunSummary {
   /** Median stage reached; null with no runs. */
   median: number | null;
   best: number | null;
+  /** Highest score among these runs; null with none recorded. */
+  bestScore: number | null;
   /** Stages reached by the most recent runs, oldest first. */
   recent: number[];
   /** How often each source dealt the killing blow. */
@@ -105,6 +109,7 @@ export const RunHistory = {
       runs: runs.length,
       median,
       best: stages.length ? stages[stages.length - 1] : null,
+      bestScore: runs.some((r) => r.score !== undefined) ? Math.max(...runs.map((r) => r.score ?? 0)) : null,
       recent: runs.slice(-recentCount).map((r) => r.stage),
       killedBy,
     };
