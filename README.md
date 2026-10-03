@@ -38,11 +38,23 @@ report). Without Edge, run `npx playwright install chromium` and set `PW_CHANNEL
 | `E` | Blink toward the cursor, then a homing bolt |
 | `F` | Flash: instant summoner blink, no damage |
 | `S` | Stop: freeze in place, drop all orders |
+| `Z` | Chat feed: light / dark |
 | `Esc` | Back out of armed A-targeting, else open/close the pause menu |
 | `R` / `Space` | Restart from the end screen |
 
-Keys live in `KEYBINDS` in [balance.ts](src/config/balance.ts); `InputController` is
-the only thing that reads them.
+**Rebinding.** Every key above except `Esc` and the restart keys can be rebound from the
+pause menu: click a row, press the new key (`Esc` backs out). Picking a key that's
+already in use **swaps** the two, so nothing is left unbound; **Reset keys** restores the
+defaults. Keys are physical keys, so Shift and Caps Lock don't change them, and Caps
+Lock, Tab, Shift, digits and so on are all bindable. The ability bar shows your keys.
+Bindings are kept for **this browser tab's session** (they survive a reload, not closing
+the tab) until profiles exist. On macOS, the browser only reports Caps Lock when it
+switches on, so a Caps Lock bind fires every other press there; it's fine on Windows.
+
+Defaults live in `KEYBINDS` in [balance.ts](src/config/balance.ts); the player's
+bindings in [Keybinds.ts](src/game/Keybinds.ts). `InputController` is the only gameplay
+reader. From the console: `__keybinds.all()`, `__keybinds.set('flash', 'CapsLock')`,
+`__keybinds.reset()`.
 
 ## The run
 
@@ -351,7 +363,8 @@ clock. Nothing fast-forwards on resume.
 
 The menu has Resume, Restart Round, and two settings that write straight into the
 `DEBUG` config: **Attack Range Indicator** (contextual / always / off) and **Damage
-Numbers** (the "-1" pip-loss pops). It also lists the full control reference.
+Numbers** (the "-1" pip-loss pops). Below them are the controls, with every key
+rebindable (see [Controls](#controls)).
 
 ## Reading the field
 

@@ -141,29 +141,35 @@ export function attackReach(targetRadius: number, playerRadius: number): number 
 }
 
 /**
- * Keybinds, normalized to uppercase key names ('A', 'S', 'Q', 'ESCAPE', 'SPACE').
- * InputController is the only thing that reads these, so rebinding later means
- * changing this object — not hunting through the scenes.
+ * DEFAULT keybinds, as physical keys (`KeyboardEvent.code`: 'KeyQ', 'CapsLock',
+ * 'Space'), so Shift, Caps Lock and the keyboard layout never change what a key
+ * does. The player can rebind every action but `cancel` and `restart` from the
+ * pause menu; their bindings live in `Keybinds` (src/game/Keybinds.ts), which
+ * InputController reads.
  */
 export const KEYBINDS = {
   /** A: arm attack-move targeting, then left-click a location. */
-  attackMove: ['A'],
+  attackMove: 'KeyA',
   /**
    * T: League's "Player Attack Move Click" — one press issues the same attack
    * move command at the cursor, with no second click.
    */
-  attackMoveClick: ['T'],
-  stop: ['S'],
+  attackMoveClick: 'KeyT',
+  stop: 'KeyS',
   /** Q: quick-cast, fires instantly toward the cursor. */
-  skillshotQ: ['Q'],
+  skillshotQ: 'KeyQ',
   /** W: quick-cast mark skillshot. */
-  skillshotW: ['W'],
+  skillshotW: 'KeyW',
   /** E: quick-cast blink toward the cursor, then a homing bolt. */
-  blinkE: ['E'],
+  blinkE: 'KeyE',
   /** F: summoner-style blink. */
-  flash: ['F'],
-  cancel: ['ESCAPE'],
-  restart: ['R', 'SPACE'],
+  flash: 'KeyF',
+  /** Z: flip the chat feed between light and dark mode. */
+  chatMode: 'KeyZ',
+  /** Not rebindable: backs out of attack-move targeting, a rebind in progress, or opens / closes the menu. */
+  cancel: 'Escape',
+  /** Not rebindable: start a new run from the end screen. */
+  restart: ['KeyR', 'Space'],
 };
 
 /**

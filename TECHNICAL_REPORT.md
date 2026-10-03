@@ -114,7 +114,7 @@ object, and an event-wired HUD kept breaking across restarts).
   owns W-mark detonation (§8) and the round lifecycle (§12). Wave/stage logic lives in
   the `WaveDirector`, not here.
 - **`UIScene.ts`** — HUD (run time, stage / wave / enemies, transition banners),
-  ability bar, passive display, pause menu, end screen. Holds no gameplay state;
+  ability bar, passive display, pause menu (with key rebinding), end screen. Holds no gameplay state;
   polls `getHudState()` / `getRoundResult()` every frame.
 
 ### Entities
@@ -268,9 +268,30 @@ scene.input.on('pointerdown', this.onPointerDown, this);
 scene.input.keyboard?.on('keydown', this.onKeyDown, this);
 ```
 
-One `keydown` listener plus the `KEYBINDS` table — that is what makes rebinding a
-config change. Keys are normalised (`' '` → `SPACE`, else `toUpperCase()`).
+One `keydown` listener reading physical keys (`event.code`: `KeyQ`, `CapsLock`) and
+looking each up in `Keybinds.actionFor(code)`. A bound key gets `preventDefault()` (no
+tab focus, page scroll or browser menu). `Escape` (`KEYBINDS.cancel`) and the restart
+keys are fixed; everything else is rebindable.
 Keyboard-issued commands read `scene.input.activePointer.worldX/Y`.
+
+### Rebinding (`src/game/Keybinds.ts`)
+
+A module singleton, `Keybinds`: one physical key per action (`BINDABLE`: Q, W, E,
+Flash, attack-move click, attack-move, stop, chat mode), defaults from `KEYBINDS`,
+the player's changes on top.
+
+- `set(action, code)` swaps with whichever action held that key, so no action is
+  ever unbound; `Escape` is refused. `reset()` restores the defaults.
+- `onChange` listeners: the ability bar relabels (`AbilityBar.setKeys`; names longer
+  than the slot allows drop to the small font) and the pause menu rows refresh.
+- `captureNext(onKey, onCancel)` puts a **capture-phase** `keydown` listener on
+  `window` that stops the event before Phaser (or the raw APM listener) sees it,
+  so the key you're binding never also casts, and `Escape` cancels the rebind
+  instead of closing the menu. Closing the menu cancels a pending capture.
+- Persistence: `sessionStorage['warmup.keybinds.v1']`, guarded like `RunHistory`.
+  Saved bindings that put two actions on one key are discarded in favour of the
+  defaults. Swapping `load` / `save` for a profile store is the planned upgrade.
+- Console: `__keybinds`.
 
 ### Command surface
 
@@ -1026,8 +1047,9 @@ hitInvulnerabilityMs 250.
 `DEBUG`: `attackRangeDisplay` `'contextual'`, `showAttackState`,
 `showCancelFeedback`, `showTargetMarker`, `showDamageNumbers` — all overlay only, the
 first three editable from the pause menu.
-`KEYBINDS`: A, T, S, Q, W, E, F, ESCAPE, R/SPACE — arrays, so multiple bindings per
-action already work.
+`KEYBINDS` (defaults, physical key codes): `KeyA`, `KeyT`, `KeyS`, `KeyQ`, `KeyW`,
+`KeyE`, `KeyF`, `KeyZ` (chat mode), `Escape` (fixed), `KeyR` / `Space` (restart,
+fixed). The player's bindings live in `Keybinds` (§4).
 
 ---
 
@@ -1191,9 +1213,6 @@ windows come free via `beginCastOrResolve`.
 **More stages or waves.** Edit `STAGES` to change the hand-written intro (any stage past
 it is generated), or `ENDLESS.wavesPerStage` for generated stages. `validateConfig()`
 rejects empty stages and malformed registry entries at startup.
-
-**Configurable keybinds.** Already 90% there: `KEYBINDS` is the only source,
-`InputController` the only reader, every action takes an array.
 
 **Drill types / persistence.** `RoundResult` is a flat serialisable snapshot built in
 one place; the stage table and `ScoreSystem` are independent enough to swap per

@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { Keybinds } from '../Keybinds';
 import { RunHistory, type RunSummary } from '../RunHistory';
 import { ARENA, DEBUG, BALANCE_VERSION } from '../../config/balance';
 import { THEME } from '../../config/theme';
@@ -105,10 +106,10 @@ export class UIScene extends Phaser.Scene {
 
     // ---- bottom-left, above vitals: system messages ------------------------
     this.chat = new ChatBox(this);
-    // Z toggles the feed's light/dark mode, once per physical press. Raw-input
-    // APM counts the press on its own.
-    this.input.keyboard?.on('keydown-Z', (event: KeyboardEvent) => {
-      if (!event.repeat) this.chat.toggleMode();
+    // Z (rebindable) toggles the feed's light/dark mode, once per physical
+    // press. Raw-input APM counts the press on its own.
+    this.input.keyboard?.on('keydown', (event: KeyboardEvent) => {
+      if (!event.repeat && event.code === Keybinds.code('chatMode')) this.chat.toggleMode();
     });
 
     // Pending-command banner, sat just above the ability bar where the eyes already are.
@@ -122,12 +123,15 @@ export class UIScene extends Phaser.Scene {
       .setDepth(101);
 
     // ---- bottom-centre: ability bar + summoner slot ----------------------
+    const slotKeys = () => [Keybinds.label('skillshotQ'), Keybinds.label('skillshotW'), Keybinds.label('blinkE'), Keybinds.label('flash')];
+    const [qKey, wKey, eKey, fKey] = slotKeys();
     this.abilityBar = new AbilityBar(this, [
-      { key: 'Q', icon: 'q' },
-      { key: 'W', icon: 'w' },
-      { key: 'E', icon: 'e' },
-      { key: 'F', icon: 'flash', summoner: true },
+      { key: qKey, icon: 'q' },
+      { key: wKey, icon: 'w' },
+      { key: eKey, icon: 'e' },
+      { key: fKey, icon: 'flash', summoner: true },
     ]);
+    Keybinds.onChange(() => this.abilityBar.setKeys(slotKeys()));
 
     // Passive gems sit just above the bar.
     const slotTop = ARENA.height - THEME.ability.bottomMargin - THEME.ability.slotSize;
@@ -188,16 +192,10 @@ export class UIScene extends Phaser.Scene {
           },
         },
       ],
+      // Mouse controls are fixed; every key below them is rebindable in the menu.
       [
-        'RMB ground | move',
-        'RMB enemy | attack that enemy',
-        'T | attack-move at cursor',
-        'A + LMB | attack-move at a point',
-        'S | stop',
-        'Q | damage skillshot',
-        'W | mark skillshot',
-        'E | blink + homing bolt',
-        'F | flash (summoner)',
+        'RMB ground | Move',
+        'RMB enemy | Attack that enemy',
       ],
     );
   }

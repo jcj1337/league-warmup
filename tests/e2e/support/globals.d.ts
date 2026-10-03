@@ -8,6 +8,8 @@ declare global {
     __balance: any;
     /** The local run log console helper (list / summary / clear), exposed by src/main.ts. */
     __runs: any;
+    /** The live key bindings (code / label / set / reset / all), exposed by src/main.ts. */
+    __keybinds: any;
     /** Not exposed by the game; the hud suite falls back when it is absent. */
     __theme?: any;
   }

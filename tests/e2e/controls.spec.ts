@@ -165,7 +165,7 @@ test('controls: Q quick-cast, T attack-move-click, targeting modes, T orbwalk, T
 
   // === T: attack move click ===================================================
   section('T: attack move click');
-  cfg.keysT.includes('T') ? pass('T is bound to attack-move-click') : fail(`T binding: ${cfg.keysT}`);
+  cfg.keysT === 'KeyT' ? pass('T is bound to attack-move-click') : fail(`T binding: ${cfg.keysT}`);
 
   // T with an enemy already in range -> immediate windup, no click.
   await setup([{ x: 800, y: 360 }]);          // 160px away, inside 260 range

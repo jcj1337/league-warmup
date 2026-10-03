@@ -60,7 +60,7 @@ test('cast: Q/W/E cast windows, committed aim, buffered orders, lockout, Flash, 
         else res(out);
       };
       // Fire the key on the next frame so t0 is genuinely pre-cast.
-      window.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true }));
+      window.dispatchEvent(new KeyboardEvent('keydown', { key, code: 'Key' + key.toUpperCase(), bubbles: true }));
       tick();
     }), { key, ms });
 
@@ -133,7 +133,7 @@ test('cast: Q/W/E cast windows, committed aim, buffered orders, lockout, Flash, 
   await page.mouse.move(1100, 360);
   const wCdCheck = await page.evaluate((wCd) => new Promise<any>((res) => {
     const g = window.__warmup.scene.getScene('GameScene');
-    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'w', bubbles: true }));
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'w', code: 'KeyW', bubbles: true }));
     requestAnimationFrame(() => res({ cd: g.cooldowns.remainingMs('w'), casting: g.cast.isCasting, full: wCd }));
   }), cfg.wCd);
   wCdCheck.casting && wCdCheck.cd > cfg.wCd - 120
@@ -146,7 +146,7 @@ test('cast: Q/W/E cast windows, committed aim, buffered orders, lockout, Flash, 
   await page.mouse.move(1100, 360);            // aim right
   await page.waitForTimeout(60);
   await page.evaluate(() => {
-    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'w', bubbles: true }));
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'w', code: 'KeyW', bubbles: true }));
   });
   await page.mouse.move(640, 60);              // yank the mouse up mid-cast
   await page.waitForFunction(() => window.__warmup.scene.getScene('GameScene').skillshot.missiles.length > 0, null, { timeout: 2000 });
@@ -204,7 +204,7 @@ test('cast: Q/W/E cast windows, committed aim, buffered orders, lockout, Flash, 
     const out = { movedDuringCast: false, castCompleted: false, movingAfter: false, missiles: 0 };
     const startX = g.player.x;
 
-    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'w', bubbles: true }));
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'w', code: 'KeyW', bubbles: true }));
 
     // Issue a move order 80ms into the cast, via the real command surface.
     let issued = false;
@@ -251,7 +251,7 @@ test('cast: Q/W/E cast windows, committed aim, buffered orders, lockout, Flash, 
       };
       probe.record = () => probe.castingAtInput.push(g.cast.isCasting);
       (window as any).__castProbe = probe;
-      window.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true }));
+      window.dispatchEvent(new KeyboardEvent('keydown', { key, code: 'Key' + key.toUpperCase(), bubbles: true }));
       window.addEventListener('pointerdown', probe.record, true);
       window.addEventListener('keydown', probe.record, true);
       const tick = () => {
@@ -360,12 +360,12 @@ test('cast: Q/W/E cast windows, committed aim, buffered orders, lockout, Flash, 
   await page.waitForTimeout(60);
   const lockout = await page.evaluate(() => new Promise<any>((res) => {
     const g = window.__warmup.scene.getScene('GameScene');
-    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'e', bubbles: true }));
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'e', code: 'KeyE', bubbles: true }));
     requestAnimationFrame(() => {
       const during = { casting: g.cast.isCasting, ability: g.cast.castingAbility };
       // Spam every other ability mid-cast.
       for (const k of ['q', 'w', 'e', 'f']) {
-        window.dispatchEvent(new KeyboardEvent('keydown', { key: k, bubbles: true }));
+        window.dispatchEvent(new KeyboardEvent('keydown', { key: k, code: 'Key' + k.toUpperCase(), bubbles: true }));
       }
       requestAnimationFrame(() => {
         res({
@@ -392,7 +392,7 @@ test('cast: Q/W/E cast windows, committed aim, buffered orders, lockout, Flash, 
   const flashTiming = await page.evaluate(() => new Promise<any>((res) => {
     const g = window.__warmup.scene.getScene('GameScene');
     const startX = g.player.x;
-    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'f', bubbles: true }));
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'f', code: 'KeyF', bubbles: true }));
     requestAnimationFrame(() => res({ moved: Math.abs(g.player.x - startX), casting: g.cast.isCasting }));
   }));
   flashTiming.moved > 100 && !flashTiming.casting
@@ -405,7 +405,7 @@ test('cast: Q/W/E cast windows, committed aim, buffered orders, lockout, Flash, 
   await page.mouse.click(760, 360, { button: 'right' });
   await page.waitForFunction(() => window.__warmup.scene.getScene('GameScene').attacks.state === 'windup', null, { timeout: 4000 });
   await page.mouse.move(1100, 360);
-  await page.evaluate(() => window.dispatchEvent(new KeyboardEvent('keydown', { key: 'w', bubbles: true })));
+  await page.evaluate(() => window.dispatchEvent(new KeyboardEvent('keydown', { key: 'w', code: 'KeyW', bubbles: true })));
   await page.waitForTimeout(80);
   const autoCancel = await page.evaluate(() => {
     const g = window.__warmup.scene.getScene('GameScene');
@@ -423,7 +423,7 @@ test('cast: Q/W/E cast windows, committed aim, buffered orders, lockout, Flash, 
   // is the real question: does a committed auto still resolve through a cast?
   const hpBeforeE = await page.evaluate(() => window.__warmup.scene.getScene('GameScene').director.enemies[0].hp);
   await page.mouse.move(1100, 360);
-  await page.evaluate(() => window.dispatchEvent(new KeyboardEvent('keydown', { key: 'e', bubbles: true })));
+  await page.evaluate(() => window.dispatchEvent(new KeyboardEvent('keydown', { key: 'e', code: 'KeyE', bubbles: true })));
   const castingNow = await page.evaluate(() => window.__warmup.scene.getScene('GameScene').cast.isCasting);
   await page.waitForTimeout(500);
   const hpAfterE = await page.evaluate(() => window.__warmup.scene.getScene('GameScene').director.enemies[0].hp);
@@ -436,7 +436,7 @@ test('cast: Q/W/E cast windows, committed aim, buffered orders, lockout, Flash, 
   await setup([{ type: 'basic', x: 200, y: 120 }]);
   await page.mouse.move(900, 360);
   await page.waitForTimeout(60);
-  await page.evaluate(() => window.dispatchEvent(new KeyboardEvent('keydown', { key: 'e', bubbles: true })));
+  await page.evaluate(() => window.dispatchEvent(new KeyboardEvent('keydown', { key: 'e', code: 'KeyE', bubbles: true })));
   await page.waitForTimeout(110);
   await page.keyboard.press('Escape');
   await page.waitForTimeout(60);
@@ -469,7 +469,7 @@ test('cast: Q/W/E cast windows, committed aim, buffered orders, lockout, Flash, 
   await setup();
   await page.mouse.move(1100, 360);
   await page.waitForTimeout(60);
-  await page.evaluate(() => window.dispatchEvent(new KeyboardEvent('keydown', { key: 'w', bubbles: true })));
+  await page.evaluate(() => window.dispatchEvent(new KeyboardEvent('keydown', { key: 'w', code: 'KeyW', bubbles: true })));
   await page.waitForTimeout(90);
   const hudCast = await page.evaluate(() => {
     const g = window.__warmup.scene.getScene('GameScene');

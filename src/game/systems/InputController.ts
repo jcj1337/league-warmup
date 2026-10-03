@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { KEYBINDS } from '../../config/balance';
 import type { Enemy } from '../entities/Enemy';
+import { Keybinds } from '../Keybinds';
 
 /**
  * Everything the input layer is allowed to ask the game to do. GameScene
@@ -58,7 +59,9 @@ export interface CommandHandler {
  *     timing, cancellation and metrics are identical by construction.
  *   - Q is quick-cast: it fires at the cursor the moment the key goes down.
  *
- * Adding W/E/R or Flash later means a case here plus a binding in KEYBINDS.
+ * Keys are physical (`event.code`) and looked up in `Keybinds`, so a rebind in
+ * the pause menu applies on the next press. Adding R later means a case here,
+ * a default in KEYBINDS and an entry in BINDABLE.
  */
 export class InputController {
   /** True while waiting for the A-click to land. */
@@ -142,9 +145,9 @@ export class InputController {
   }
 
   private onKeyDown(event: KeyboardEvent): void {
-    const key = normalizeKey(event.key);
+    const code = event.code;
 
-    if (KEYBINDS.restart.includes(key) && !this.cmd.isRoundRunning()) {
+    if (KEYBINDS.restart.includes(code) && !this.cmd.isRoundRunning()) {
       this.cmd.restartRound();
       return;
     }
@@ -152,7 +155,7 @@ export class InputController {
 
     // Escape is contextual: it backs out of armed attack-move targeting first,
     // and only opens/closes the pause menu when there is nothing to back out of.
-    if (KEYBINDS.cancel.includes(key)) {
+    if (code === KEYBINDS.cancel) {
       if (this.attackMovePending) {
         this.cancelPending();
       } else {
@@ -164,13 +167,19 @@ export class InputController {
     // Everything below is a gameplay command, so it stops at the pause menu.
     if (!this.cmd.acceptsGameplayInput()) return;
 
-    if (KEYBINDS.attackMove.includes(key)) {
+    const action = Keybinds.actionFor(code);
+    // The chat toggle is UIScene's; anything unbound is ignored.
+    if (!action || action === 'chatMode') return;
+    // A bound key belongs to the game: no tab focus, page scroll or browser menu.
+    event.preventDefault();
+
+    if (action === 'attackMove') {
       // A toggles targeting mode: pressing it again backs out.
       this.attackMovePending = !this.attackMovePending;
       return;
     }
 
-    if (KEYBINDS.attackMoveClick.includes(key)) {
+    if (action === 'attackMoveClick') {
       // T: the exact same command A + left-click produces, issued straight at
       // the cursor with no targeting mode and no second input. The range hint
       // flag is the only difference, and it is cosmetic.
@@ -180,7 +189,7 @@ export class InputController {
       return;
     }
 
-    if (KEYBINDS.stop.includes(key)) {
+    if (action === 'stop') {
       this.cancelPending();
       this.cmd.commandStop();
       return;
@@ -190,22 +199,22 @@ export class InputController {
     // cursor, are no-ops on cooldown, and never disturb a pending attack move.
     const { x, y } = this.cursor();
 
-    if (KEYBINDS.skillshotQ.includes(key)) {
+    if (action === 'skillshotQ') {
       this.cmd.castSkillshot(x, y);
       return;
     }
 
-    if (KEYBINDS.skillshotW.includes(key)) {
+    if (action === 'skillshotW') {
       this.cmd.castMark(x, y);
       return;
     }
 
-    if (KEYBINDS.blinkE.includes(key)) {
+    if (action === 'blinkE') {
       this.cmd.castBlink(x, y);
       return;
     }
 
-    if (KEYBINDS.flash.includes(key)) {
+    if (action === 'flash') {
       this.cmd.castFlash(x, y);
       return;
     }
@@ -217,10 +226,4 @@ export class InputController {
     window.removeEventListener('keydown', this.onRawKeyDown);
     this.scene.game.canvas.removeEventListener('pointerdown', this.onRawPointerDown);
   }
-}
-
-/** 'a' -> 'A', ' ' -> 'SPACE', 'Escape' -> 'ESCAPE'. */
-function normalizeKey(key: string): string {
-  if (key === ' ') return 'SPACE';
-  return key.toUpperCase();
 }

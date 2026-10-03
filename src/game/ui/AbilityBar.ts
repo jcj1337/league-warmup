@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import { ARENA } from '../../config/balance';
 import { THEME } from '../../config/theme';
-import { pixelText } from '../art/font';
+import { pixelText, setPixelScale } from '../art/font';
 import { TEX } from '../art/textures';
 import { pixelPanel } from '../view/pixelDraw';
 
@@ -61,6 +61,13 @@ export class AbilityBar {
     });
   }
 
+  /** Relabel the slots after a rebind: `keys[i]` corresponds to `specs[i]` from the constructor. */
+  setKeys(keys: string[]): void {
+    this.slots.forEach((slot, i) => {
+      if (keys[i] !== undefined) slot.setKey(keys[i]);
+    });
+  }
+
   /** `states[i]` corresponds to `specs[i]` from the constructor. */
   update(states: AbilitySlotState[]): void {
     this.slots.forEach((slot, i) => {
@@ -116,6 +123,13 @@ class AbilitySlot {
     this.keyText = pixelText(scene, cx + size / 2 - 4, cy + size / 2 - 2, spec.key, 2, THEME.ui.dim)
       .setOrigin(1, 1)
       .setDepth(103);
+    this.setKey(spec.key);
+  }
+
+  /** Show a new keybind. A long name ('CAPS', 'LSHIFT') drops to the small font so it stays in the corner. */
+  setKey(label: string): void {
+    this.keyText.setText(label);
+    setPixelScale(this.keyText, label.length * 12 <= this.size * 0.6 ? 2 : 1);
   }
 
   update(state: AbilitySlotState): void {

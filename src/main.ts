@@ -4,6 +4,7 @@ import { ARENA } from './config/balance';
 import { THEME } from './config/theme';
 import { GameScene } from './game/scenes/GameScene';
 import { UIScene } from './game/scenes/UIScene';
+import { Keybinds } from './game/Keybinds';
 import { RunHistory } from './game/RunHistory';
 
 const game = new Phaser.Game({
@@ -34,10 +35,11 @@ const game = new Phaser.Game({
 //   __theme.player.attack.windupLeanPx // presentation values
 //   __runs.summary()                   // your logged runs on the current growth + balance version
 //   __runs.list() / __runs.clear()     // every logged run / delete the log
+//   __keybinds.all() / .set('flash', 'CapsLock') / .reset()  // key bindings (this tab's session)
 const runs = {
   list: () => RunHistory.list(),
   summary: (growth: number = balance.DIFFICULTY.growth, version: number = balance.BALANCE_VERSION) =>
     RunHistory.summary(growth, version),
   clear: () => RunHistory.clear(),
 };
-Object.assign(window as unknown as Record<string, unknown>, { __warmup: game, __balance: balance, __theme: THEME, __runs: runs });
+Object.assign(window as unknown as Record<string, unknown>, { __warmup: game, __balance: balance, __theme: THEME, __runs: runs, __keybinds: Keybinds });
