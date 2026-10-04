@@ -42,8 +42,8 @@ test('start screen, saved pause-menu settings, pause on focus loss', async ({ pa
       ? pass('the first round holds at time 0 behind the start screen')
       : fail(`held: ${JSON.stringify(s)}`);
     s.startTexts.includes("QWER'S BACKYARD") && s.startTexts.includes('CLICK OR PRESS ANY KEY') &&
-      s.startTexts.includes('DESIGNED BY QWER') && s.startTexts.length === 3
-      ? pass("start screen shows QWER'S BACKYARD, the prompt and the credit, nothing else")
+      s.startTexts.includes('CHOOSE YOUR CHAMPION') && s.startTexts.includes('DESIGNED BY QWER') && s.startTexts.length === 4
+      ? pass("start screen shows QWER'S BACKYARD, the champion row, the prompt and the credit, nothing else")
       : fail(`texts: ${JSON.stringify(s.startTexts)}`);
   }
   // The release of a key pressed before the card (the F5 that reloaded the page) doesn't count.
@@ -114,6 +114,66 @@ test('start screen, saved pause-menu settings, pause on focus loss', async ({ pa
       ? pass('a restart goes straight into play, no start screen')
       : fail(`after restart: ${JSON.stringify(s)}`);
   }
+
+  // === 1b. Champion select ====================================================
+  section('1b. Champion select');
+  await page.reload({ waitUntil: 'load' });
+  await page.waitForFunction(() => window.__warmup?.scene?.getScene('UIScene')?.startScreen?.visible);
+  await page.waitForTimeout(100);
+  const row = () => page.evaluate(() => {
+    const ui = window.__warmup.scene.getScene('UIScene');
+    const tile = ui.championRow.tiles.get('ezreal');
+    return {
+      selected: ui.championRow.selectedId as string,
+      tiles: [...ui.championRow.tiles.keys()] as string[],
+      champions: Object.keys(window.__champions) as string[],
+      tile: tile ? { x: tile.cx as number, y: tile.cy as number } : null,
+      profile: window.__profile.data.champion as string,
+      hudChampion: window.__warmup.scene.getScene('GameScene').getHudState().champion as string,
+    };
+  });
+  {
+    const r = await row();
+    r.selected === 'ezreal' && r.profile === 'ezreal' && r.hudChampion === 'ezreal' && r.tiles.join() === r.champions.join()
+      ? pass(`the row shows every champion (${r.tiles.join(', ')}) with the profile's pick framed`)
+      : fail(`row: ${JSON.stringify(r)}`);
+    // A click on a tile picks; it never starts the run.
+    if (r.tile) await page.mouse.click(r.tile.x, r.tile.y);
+    await page.waitForTimeout(150);
+    const s = await game();
+    s.awaiting && s.now === 0 ? pass('clicking a champion tile does not start the run') : fail(`tile click: ${JSON.stringify(s)}`);
+  }
+  await page.keyboard.press('ArrowRight');
+  await page.keyboard.press('ArrowLeft');
+  await page.waitForTimeout(150);
+  {
+    const [r, s] = [await row(), await game()];
+    s.awaiting && r.selected === 'ezreal'
+      ? pass('the arrow keys browse the row without starting the run')
+      : fail(`arrows: ${JSON.stringify({ r, s })}`);
+  }
+  // "Change champion" from the pause menu: back to the start screen with a fresh, held round.
+  await page.mouse.click(1100, 650);
+  await page.waitForTimeout(400);
+  const roundBefore = await page.evaluate(() => window.__warmup.scene.getScene('GameScene').getHudState().round);
+  await page.keyboard.press('Escape');
+  await page.waitForTimeout(80);
+  const changeAt = await page.evaluate(() => {
+    const t = window.__warmup.scene.getScene('UIScene').pauseMenu.container.list
+      .find((o: { type: string; text?: string }) => /Text$/.test(o.type) && o.text === 'CHANGE CHAMPION');
+    return t ? { x: t.x, y: t.y } : null;
+  });
+  if (changeAt) await page.mouse.click(changeAt.x, changeAt.y);
+  await page.waitForFunction((r) => window.__warmup.scene.getScene('GameScene').getHudState().round !== r, roundBefore);
+  await page.waitForTimeout(150);
+  {
+    const s = await game();
+    changeAt && s.awaiting && s.startVisible && s.now === 0 && !s.paused && !s.menu
+      ? pass('Change Champion in the pause menu returns to the start screen with a fresh held round')
+      : fail(`change champion: ${JSON.stringify({ changeAt, s })}`);
+  }
+  await page.mouse.click(1100, 650);
+  await page.waitForTimeout(300);
 
   // === 2. Settings are saved ==================================================
   section('2. Saved settings');

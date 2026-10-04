@@ -8,6 +8,8 @@ import { pixelPanel } from '../view/pixelDraw';
 export interface PauseMenuActions {
   resume(): void;
   restart(): void;
+  /** Back to the start screen to pick a champion; the current run is dropped. */
+  changeChampion(): void;
 }
 
 /** One settings row: a label, a cycling value, and what to do when clicked. */
@@ -131,8 +133,9 @@ export class PauseMenu {
     parts.push(pixelText(scene, x, top + 36, 'PAUSED', 4).setOrigin(0.5));
 
     // ---- actions ---------------------------------------------------------
-    parts.push(...this.button(x, top + 100, 260, 40, 'RESUME', actions.resume));
-    parts.push(...this.button(x, top + 146, 260, 40, 'RESTART ROUND', actions.restart));
+    parts.push(...this.button(x - 110, top + 100, 200, 40, 'RESUME', actions.resume));
+    parts.push(...this.button(x + 110, top + 100, 200, 40, 'RESTART ROUND', actions.restart));
+    parts.push(...this.button(x, top + 146, 260, 40, 'CHANGE CHAMPION', actions.changeChampion));
 
     // ---- settings --------------------------------------------------------
     parts.push(pixelText(scene, x, top + 190, '- SETTINGS -', 2, THEME.ui.faint).setOrigin(0.5));

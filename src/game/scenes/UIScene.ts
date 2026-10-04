@@ -4,6 +4,9 @@ import { Keybinds } from '../Keybinds';
 import { MouseSpeed } from '../MouseSpeed';
 import { RunHistory, type RunSummary } from '../RunHistory';
 import { Settings } from '../Settings';
+import { Profile } from '../../profile/Profile';
+import { resolveLook } from '../../cosmetics/catalogue';
+import { ChampionRow } from '../ui/ChampionRow';
 import { CHAMPIONS, DEFAULT_CHAMPION, isChampionId, SLOTS, type Champion } from '../../champions';
 import type { BindableAction } from '../Keybinds';
 import { ARENA, DEBUG, BALANCE_VERSION, MOUSE } from '../../config/balance';
@@ -75,8 +78,9 @@ export class UIScene extends Phaser.Scene {
   private resultText!: Phaser.GameObjects.BitmapText;
   private overlayVisible = false;
 
-  /** Title card over the first round after a page load; a click starts the run. */
+  /** Title card over a held round (page load, "Change champion"); a click or key starts the run. */
   private startScreen!: Phaser.GameObjects.Container;
+  private championRow!: ChampionRow;
 
   constructor() {
     // active: true so the HUD boots alongside GameScene — Phaser only
@@ -229,6 +233,10 @@ export class UIScene extends Phaser.Scene {
           this.game_.setPaused(false);
           this.game_.restartRound();
         },
+        changeChampion: () => {
+          this.game_.setPaused(false);
+          this.game_.returnToStart();
+        },
       },
       [
         {
@@ -290,26 +298,33 @@ export class UIScene extends Phaser.Scene {
       .setLineSpacing(2)
       .setMaxWidth(panelW - END_PANEL_MARGIN * 2);
 
-    const button = this.add
-      .rectangle(ARENA.width / 2, 626, 280, 48, THEME.menu.button)
-      .setStrokeStyle(3, THEME.ui.accent)
-      .setInteractive({ useHandCursor: true });
-
-    const buttonText = pixelText(this, ARENA.width / 2, 626, 'PLAY AGAIN  [R]', 2, THEME.ui.accent).setOrigin(0.5);
-
-    button.on('pointerover', () => button.setFillStyle(THEME.menu.buttonHover));
-    button.on('pointerout', () => button.setFillStyle(THEME.menu.button));
-    button.on('pointerdown', () => this.game_.restartRound());
+    const endButton = (cx: number, label: string, onClick: () => void): Phaser.GameObjects.GameObject[] => {
+      const button = this.add
+        .rectangle(cx, 626, 280, 48, THEME.menu.button)
+        .setStrokeStyle(3, THEME.ui.accent)
+        .setInteractive({ useHandCursor: true });
+      const text = pixelText(this, cx, 626, label, 2, THEME.ui.accent).setOrigin(0.5);
+      button.on('pointerover', () => button.setFillStyle(THEME.menu.buttonHover));
+      button.on('pointerout', () => button.setFillStyle(THEME.menu.button));
+      button.on('pointerdown', onClick);
+      return [button, text];
+    };
+    const buttons = [
+      ...endButton(ARENA.width / 2 - 160, 'PLAY AGAIN  [R]', () => this.game_.restartRound()),
+      ...endButton(ARENA.width / 2 + 160, 'CHANGE CHAMPION', () => this.game_.returnToStart()),
+    ];
 
     this.overlay = this.add
-      .container(0, 0, [bg, plate, title, this.resultText, button, buttonText])
+      .container(0, 0, [bg, plate, title, this.resultText, ...buttons])
       .setDepth(200)
       .setVisible(false);
   }
 
   /**
-   * The title card shown over the first round after a page load, while
-   * GameScene holds it at time 0. A click anywhere or any key starts the run.
+   * The title card shown over a held round (the first after a page load, or
+   * after "Change champion"), while GameScene holds it at time 0. A click
+   * anywhere or any key starts the run; the champion row picks who plays it
+   * (a click on a tile, or the arrow keys) without starting.
    * It starts on the release, not the press: the press reaches GameScene while
    * the run is still held, so it is never also a move order or a cast, and it
    * already counts as the user gesture CursorLock needs for a non-1.0 Mouse
@@ -330,24 +345,35 @@ export class UIScene extends Phaser.Scene {
     // so the release of the F5 / Ctrl+R that reloaded the page can't start the run.
     const pressed = new Set<string>();
     this.input.keyboard?.on('keydown', (event: KeyboardEvent) => {
-      if (this.game_.isAwaitingStart) pressed.add(event.code);
+      if (!this.game_.isAwaitingStart) return;
+      // The arrow keys browse champions instead of starting.
+      if (event.code === 'ArrowLeft' || event.code === 'ArrowRight') {
+        if (!event.repeat) this.pickChampion(this.championRow.neighbour(event.code === 'ArrowLeft' ? -1 : 1));
+        return;
+      }
+      pressed.add(event.code);
     });
     this.input.keyboard?.on('keyup', (event: KeyboardEvent) => {
       if (pressed.delete(event.code) && this.game_.isAwaitingStart) this.game_.startRun();
     });
 
     const panelW = 620;
-    const panelH = 260;
+    const panelH = 350;
     const plate = this.add.graphics();
     pixelPanel(plate, cx - panelW / 2, cy - panelH / 2, panelW, panelH, {
       fill: THEME.ui.panel, fillAlpha: 0.97, edge: THEME.ui.panelEdge, highlight: THEME.ui.panelHighlight, border: 3,
     });
     plate.fillStyle(THEME.ui.accent, 0.9);
-    plate.fillRect(cx - panelW / 2 + 28, cy - 34, panelW - 56, 3);
+    plate.fillRect(cx - panelW / 2 + 28, cy - 80, panelW - 56, 3);
 
-    const title = pixelText(this, cx, cy - 74, "QWER'S BACKYARD", 6, THEME.ui.accent).setOrigin(0.5);
-    const prompt = pixelText(this, cx, cy + 20, 'CLICK OR PRESS ANY KEY', 3, THEME.ui.text).setOrigin(0.5);
-    const credit = pixelText(this, cx, cy + 86, 'DESIGNED BY QWER', 2, THEME.ui.faint).setOrigin(0.5);
+    const title = pixelText(this, cx, cy - 120, "QWER'S BACKYARD", 6, THEME.ui.accent).setOrigin(0.5);
+    const choose = pixelText(this, cx, cy - 58, 'CHOOSE YOUR CHAMPION', 2, THEME.ui.faint).setOrigin(0.5);
+    this.championRow = new ChampionRow(
+      this, cx, cy - 6, Object.values(CHAMPIONS), championOf(Profile.data.champion).id, resolveLook(Profile.data),
+      (id) => this.pickChampion(id),
+    );
+    const prompt = pixelText(this, cx, cy + 84, 'CLICK OR PRESS ANY KEY', 3, THEME.ui.text).setOrigin(0.5);
+    const credit = pixelText(this, cx, cy + 136, 'DESIGNED BY QWER', 2, THEME.ui.faint).setOrigin(0.5);
 
     // UIScene's tweens never pause, so the prompt keeps breathing while the run is held.
     this.tweens.add({
@@ -360,9 +386,20 @@ export class UIScene extends Phaser.Scene {
     });
 
     this.startScreen = this.add
-      .container(0, 0, [scrim, plate, title, prompt, credit])
+      .container(0, 0, [scrim, plate, title, choose, this.championRow.container, prompt, credit])
       .setDepth(300)
       .setVisible(false);
+  }
+
+  /** The start screen's pick: saved to the profile, and the held round is rebuilt as that champion. */
+  private pickChampion(id: string): void {
+    if (!isChampionId(id) || !this.game_.isAwaitingStart) return;
+    this.championRow.setSelected(id);
+    if (Profile.data.champion === id) return;
+    Profile.update((data) => {
+      data.champion = id;
+    });
+    this.game_.returnToStart();
   }
 
   /**

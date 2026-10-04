@@ -370,7 +370,10 @@ first round, held at time 0: nothing moves. A click anywhere or any key starts t
 It starts on the release, so the click or key is never also a move order or a cast, and
 the press counts as the gesture a non-1.0 Mouse Speed needs for its pointer lock (except
 `Esc`, which browsers don't count: the lock then waits for your next click). Restarts
-(`R`, Restart Round) skip it and go straight into play.
+(`R`, Restart Round) skip it and go straight into play. The card also carries the
+**champion row**: click a tile or use the arrow keys to pick who you play (saved to your
+profile); **Change Champion** in the pause menu or on the end screen brings the card
+back with a fresh run.
 
 ## Pause & settings
 
@@ -378,7 +381,7 @@ the press counts as the gesture a non-1.0 Mouse Speed needs for its pointer lock
 timers, cast windows, cooldowns, mark durations, projectiles, wave breathers and the run
 clock. Nothing fast-forwards on resume.
 
-The menu has Resume, Restart Round, a **Mouse Speed** slider, **Range Indicator**
+The menu has Resume, Restart Round, Change Champion, a **Mouse Speed** slider, **Range Indicator**
 (contextual / always / off), **Damage Numbers** (the "-1" pip-loss pops) and **Pause on
 Focus Loss** (on by default: alt-tabbing, clicking another window or switching tabs
 opens this menu, so the run never plays on without you). Below them are the controls,

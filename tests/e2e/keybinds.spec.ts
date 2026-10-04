@@ -50,6 +50,7 @@ test('keybinds: rebind from the pause menu, swaps, Escape cancels, ability bar l
     slots.map((s) => s.text).join('') === 'QWEF' ? pass('ability bar shows Q W E F') : fail(`slots: ${JSON.stringify(slots)}`);
   }
   await page.keyboard.press('Escape');
+  await page.waitForTimeout(100);                // the HUD shows the menu a frame after the game pauses
   {
     const m = await menu();
     m.visible && Object.values(m.rows).join(',') === 'Q,W,E,R,F,T,A,S,Z'
@@ -107,6 +108,7 @@ test('keybinds: rebind from the pause menu, swaps, Escape cancels, ability bar l
   // === 3. The new keys play ===================================================
   section('3. In play');
   await page.keyboard.press('Escape');
+  await page.waitForTimeout(100);                // likewise, it hides a frame after the game resumes
   {
     const m = await menu();
     !m.visible && !m.paused ? pass('Escape (not waiting) closes the menu') : fail(`close: ${JSON.stringify(m)}`);

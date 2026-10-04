@@ -123,6 +123,8 @@ export class GameScene extends Phaser.Scene {
    * survives scene.restart(), so this counts rounds for the persistent UIScene.
    */
   private roundId = 0;
+  /** Set by returnToStart(): the next round waits on the start screen like the first. */
+  private holdNextRound = false;
 
   constructor() {
     super('GameScene');
@@ -130,8 +132,9 @@ export class GameScene extends Phaser.Scene {
 
   create(): void {
     this.roundId++;
-    // Only the first round after a page load waits on the start screen.
-    this.run = new Run(this.roundId === 1);
+    // The first round after a page load waits on the start screen; so does one after "Change champion".
+    this.run = new Run(this.roundId === 1 || this.holdNextRound);
+    this.holdNextRound = false;
     this.enemies = [];
     this.lastCancelShownAt = -Infinity;
     this.lastReleaseShownAt = -Infinity;
@@ -498,6 +501,12 @@ export class GameScene extends Phaser.Scene {
     if (remaining <= 0) return 0;
     // Full strength, then ease out over the last `fadeMs`.
     return Math.min(1, remaining / THEME.rangeHint.fadeMs);
+  }
+
+  /** Back to the start screen with a fresh, held round (a champion change picks up the profile's choice). */
+  returnToStart(): void {
+    this.holdNextRound = true;
+    this.restartRound();
   }
 
   restartRound(): void {
