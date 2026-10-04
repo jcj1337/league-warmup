@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { ARENA, attackReach, DEBUG, PLAYER, TARGETS } from '../../config/balance';
+import { ARENA, ATTACK, attackReach, DEBUG, PLAYER, TARGETS } from '../../config/balance';
 import { PlayerView, type AttackVisual, type CastKind, type PlayerViewState } from '../view/PlayerView';
 import type { ChampionStats } from '../../champions/types';
 import type { PlayerFrames } from '../art/look';
@@ -58,6 +58,8 @@ export class Player {
     stats: ChampionStats,
     look: PlayerFrames,
     private readonly levelSpeed: () => number = () => 1,
+    /** The champion's auto range, for the drawn ring. */
+    private readonly attackRange: () => number = () => ATTACK.range,
   ) {
     this.x = x;
     this.y = y;
@@ -202,7 +204,7 @@ export class Player {
     s.hp = this.hp;
     s.stunned = this.isStunned;
     s.slowed = this.isSlowed;
-    // Re-read every frame so live-tuning ATTACK.range updates the ring.
+    // Re-read every frame so live-tuning the champion's range updates the ring.
     s.rangeRadius = this.attackRingRadius();
     this.view.sync(s, deltaSeconds);
   }
@@ -213,7 +215,7 @@ export class Player {
    * test uses. (Per-target truth is the target reticle.)
    */
   private attackRingRadius(): number {
-    return attackReach(TARGETS.radius, this.radius);
+    return attackReach(this.attackRange(), TARGETS.radius, this.radius);
   }
 
   // ------------------------------------------------ visual feeds (read-only)

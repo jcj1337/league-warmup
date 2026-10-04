@@ -58,6 +58,9 @@ export const ATTACK = {
    * League: in range when dist(player, target) <= range + target.radius.
    * The debug ring drawn around the player is exactly this radius, so a target
    * is attackable as soon as its circle touches the ring.
+   *
+   * The default auto range, Ezreal's. A champion sets its own through its
+   * attack profile (Champion.attack.range): Cassiopeia's is shorter.
    */
   range: 260,
 
@@ -138,8 +141,8 @@ export const ATTACK = {
  * that should be drawn around the player. A target whose center sits inside the
  * ring is attackable, full stop.
  */
-export function attackReach(targetRadius: number, playerRadius: number): number {
-  return ATTACK.range + targetRadius + (ATTACK.rangeFromPlayerEdge ? playerRadius : 0);
+export function attackReach(range: number, targetRadius: number, playerRadius: number): number {
+  return range + targetRadius + (ATTACK.rangeFromPlayerEdge ? playerRadius : 0);
 }
 
 /**
@@ -242,8 +245,11 @@ export const APM = {
 /** F: a summoner-style blink. No hit, no passive, no cooldown refund. */
 export const FLASH = {
   cooldownMs: 20000,
-  /** ~1.06x attack range — shorter than E. (Was 325.) */
-  range: 275,
+  /**
+   * League's ratio to the auto: Flash 400 against a 550 auto (~0.73x), so
+   * noticeably shorter than your attack range, and shorter than Ezreal's E. (Was 275.)
+   */
+  range: 190,
 } as const;
 
 
@@ -643,6 +649,12 @@ export interface EnemyEntry {
   contactDamage: number;
   /** XP the player earns for killing one (see LEVELS). */
   xp: number;
+  /**
+   * A spellcaster: damage over time can't finish it. Poisoned above one pip,
+   * poison wears it down to one and stops there, so you can't tag it and run;
+   * poisoned at one pip, the poison may kill.
+   */
+  spellcaster?: boolean;
 }
 
 export const ENEMIES = {
@@ -667,6 +679,7 @@ export const ENEMIES = {
     pips: { start: 1, every: 10, max: 2 },
     contactDamage: 6,
     xp: 3,
+    spellcaster: true,
   },
   sovereign: {
     name: 'Sovereign', cost: 3, unlockStage: 5, weight: 0.6, maxShare: 0.25,
@@ -674,6 +687,7 @@ export const ENEMIES = {
     pips: { start: 2, every: 10, max: 3 },
     contactDamage: 6,
     xp: 3,
+    spellcaster: true,
   },
 } satisfies Record<string, EnemyEntry>;
 

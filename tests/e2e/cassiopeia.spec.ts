@@ -7,6 +7,7 @@ test('cassiopeia: picked from the profile, slow autos, Q blast + poison ticks, W
   const cfg = await page.evaluate(() => ({
     Q: window.__cassiopeia.Q, W: window.__cassiopeia.W, E: window.__cassiopeia.E, R: window.__cassiopeia.R,
     POISON: window.__cassiopeia.POISON, LEVELS: window.__cassiopeia.LEVELS, STATS: window.__cassiopeia.STATS,
+    AUTO: window.__cassiopeia.AUTO, ezrealRange: window.__balance.ATTACK.range,
   }));
   const G = () => page.evaluate(() => {
     const g = window.__warmup.scene.getScene('GameScene');
@@ -14,6 +15,7 @@ test('cassiopeia: picked from the profile, slow autos, Q blast + poison ticks, W
       champion: g.getHudState().champion as string,
       now: g.clock.now as number,
       base: g.attacks.baseCooldownMs as number,
+      attackRange: g.attackRange as number,
       cd: { q: g.cooldowns.remainingMs('q'), w: g.cooldowns.remainingMs('w'), e: g.cooldowns.remainingMs('e'), r: g.cooldowns.remainingMs('r') },
       zones: g.kit.zones.zones.length as number,
       clouds: g.kit.zones.clouds.length as number,
@@ -54,6 +56,9 @@ test('cassiopeia: picked from the profile, slow autos, Q blast + poison ticks, W
     s.champion === 'cassiopeia' && s.slots.join('') === 'QWERF' && Math.abs(s.base - cfg.LEVELS.baseAttackCooldownMs) < 1
       ? pass(`playing Cassiopeia: Q W E R + F on the bar, ${s.base}ms auto cycle at level 1`)
       : fail(`champion: ${JSON.stringify({ champion: s.champion, slots: s.slots, base: s.base })}`);
+    s.attackRange === cfg.AUTO.range && cfg.AUTO.range < cfg.ezrealRange && cfg.Q.range < 450 && cfg.E.range < cfg.ezrealRange
+      ? pass(`a battle mage's reach: auto ${s.attackRange} (Ezreal's ${cfg.ezrealRange}), Q ${cfg.Q.range}, E ${cfg.E.range}, W ${cfg.W.range}`)
+      : fail(`ranges: ${JSON.stringify({ auto: s.attackRange, cfg: cfg.AUTO, q: cfg.Q.range, e: cfg.E.range })}`);
   }
 
   // === 2. Q: a delayed blast, then poison ticks ===============================
@@ -95,6 +100,32 @@ test('cassiopeia: picked from the profile, slow autos, Q blast + poison ticks, W
     ? pass(`a far Q lands at its max range (${cfg.Q.range}px)`)
     : fail(`range clamp: ${JSON.stringify(far)}`);
 
+  // A spellcaster can't be poisoned to death from above one pip: tagging it with Q and running doesn't kill it.
+  const caster = (hp: number) => page.evaluate((hp) => {
+    const g = window.__warmup.scene.getScene('GameScene');
+    const d = g.director;
+    g.enemyProjectiles.clear(); g.hostileSpells.clear(); g.kit.clear();
+    for (const e of d.enemies) e.active = false;
+    d.enemies.length = 0;
+    d.currentPhase = 'wave';
+    const e = d.spawnEnemy('sovereign');
+    e.x = 1000; e.y = 200; e.hp = hp; e.maxHp = hp;
+    d.enemies.push(e);
+    g.player.x = 640; g.player.y = 360; g.player.stop(); g.player.hp = 100;
+    g.kit.poison(e);
+  }, hp);
+  const sovereign = async () => (await G()).enemies.find((e) => e.type === 'sovereign');
+  await caster(2);
+  await page.waitForTimeout(cfg.POISON.durationMs + 300);
+  const worn = await sovereign();
+  worn && worn.active && worn.hp === 1 && !worn.poisoned
+    ? pass('a spellcaster poisoned at 2 pips is worn down to 1, and the poison stops there')
+    : fail(`spellcaster at 2: ${JSON.stringify(worn)}`);
+  await caster(1);
+  await page.waitForTimeout(cfg.POISON.tickMs + 300);
+  const finished = await sovereign();
+  !finished || !finished.active ? pass('poisoned at 1 pip, the poison may kill it') : fail(`spellcaster at 1: ${JSON.stringify(finished)}`);
+
   // === 3. W: a cloud that slows and poisons, no pip of its own ================
   section('3. W');
   await stage(800, 360, 3);
@@ -108,7 +139,9 @@ test('cassiopeia: picked from the profile, slow autos, Q blast + poison ticks, W
   await page.evaluate(() => { const e = window.__warmup.scene.getScene('GameScene').director.enemies[0]; e.x = 1100; e.goalX = 1100; });
   await page.waitForTimeout(cfg.W.slowMs + 150);
   const left = await G();
-  left.enemies[0].slow === 1 ? pass('leaving the cloud, the slow lapses') : fail(`slow after leaving: ${left.enemies[0].slow}`);
+  left.enemies[0].slow === 1 && !left.enemies[0].poisoned && left.enemies[0].hp === 3
+    ? pass('leaving the cloud, the slow and the poison lapse, with no pip: W poisons only while you stand in it')
+    : fail(`after leaving: ${JSON.stringify(left.enemies[0])}`);
   await page.waitForTimeout(cfg.W.durationMs);
   (await G()).clouds === 0 ? pass(`the cloud expires after ${cfg.W.durationMs}ms`) : fail('cloud still there');
 
@@ -135,7 +168,7 @@ test('cassiopeia: picked from the profile, slow autos, Q blast + poison ticks, W
   await stage(1100, 600, 3);
   await page.mouse.move(800, 360);
   await page.keyboard.press('w');
-  await page.mouse.move(640, 560);
+  await page.mouse.move(640, 540);            // 180px down, inside Flash range
   await page.keyboard.press('f');
   await page.waitForFunction(() => window.__warmup.scene.getScene('GameScene').kit.zones.clouds.length === 1, null, { timeout: 2000 });
   const wf = await page.evaluate(() => {
@@ -143,7 +176,7 @@ test('cassiopeia: picked from the profile, slow autos, Q blast + poison ticks, W
     const c = g.kit.zones.clouds[0];
     return { x: c.x, y: c.y, from: c.thrownFrom, px: g.player.x, py: g.player.y, flashCd: g.cooldowns.remainingMs('flash') };
   });
-  wf.flashCd > 0 && Math.abs(wf.py - 560) < 1 && Math.abs(wf.x - (wf.px + 160)) < 1 && Math.abs(wf.y - wf.py) < 1 &&
+  wf.flashCd > 0 && Math.abs(wf.py - 540) < 1 && Math.abs(wf.x - (wf.px + 160)) < 1 && Math.abs(wf.y - wf.py) < 1 &&
     wf.from && Math.abs(wf.from.y - wf.py) < 1
     ? pass(`W-Flash: Flash mid-cast and the bolts leave from where she lands, the cloud 160px ahead of her as aimed`)
     : fail(`W-Flash: ${JSON.stringify(wf)}`);

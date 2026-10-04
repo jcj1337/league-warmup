@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { ARENA, ATTACK, DEBUG, FLASH } from '../../config/balance';
+import { ARENA, DEBUG, FLASH } from '../../config/balance';
 import { activeChampion, type Champion, type Kit, type Slot } from '../../champions';
 import type { AbilityDef, Aim } from '../../champions/types';
 import { THEME } from '../../config/theme';
@@ -158,6 +158,7 @@ export class GameScene extends Phaser.Scene {
     this.player = new Player(
       this, ARENA.width / 2, ARENA.height / 2, this.champion.stats, look,
       () => this.progression.moveSpeedMultiplier,
+      () => this.champion.attack.range,
     );
 
     this.scoring = new ScoreSystem();
@@ -744,7 +745,8 @@ export class GameScene extends Phaser.Scene {
     return this.run ? this.run.roundResult : null;
   }
 
+  /** The playing champion's auto range. */
   get attackRange(): number {
-    return ATTACK.range;
+    return this.champion.attack.range;
   }
 }

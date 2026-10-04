@@ -162,7 +162,7 @@ test('cast: Q/W/E cast windows, committed aim, buffered orders, lockout, Flash m
   section('E cast timing');
   // Enemy sits near the blink DESTINATION so the post-blink bolt can acquire it.
   await setup([{ type: 'basic', x: 1000, y: 360 }]);
-  await page.mouse.move(900, 360);             // 260px right, inside E range
+  await page.mouse.move(840, 360);             // 200px right, inside E range
   await page.waitForTimeout(60);
   const eSamples = await sampleCast('e', 700);
 

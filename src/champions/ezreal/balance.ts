@@ -107,8 +107,11 @@ export const BLINK_E = {
    */
   castTimeMs: 210,
   cooldownMs: 8000,
-  /** ~1.2x attack range. Real repositioning, well short of Q/W reach. (Was 364.) */
-  range: 310,
+  /**
+   * League's ratio to the auto: Arcane Shift 475 against Ezreal's 550 auto
+   * (~0.86x), so just short of his attack range, and longer than Flash. (Was 310.)
+   */
+  range: 225,
   /**
    * Post-blink search radius for the bolt, measured from where E lands.
    * ~1.46x attack range. Provisional — was 455; tune after playtesting.

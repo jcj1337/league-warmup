@@ -3,7 +3,7 @@ import { TEX } from '../../game/art/textures';
 import { registerStatusLook } from '../../game/view/statusLooks';
 import type { Champion } from '../types';
 import { CASSIOPEIA_ART } from './art';
-import { E, LEVELS, PETRIFY_STATUS, POISON_STATUS, Q, R, STATS, W } from './balance';
+import { AUTO, E, LEVELS, PETRIFY_STATUS, POISON_STATUS, Q, R, STATS, W } from './balance';
 import { CassiopeiaKit } from './kit';
 
 /** Poisoned: a violet drip overhead and a venom ring at the feet. Petrified: a stone eye. */
@@ -19,7 +19,10 @@ export const CASSIOPEIA: Champion = {
   id: 'cassiopeia',
   name: 'Cassiopeia',
   stats: STATS,
-  attack: { get baseCooldownMs() { return LEVELS.baseAttackCooldownMs; } },
+  attack: {
+    get baseCooldownMs() { return LEVELS.baseAttackCooldownMs; },
+    get range() { return AUTO.range; },
+  },
   levels: LEVELS,
   art: CASSIOPEIA_ART,
   slots: {

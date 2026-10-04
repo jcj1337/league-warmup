@@ -10,8 +10,10 @@ import type { KitingMetrics } from './KitingMetrics';
  * Where the base auto cycle comes from. The player's Progression supplies it
  * from their level, so attack speed grows with kills — never with time.
  */
+/** How fast the auto cycles, and how far it reaches (the champion's, read live). */
 export interface AttackPacing {
   readonly baseAttackCooldownMs: number;
+  readonly attackRange: number;
 }
 
 /**
@@ -378,7 +380,7 @@ export class AttackSystem {
   }
 
   private reachTo(target: Enemy): number {
-    return attackReach(target.radius, this.player.radius);
+    return attackReach(this.pacing.attackRange, target.radius, this.player.radius);
   }
 
   /**

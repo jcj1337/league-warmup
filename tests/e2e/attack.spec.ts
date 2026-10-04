@@ -77,7 +77,7 @@ test('attack: ground move, direct attack + chase, windup/recovery, cancel, post-
   // of attackable target CENTERS — see attackReach() in balance.ts.
   const expectedRing = await page.evaluate(() => {
     const s = window.__warmup.scene.getScene('GameScene');
-    return window.__balance.attackReach(window.__balance.TARGETS.radius, s.player.radius);
+    return window.__balance.attackReach(window.__warmup.scene.getScene('GameScene').attackRange, window.__balance.TARGETS.radius, s.player.radius);
   });
   ring.visible && Math.abs(ring.radius - expectedRing) < 0.01
     ? pass(`attack range ring visible at exactly attackReach (${ring.radius}px)`)
@@ -136,7 +136,7 @@ test('attack: ground move, direct attack + chase, windup/recovery, cancel, post-
   });
   const liveTarget = chased ?? arrived.enemies.reduce((a, b) => (dist(b, arrived.player) < dist(a, arrived.player) ? b : a));
   const stopDist = dist(liveTarget, arrived.player);
-  const reach = await page.evaluate((r) => window.__balance.attackReach(r, window.__warmup.scene.getScene('GameScene').player.radius), liveTarget.r);
+  const reach = await page.evaluate((r) => window.__balance.attackReach(window.__warmup.scene.getScene('GameScene').attackRange, r, window.__warmup.scene.getScene('GameScene').player.radius), liveTarget.r);
   stopDist <= reach + 2
     ? pass(`stopped inside attack range (${stopDist.toFixed(0)}px <= reach ${reach}px)`)
     : fail(`still out of range after chase: ${stopDist.toFixed(0)}px`);

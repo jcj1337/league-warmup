@@ -106,6 +106,8 @@ export interface ChampionArt {
 export interface AttackProfile {
   /** The auto cycle at level 1 (windup + recovery), before attack speed. */
   baseCooldownMs: number;
+  /** Auto range: the player's centre to the target's edge (see attackReach). Read live. */
+  range: number;
 }
 
 /** Where a cast is aimed, as resolved by the engine from `Targeting`. */

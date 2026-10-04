@@ -131,8 +131,8 @@ test('kit: W mark + detonation, E blink + bolt priority, Flash, Q cooldown refun
 
   // === E: blink ==============================================================
   section('E: blink');
-  cfg.e.range === 310 && cfg.e.boltAcquisitionRange === 380
-    ? pass(`E blink range ${cfg.e.range} (was 364), bolt acquisition still ${cfg.e.boltAcquisitionRange}`)
+  cfg.e.range === 225 && cfg.e.boltAcquisitionRange === 380
+    ? pass(`E blink range ${cfg.e.range} (was 310), bolt acquisition still ${cfg.e.boltAcquisitionRange}`)
     : fail(`E range ${cfg.e.range}, acquisition ${cfg.e.boltAcquisitionRange}`);
   cfg.e.cooldownMs === 8000 && cfg.f.cooldownMs === 20000
     ? pass('E / Flash cooldowns unchanged (8000 / 20000ms)')
@@ -247,7 +247,7 @@ test('kit: W mark + detonation, E blink + bolt priority, Flash, Q cooldown refun
 
   // === Flash =================================================================
   section('Flash');
-  cfg.f.range === 275 ? pass(`Flash range ${cfg.f.range} (was 325)`) : fail(`Flash range ${cfg.f.range}`);
+  cfg.f.range === 190 ? pass(`Flash range ${cfg.f.range} (was 275)`) : fail(`Flash range ${cfg.f.range}`);
   await setup([{ type: 'basic', x: 200, y: 120 }]);
   await page.mouse.move(1270, 360);
   await page.keyboard.press('f');

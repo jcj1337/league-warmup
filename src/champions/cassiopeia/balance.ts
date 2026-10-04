@@ -4,12 +4,22 @@
  * She drills a different rhythm from Ezreal: autos are slower and her E is
  * the beat between them; Q and W are ground spells you place ahead of where
  * enemies will be; R is a once-a-stage cone that punishes enemies facing you.
+ *
+ * She's a battle mage (League's Cassiopeia, Ryze, Vladimir, Swain): sustained
+ * damage from short range, in the thick of the fight, where Ezreal pokes from
+ * far off. Her auto reaches ~0.77x his, and each spell keeps League's ratio to
+ * her auto (Q 850, E and W 700, auto 550), so her whole kit is shorter than his.
  */
 
 export const STATS = {
   radius: 14,
   maxHp: 100,
   moveSpeed: 280,
+};
+
+/** Her auto: shorter than Ezreal's 260 (__balance.ATTACK.range). Centre to the target's edge. */
+export const AUTO = {
+  range: 200,
 };
 
 /** Her level perks: no boots, but speed with every level. */
@@ -29,7 +39,7 @@ export const LEVELS = {
  */
 export const Q = {
   /** 1.55x her auto range, League's 850 / 550: you walk up to cast it. */
-  range: 400,
+  range: 310,
   radius: 45,
   /** The telegraph: enemies can walk out of it. */
   delayMs: 400,
@@ -37,7 +47,11 @@ export const Q = {
   cooldownMs: 3500,
 };
 
-/** Poison, from Q and W: a pip every `tickMs` for `durationMs` (so two more pips if they stay alive). */
+/**
+ * Poison: a pip every `tickMs` while it lasts. Q's lasts `durationMs` (two more
+ * pips if they stay alive); W's only while they stand in the cloud (W.poisonMs).
+ * It can't finish a spellcaster from above one pip (ENEMIES[id].spellcaster).
+ */
 export const POISON = {
   durationMs: 4000,
   tickMs: 2000,
@@ -49,7 +63,7 @@ export const POISON = {
  */
 export const W = {
   /** 1.27x her auto range, League's 700 / 550. */
-  range: 330,
+  range: 250,
   /** How many clouds, laid side by side across her aim, the middle one on the aim point. */
   puffs: 7,
   puffRadius: 30,
@@ -72,6 +86,11 @@ export const W = {
   slowFraction: 0.35,
   /** A slow this short lapses the moment they leave the cloud. */
   slowMs: 600,
+  /**
+   * W's poison is as short, re-applied each tick: it lasts only while they're
+   * inside, and lapses (without its pip) when they step out before a tick.
+   */
+  poisonMs: 600,
   castTimeMs: 150,
   cooldownMs: 12000,
 };
@@ -83,7 +102,7 @@ export const W = {
  */
 export const E = {
   /** To the target's edge. 1.27x her auto range, League's 700 / 550. */
-  range: 330,
+  range: 250,
   castTimeMs: 150,
   cooldownMs: 800,
   pips: 1,

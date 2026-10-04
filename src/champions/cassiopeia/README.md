@@ -8,23 +8,31 @@ shared across champions: see the main README's [Controls](../../../README.md#con
 
 | | Aim | Cast time | Cooldown | Range | Pips removed |
 | --- | --- | --- | --- | --- | --- |
-| Auto | target | ~240ms windup\* | 950ms\* | 260 | 1 |
-| Q, Noxious Blast | ground point | 150ms | 3500ms† | 400, blast radius 45 | 1 on landing, then poison |
-| W, Miasma | ground point | 150ms | 12000ms† | 330; a wall of 7 clouds across your aim, ~180 × 60 | 0; slows 35% and poisons inside |
-| E, Twin Fang | the enemy **under** the cursor | 150ms | 800ms† | 330 | 1, **2 if poisoned** |
+| Auto | target | ~240ms windup\* | 950ms\* | 200 (Ezreal's is 260) | 1 |
+| Q, Noxious Blast | ground point | 150ms | 3500ms† | 310, blast radius 45 | 1 on landing, then poison |
+| W, Miasma | ground point | 150ms | 12000ms† | 250; a wall of 7 clouds across your aim, ~180 × 60 | 0; slows 35% and poisons, only while inside |
+| E, Twin Fang | the enemy **under** the cursor | 150ms | 800ms† | 250 | 1, **2 if poisoned** |
 | R, Petrifying Gaze | cone toward the cursor | 500ms, rooted; strikes as it ends | 45000ms†, **back at every stage clear** | 420, 80° wide | 1; **stuns enemies facing you** 1.5s, slows the rest 50% |
-| F | cursor | instant | 20000ms | 275 | — |
+| F | cursor | instant | 20000ms | 190 | — |
 
 \* her level-1 auto cycle is 950ms (Ezreal's is 700ms), +3% attack speed per level; the
 windup is a quarter of it. † at level 1; ability haste (+5 per level) shortens Q / W / E / R,
 as for Ezreal: ×0.8 at level 6, ×0.67 at 11, ×0.54 at 18 (Q 3.5s → 1.9s, E 800 → 430ms).
 
 **Sizes come from League, by proportion.** Ranges are scaled by her auto range (League's
-550 is our 260): Q 850 → 400, W 700 → 330. Areas are scaled by body size instead, since
+550 is her 200): Q 850 → 310, W and E 700 → 250. Areas are scaled by body size instead, since
 our bodies are far smaller relative to range than League's.
 
-**Poison.** Q's blast and W's cloud poison what they touch for 4s: a pip every 2s while it
-lasts (two more pips if they stay alive). Being poisoned is what makes E hit for two.
+**A battle mage.** Like League's Cassiopeia (or Ryze, Vladimir, Swain), she does her damage
+from short range, in the thick of the fight; Ezreal pokes from far off. Her auto reaches 200
+to his 260, and her whole kit is shorter than his to match.
+
+**Poison.** A pip every 2s while it lasts; being poisoned is what makes E hit for two.
+Q's blast poisons for 4s (two more pips if they stay alive). W's cloud poisons only while
+they're inside it: step out before a tick and the poison lapses with no pip, so W is for
+the slow and for setting up E, not for damage on its own. **Spellcasters** (the Magus and the
+Sovereign) can't be poisoned to death: poisoned above one pip, it wears them down to one and
+stops, so tagging one with Q and running doesn't kill it. Poisoned at one pip, it can.
 
 **Q and W are telegraphed.** Q lands 400ms after you place it; the purple disc swelling
 to the edge is the countdown, and anything that walks out before it lands is missed. Q is
@@ -40,7 +48,7 @@ takes hold once they're all down. It lingers 4s and re-applies its slow and pois
 whatever touches any of the clouds.
 
 **E is point-and-click.** Press it with the cursor *on* an enemy (the same hit test as a
-right-click attack) whose body is within 330px of you. Empty ground casts nothing, even
+right-click attack) whose body is within 250px of you. Empty ground casts nothing, even
 with an enemy close by; an enemy out of range casts nothing either, and E's range ring
 closes in around you to show the reach. Either way the cooldown doesn't start. Its cooldown
 is its own: autos never reset it and it never resets autos.

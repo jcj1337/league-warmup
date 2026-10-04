@@ -295,6 +295,9 @@ Orbwalk loop: `T` (or `A` + click) → auto fires → right-click away → repea
 | Magus | tall slate slime in a brass crest and mask, rune tablets floating at its sides | same as basic | artillery caster with a Xerath-style kit (below); holds 360–480px from you, backs off at 60% of your speed, never moves while casting |
 | Sovereign | indigo slime under a silver diadem, two dark orbs circling her head | 2 (3 from Stage 11) | sphere mage with a Syndra-style kit (below); holds 280–380px from you, at most one per wave, from Stage 5 |
 
+The Magus and the Sovereign are **spellcasters** (`ENEMIES[id].spellcaster`): damage over time
+can't finish one from above one pip, so the last pip is yours to land.
+
 Pips follow each mob's `ENEMIES` pip ramp (see above). Pursuers first appear in
 Stage 2, the Magus and the Sovereign in Stage 5 (Waves 1 and 2). A Pursuer's swing only lands if you are still in reach when it
 resolves — walking or blinking out during the telegraph makes it miss. A Pursuer

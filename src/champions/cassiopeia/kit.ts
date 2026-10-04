@@ -1,3 +1,4 @@
+import { ENEMIES, type EnemyEntry } from '../../config/balance';
 import type { Enemy } from '../../game/entities/Enemy';
 import { PlayerZoneSystem } from '../../game/systems/PlayerZoneSystem';
 import type { Aim, Kit, KitContext, KitStat, Slot } from '../types';
@@ -19,7 +20,9 @@ import { TwinFang, playBite } from './TwinFang';
  * Flash carries W and R with her (the engine shifts the aim; see CastSystem).
  *
  * Poison is a status on the enemy ('cassiopeia.poison') plus a tick schedule
- * kept here: a pip every POISON.tickMs while it lasts. Every pip goes through
+ * kept here: a pip every POISON.tickMs while it lasts. Q's lasts its full
+ * duration; W's only while they stay in the cloud. On a spellcaster poisoned
+ * above one pip, the tick that would kill doesn't land. Every pip goes through
  * the hit funnel, so kills, score and gold are the engine's.
  */
 export class CassiopeiaKit implements Kit {
@@ -27,8 +30,11 @@ export class CassiopeiaKit implements Kit {
   readonly zones: PlayerZoneSystem;
   /** E fangs in flight. */
   readonly bolts: TwinFang[] = [];
-  /** Per poisoned enemy: when its next pip ticks, and when the poison lapses (ticks on the deadline still land). */
-  private readonly poisonTicks = new Map<Enemy, { nextTickAt: number; until: number }>();
+  /**
+   * Per poisoned enemy: when its next pip ticks, when the poison lapses (ticks
+   * on the deadline still land), and whether it may kill.
+   */
+  private readonly poisonTicks = new Map<Enemy, { nextTickAt: number; until: number; lethal: boolean }>();
 
   poisonTicksLanded = 0;
   fangs = 0;
@@ -76,7 +82,7 @@ export class CassiopeiaKit implements Kit {
           const t = this.ctx.clock.now;
           for (const e of inside) {
             e.applySlow(MIASMA_SLOW, W.slowFraction, t, W.slowMs);
-            this.poison(e);
+            this.poison(e, W.poisonMs);
           }
         },
       }, now);
@@ -124,12 +130,20 @@ export class CassiopeiaKit implements Kit {
     this.ctx.combat.hit(e, e.takeHit());
   }
 
-  /** Apply (or refresh) poison; the first tick is one tick from now. */
-  poison(e: Enemy): void {
+  /**
+   * Apply (or extend) poison for `durationMs`; the first tick is one tick from
+   * now. A shorter application never cuts a longer one short (W's brief poison
+   * on a Q-poisoned enemy). A spellcaster poisoned above one pip can be worn
+   * down to one but not killed by it; poisoned at one pip, it can.
+   */
+  poison(e: Enemy, durationMs: number = POISON.durationMs): void {
     const now = this.ctx.clock.now;
-    e.applyStatus(POISON_STATUS, now, POISON.durationMs);
     const live = this.poisonTicks.get(e);
-    this.poisonTicks.set(e, { nextTickAt: live ? live.nextTickAt : now + POISON.tickMs, until: now + POISON.durationMs });
+    const until = Math.max(now + durationMs, live ? live.until : 0);
+    e.applyStatus(POISON_STATUS, now, until - now);
+    const entry: EnemyEntry = ENEMIES[e.archetype];
+    const lethal = !entry.spellcaster || e.hp <= 1 || (live?.lethal ?? false);
+    this.poisonTicks.set(e, { nextTickAt: live ? live.nextTickAt : now + POISON.tickMs, until, lethal });
   }
 
   private onFangImpact(target: Enemy, angle: number): void {
@@ -180,6 +194,7 @@ export class CassiopeiaKit implements Kit {
       // Every tick due up to the deadline lands, the one on the deadline included.
       while (e.active && nowMs >= p.nextTickAt && p.nextTickAt <= p.until) {
         p.nextTickAt += POISON.tickMs;
+        if (!p.lethal && e.hp <= 1) continue;   // a spellcaster's last pip is yours to take
         this.poisonTicksLanded++;
         this.pip(e);
       }

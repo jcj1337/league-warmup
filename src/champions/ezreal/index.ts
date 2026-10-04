@@ -1,3 +1,4 @@
+import { ATTACK } from '../../config/balance';
 import { THEME } from '../../config/theme';
 import { TEX } from '../../game/art/textures';
 import { registerStatusLook } from '../../game/view/statusLooks';
@@ -23,7 +24,11 @@ export const EZREAL: Champion = {
   id: 'ezreal',
   name: 'Ezreal',
   stats: STATS,
-  attack: { get baseCooldownMs() { return LEVELS.baseAttackCooldownMs; } },
+  attack: {
+    get baseCooldownMs() { return LEVELS.baseAttackCooldownMs; },
+    // The world's default auto range: __balance.ATTACK.range.
+    get range() { return ATTACK.range; },
+  },
   levels: LEVELS,
   art: EZREAL_ART,
   slots: {

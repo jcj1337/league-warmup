@@ -10,8 +10,8 @@ see the main README's [Controls](../../../README.md#controls).
 | Auto | 175ms windup\* | 700→347ms\* | 260 | 1150 px/s (homing) | 1 |
 | Q | 165ms | 3000ms† | 450 | 1250 px/s | 1 (2 from level 9) |
 | W | 185ms | 6000ms† | 450 | 1000 px/s | 0 on contact, **+1 on detonation** |
-| E | 210ms | 8000ms† | 310 blink / 380 bolt acquisition | 1050 px/s bolt | 1 |
-| F | instant | 20000ms | 275 | — | — |
+| E | 210ms | 8000ms† | 225 blink / 380 bolt acquisition | 1050 px/s bolt | 1 |
+| F | instant | 20000ms | 190 | — | — |
 
 \* the auto cooldown is set by your level (700ms at level 1, +6% attack speed per level,
 347ms at 18); the windup is a quarter of it, and both shrink further as the passive stacks.

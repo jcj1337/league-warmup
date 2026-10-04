@@ -62,6 +62,11 @@ export class Progression implements AttackPacing {
     return 1 + this.perks.moveSpeedPerLevel * (this.level - 1);
   }
 
+  /** AttackPacing: the champion's auto range. */
+  get attackRange(): number {
+    return this.attack.range;
+  }
+
   /** AttackPacing: the base auto cycle at this level, before passive stacks. */
   get baseAttackCooldownMs(): number {
     return this.attack.baseCooldownMs / this.attackSpeedMultiplier;
