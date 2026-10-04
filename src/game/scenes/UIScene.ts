@@ -386,7 +386,16 @@ export class UIScene extends Phaser.Scene {
       (id) => this.pickChampion(id),
     );
     const prompt = pixelText(this, cx, cy + 84, 'CLICK OR PRESS ANY KEY', 3, THEME.ui.text).setOrigin(0.5);
-    const credit = pixelText(this, cx, cy + 136, 'DESIGNED BY 2.1K LP, TOP 50 MID QWER', 2, THEME.ui.faint).setOrigin(0.5);
+    // The credit, with qwer's rank beside it: a challenger crest over TOP 50, the pair centred as one line.
+    const credit = pixelText(this, 0, cy + 136, 'DESIGNED BY QWER', 2, THEME.ui.faint).setOrigin(0, 0.5);
+    const badge = this.add.image(0, cy + 124, TEX.ui.challenger).setScale(3);
+    const rank = pixelText(this, 0, cy + 152, 'TOP 50', 2, THEME.ui.accent).setOrigin(0.5);
+    const badgeW = Math.max(badge.displayWidth, rank.width);
+    const gap = 14;
+    const left = Math.round(cx - (credit.width + gap + badgeW) / 2);
+    credit.setX(left);
+    badge.setX(Math.round(left + credit.width + gap + badgeW / 2));
+    rank.setX(badge.x);
 
     // UIScene's tweens never pause, so the prompt keeps breathing while the run is held.
     this.tweens.add({
@@ -399,7 +408,7 @@ export class UIScene extends Phaser.Scene {
     });
 
     this.startScreen = this.add
-      .container(0, 0, [scrim, plate, title, choose, this.championRow.container, prompt, credit])
+      .container(0, 0, [scrim, plate, title, choose, this.championRow.container, prompt, credit, badge, rank])
       .setDepth(300)
       .setVisible(false);
   }

@@ -157,6 +157,22 @@ export const SPRITES: Record<string, PixelSprite> = {
     rows: ['..kkk..', '.kWWgk.', 'kWWggok', 'kWgggok', 'kggggok', '.kgook.', '..kkk..'],
     pal: { k: P.ink, W: P.eyeHot, g: P.gold, o: P.goldDark },
   },
+  /** The start screen's credit badge: a challenger crest, gold wings and crown around a blue gem. */
+  ui_challenger: {
+    rows: [
+      '......k.k.k......',
+      '.....kYkYkYk.....',
+      '.....kyyyyyk.....',
+      'k....kkkkkkk....k',
+      'Yk....kbcbk....kY',
+      'yYk..kbcWcbk..kYy',
+      '.yYk.kbbcbbk.kYy.',
+      '..yyo.kbbbk.oyy..',
+      '...yyo.kbk.oyy...',
+      '....oo..k..oo....',
+    ],
+    pal: { k: P.ink, Y: P.eyeHot, y: P.gold, o: P.goldDark, b: P.blue, c: P.blueLight, W: P.blueShine },
+  },
   fx_muzzle: {
     rows: ['..w..', '.wWw.', 'wWWWw', '.wWw.', '..w..'],
     pal: { w: P.auto, W: P.autoCore },

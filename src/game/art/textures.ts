@@ -52,7 +52,7 @@ export const TEX = {
     pingAttack: 'fx_ping_attack',
     dest: 'fx_dest',
   },
-  ui: { gem: 'ui_gem', gemEmpty: 'ui_gem_empty' },
+  ui: { gem: 'ui_gem', gemEmpty: 'ui_gem_empty', challenger: 'ui_challenger' },
   props: {
     rockLarge: 'prop_rock_l',
     rockSmall: 'prop_rock_s',

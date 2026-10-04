@@ -42,8 +42,8 @@ test('start screen, saved pause-menu settings, pause on focus loss', async ({ pa
       ? pass('the first round holds at time 0 behind the start screen')
       : fail(`held: ${JSON.stringify(s)}`);
     s.startTexts.includes("QWER'S BACKYARD") && s.startTexts.includes('CLICK OR PRESS ANY KEY') &&
-      s.startTexts.includes('CHOOSE YOUR CHAMPION') && s.startTexts.includes('DESIGNED BY 2.1K LP, TOP 50 MID QWER') && s.startTexts.length === 4
-      ? pass("start screen shows QWER'S BACKYARD, the champion row, the prompt and the credit, nothing else")
+      s.startTexts.includes('CHOOSE YOUR CHAMPION') && s.startTexts.includes('DESIGNED BY QWER') && s.startTexts.includes('TOP 50') && s.startTexts.length === 5
+      ? pass("start screen shows QWER'S BACKYARD, the champion row, the prompt and the credit with its TOP 50 badge, nothing else")
       : fail(`texts: ${JSON.stringify(s.startTexts)}`);
   }
   // The release of a key pressed before the card (the F5 that reloaded the page) doesn't count.
