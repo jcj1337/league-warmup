@@ -11,6 +11,7 @@ const T = THEME.fx.trails;
  */
 export const PROJECTILE_ART = {
   auto: { frames: [TEX.proj.auto], rotate: true, trail: T.auto, depth: D.projectiles },
+  venom: { frames: [TEX.proj.venom], rotate: true, trail: T.venom, depth: D.projectiles },
   q: { frames: [TEX.proj.q], rotate: true, trail: T.q, depth: D.projectiles },
   w: { frames: [TEX.proj.w], rotate: false, trail: T.w, depth: D.projectiles },
   e: { frames: [TEX.proj.e], rotate: true, trail: T.e, depth: D.projectiles },
@@ -21,3 +22,6 @@ export const PROJECTILE_ART = {
   sphere: { frames: [TEX.proj.sphere], rotate: false, trail: T.sphere, depth: D.hostileProjectiles },
   orb: { frames: TEX.proj.orb, frameMs: 70, rotate: false, trail: T.orb, depth: D.hostileProjectiles },
 } satisfies Record<string, ProjectileArt>;
+
+/** A projectile look by name, for a champion's auto (Champion.autoLook). */
+export type ProjectileArtKey = keyof typeof PROJECTILE_ART;

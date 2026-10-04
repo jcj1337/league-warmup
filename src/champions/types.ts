@@ -8,6 +8,7 @@ import type { GameClock } from '../game/systems/GameClock';
 import type { PlayerProjectileSystem } from '../game/systems/PlayerProjectileSystem';
 import type { Progression } from '../game/systems/Progression';
 import type { PixelColor } from '../game/art/pixel';
+import type { ProjectileArtKey } from '../game/view/projectileArt';
 
 /**
  * What a playable champion is to the engine.
@@ -56,7 +57,15 @@ export interface CastTelegraph {
 }
 
 /** Which THEME.fx entry colours a slot's effects. Grows with each champion. */
-export type FxKey = 'q' | 'w' | 'e' | 'r' | 'poison' | 'miasma' | 'fang' | 'gaze';
+export type FxKey = 'q' | 'w' | 'e' | 'r' | 'poison' | 'miasma' | 'fang' | 'gaze' | 'venom';
+
+/** How a champion's auto looks: the missile, the colours of its muzzle burst and impact, its muzzle flash. */
+export interface AutoLook {
+  missile: ProjectileArtKey;
+  fx: FxKey;
+  /** Texture key of the flash at the slime's edge as it fires. */
+  muzzle: string;
+}
 
 /** What a cast window scales with: both are 1 at level 1 with no passive. */
 export interface CastPace {
@@ -260,6 +269,8 @@ export interface Champion {
   art: ChampionArt;
   /** What the body does for an auto. The engine's plain hunker-and-pop when omitted. */
   autoMotion?: Motion;
+  /** How the auto looks. The engine's cyan bolt when omitted. */
+  autoLook?: AutoLook;
   slots: { q: AbilityDef; w: AbilityDef; e: AbilityDef; r?: AbilityDef };
   createKit(ctx: KitContext): Kit;
 }

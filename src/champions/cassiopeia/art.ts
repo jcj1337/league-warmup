@@ -23,7 +23,7 @@ const BODY = [
   'kmmmmemmmmemmk',
   'kmmcmmmmmmmmck',
   'kdmmmmkmmkmmdk',
-  '.kdsmmmmmmsdk.',
+  '.kdsmmFmmFsdk.',
   '..kkdsmmmsdkk.',
   '....kddsddDkk.',
   '.....kkkDDDDk.',
@@ -34,8 +34,31 @@ const without = (rows: readonly string[], ...drop: number[]) => rows.filter((_, 
 const withRow = (rows: readonly string[], index: number, row: string) => rows.map((r, i) => (i === index ? row : r));
 const withRows = (rows: readonly string[], edits: Record<number, string>) => rows.map((r, i) => edits[i] ?? r);
 const doubled = (rows: readonly string[], index: number) => [...rows.slice(0, index + 1), ...rows.slice(index)];
-/** Two clear columns either side, so a pose can reach past the body (the tongue) and stay centred. */
-const padded = (rows: readonly string[]) => rows.map((r) => `..${r}..`);
+/**
+ * Her tail, out behind her from the coil and curling up to a point: laid over
+ * every pose, bottom-aligned, with four clear columns either side of the body
+ * so it (and the tongue) can reach past it and the body stays centred.
+ */
+const TAIL = [
+  '.kk...................',
+  'kLsk..................',
+  'kmsk..................',
+  '.kmsk.................',
+  '.kmsskkkk.............',
+  '.kmmsssssss...........',
+  '..kkkkkkkkkk..........',
+];
+const withTail = (rows: readonly string[]) => {
+  const out = rows.map((r) => `....${r}....`);
+  const off = out.length - TAIL.length;
+  return out.map((r, y) => {
+    const t = TAIL[y - off];
+    return t === undefined ? r : [...r].map((ch, x) => (t[x] !== '.' ? t[x] : ch)).join('');
+  });
+};
+/** One row of a finished (tailed) frame, `str` painted from column `x`. */
+const paint = (rows: readonly string[], y: number, x: number, str: string) =>
+  rows.map((r, i) => (i === y ? r.slice(0, x) + str + r.slice(x + str.length) : r));
 
 /** Eyes squeezed shut, cheeks puffed, mouth pressed closed: holding a breath. */
 const SHUT = withRows(BODY, {
@@ -47,35 +70,31 @@ const SHUT = withRows(BODY, {
 
 export const CASSIOPEIA_ART: ChampionArt = {
   frames: {
-    idle: BODY,
+    idle: withTail(BODY),
     /** Breath out / landing half of the hop: the coil takes the weight. */
-    squash: without(BODY, 4),
+    squash: withTail(without(BODY, 4)),
     /** Airborne half of the hop, and the release pop. */
-    stretch: doubled(BODY, 4),
+    stretch: withTail(doubled(BODY, 4)),
     /** Attack windup: hunkered down, eyes narrowed. */
-    charge: without(withRow(BODY, 5, 'kmmmmmmmmmmmmk'), 4),
+    charge: withTail(without(withRow(BODY, 5, 'kmmmmmmmmmmmmk'), 4)),
     /** Casting: little "o" mouth. */
-    cast: withRow(BODY, 8, 'kdmmmmmkkmmmdk'),
+    cast: withTail(withRow(BODY, 8, 'kdmmmmmkkmmmdk')),
   },
   extraFrames: {
     /** The spit: mouth wide open. */
-    spit: withRows(BODY, { 8: 'kdmmmkkkkmmmdk', 9: '.kdsmmkkmmsdk.' }),
+    spit: withTail(withRows(BODY, { 8: 'kdmmmkkkkmmmdk', 9: '.kdsmmkkmmsdk.' })),
     /** The flick after a spit: a forked tongue out past the facing side. */
-    tongue: withRows(padded(BODY), {
-      7: '..kmmcmmmmmmmmck.t',
-      8: '..kdmmmmmkttttttt.',
-      9: '...kdsmmmmmmsdk..t',
-    }),
+    tongue: paint(paint(paint(withTail(BODY), 7, 19, 't'), 8, 10, 'mkttttttt'), 9, 19, 't'),
     /** Twin Fang: jaws open on two fangs. */
-    fangs: withRows(BODY, { 8: 'kdmmmkkkkkmmdk', 9: '.kdsmFkkFmsdk.' }),
+    fangs: withTail(withRows(BODY, { 8: 'kdmmmkkkkkmmdk', 9: '.kdsmFkkFmsdk.' })),
     /** Petrifying Gaze, breathing in: eyes shut, cheeks full. */
-    shut: SHUT,
+    shut: withTail(SHUT),
     /** Petrifying Gaze, the strike: eyes wide (they light up), mouth open. */
-    gaze: withRows(BODY, {
+    gaze: withTail(withRows(BODY, {
       5: 'kmmmeemmmeemmk',
       6: 'kmmmeemmmeemmk',
       8: 'kdmmmmkkkkmmdk',
-    }),
+    })),
   },
   glow: 'e',
   pal: PAL,

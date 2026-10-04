@@ -420,6 +420,8 @@ export const THEME = {
   // --------------------------------------------------------------- effects
   fx: {
     auto: { color: P.auto, core: P.autoCore, deep: P.autoDeep, impactRadius: 18, impactMs: 180, sparks: 5 },
+    /** Cassiopeia's auto: violet, smaller and quicker than her spells. */
+    venom: { color: P.toxin, core: P.toxinCore, deep: P.toxinDeep, impactRadius: 15, impactMs: 160, sparks: 4 },
     q: { color: P.q, core: P.qCore, deep: P.qDeep, castFlashRadius: 24, castFlashMs: 120, impactRadius: 30, impactMs: 200, sparks: 9 },
     w: { color: P.w, core: P.wCore, deep: P.wDeep, castFlashRadius: 28, castFlashMs: 130, impactRadius: 34, impactMs: 220, sparks: 8 },
     e: { color: P.e, core: P.eCore, deep: P.eDeep, blue: P.eBlue, blinkMs: 180, impactRadius: 24, impactMs: 200, sparks: 7 },
@@ -439,6 +441,7 @@ export const THEME = {
     /** Trail puffs: one every `spacing` px of travel. */
     trails: {
       auto: { color: P.auto, spacing: 14, life: 120, size: 3 },
+      venom: { color: P.toxin, spacing: 10, life: 110, size: 2 },
       q: { color: P.q, spacing: 10, life: 150, size: 3 },
       w: { color: P.wHot, spacing: 12, life: 240, size: 6 },
       e: { color: P.e, spacing: 10, life: 160, size: 3 },
@@ -648,9 +651,10 @@ export const THEME = {
 
   /**
    * The player's ground spells (PlayerZoneView): Cassiopeia's purple, never
-   * the red that means "this hurts you". One language for all of them: venom
-   * lobbed from her body, landing in opaque blotchy puffs that pop open with
-   * a little overshoot, splatter droplets and shrink away.
+   * the red that means "this hurts you". Her clouds are venom lobbed from her
+   * body, landing in opaque blotchy puffs that pop open with a little
+   * overshoot, splatter droplets and shrink away; Q and the gaze land clean,
+   * in a splash and a sweeping stone front.
    */
   playerZone: {
     fill: P.toxinDeep,
@@ -679,15 +683,11 @@ export const THEME = {
     /** How far the rim shows past each puff. */
     cloudRimPx: 3,
     blotchAlpha: 0.7,
+    /** A splash (Q landing, an enemy caught by the gaze): droplets and two rings running out, over this long. */
+    splashMs: 300,
     /**
-     * A circle (her Q) wells up in place: `puffs` puffs bubble up inside the
-     * ring, each starting `stagger` of the delay after the last and growing
-     * over `grow` of it, to `size` of the radius, `spread` out from the centre.
-     */
-    welling: { puffs: 4, stagger: 0.14, grow: 0.45, size: 0.32, spread: 0.55 },
-    /**
-     * A burst (Q landing, a bite, an enemy caught by the gaze): a big puff and
-     * a ring of smaller ones popping a beat apart, held, then shrinking away.
+     * A burst of puffs (a bite): a big puff and a ring of smaller ones popping
+     * a beat apart, held, then shrinking away.
      */
     burstMs: 480,
     burstHoldFraction: 0.5,
@@ -698,12 +698,13 @@ export const THEME = {
     burstPuffs: 5,
     burstStaggerMs: 22,
     burstSplatMs: 240,
-    /** The gaze's wave: it reaches the cone's edge over `sweepTravel` of `sweepMs`, then shrinks away. */
+    /** The gaze's front: it reaches the cone's edge over `sweepTravel` of `sweepMs`, then fades. Stone, not venom. */
     sweepMs: 540,
     sweepTravel: 0.42,
-    sweepWashAlpha: 0.3,
-    sweepPuffSpacing: 26,
-    sweepPuffRadius: 16,
+    sweepFront: P.stoneCore,
+    sweepFrontWidth: 4,
+    sweepWash: P.stone,
+    sweepWashAlpha: 0.22,
     /** A thrown cloud's puff bursts open over this long where its bolt lands, and splats droplets for the next. */
     puffPopMs: 140,
     puffSplatMs: 220,

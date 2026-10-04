@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import { ATTACK, attackReach, DEBUG } from '../../config/balance';
 import { THEME } from '../../config/theme';
-import { AutoAttackMissile } from '../entities/AutoAttackMissile';
+import { AUTO_MISSILE_SPEC, AutoAttackMissile, type HomingMissileSpec } from '../entities/AutoAttackMissile';
 import type { Player } from '../entities/Player';
 import type { Enemy } from '../entities/Enemy';
 import type { KitingMetrics } from './KitingMetrics';
@@ -103,6 +103,8 @@ export class AttackSystem {
     /** The champion's kit: its passive (if any) multiplies attack speed. */
     private readonly haste: { readonly attackSpeedMultiplier: number },
     private readonly callbacks: AttackCallbacks,
+    /** The champion's missile: its speed, size and look. Read per shot, so console tuning applies. */
+    private readonly missileSpec: () => HomingMissileSpec = () => AUTO_MISSILE_SPEC(),
   ) {
     this.targetMarker = scene.add.graphics().setDepth(THEME.depth.reticle).setVisible(false);
   }
@@ -445,6 +447,7 @@ export class AttackSystem {
         target,
         target.spawnId,
         (hitTarget) => this.onMissileHit(hitTarget),
+        this.missileSpec(),
       ),
     );
   }

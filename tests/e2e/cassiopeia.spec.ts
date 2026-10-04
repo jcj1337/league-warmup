@@ -61,6 +61,25 @@ test('cassiopeia: picked from the profile, slow autos, Q blast + poison ticks, W
       : fail(`ranges: ${JSON.stringify({ auto: s.attackRange, cfg: cfg.AUTO, q: cfg.Q.range, e: cfg.E.range })}`);
   }
 
+  // Her auto is her own: a slim violet needle, not Ezreal's cyan bolt.
+  await stage(780, 360, 9);
+  await page.evaluate(() => {
+    const g = window.__warmup.scene.getScene('GameScene');
+    g.attacks.commandAttack(g.director.enemies[0]);
+  });
+  await page.waitForFunction(() => window.__warmup.scene.getScene('GameScene').attacks.missilesInFlight > 0, null, { timeout: 3000 });
+  {
+    const needle = await page.evaluate(() => {
+      const g = window.__warmup.scene.getScene('GameScene');
+      const m = g.attacks.missiles[0];
+      return { key: m.view.textureKey, impact: m.spec.impact, muzzle: g.player.view.muzzle.texture.key };
+    });
+    needle.key === 'proj_venom' && needle.impact === 'venom' && needle.muzzle === 'fx_muzzle_venom'
+      ? pass('her auto is a violet venom needle, with its own muzzle flash and impact')
+      : fail(`her auto: ${JSON.stringify(needle)}`);
+  }
+  await page.evaluate(() => window.__warmup.scene.getScene('GameScene').attacks.onStop());
+
   // === 2. Q: a delayed blast, then poison ticks ===============================
   section('2. Q');
   await stage(900, 360, 4);

@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import type { CastStyle, FxKey, Motion, Slot } from '../../champions/types';
+import type { AutoLook, CastStyle, FxKey, Motion, Slot } from '../../champions/types';
 import { THEME, actorDepth } from '../../config/theme';
 import type { PlayerFrames } from '../art/look';
 import { TEX } from '../art/textures';
@@ -114,6 +114,8 @@ export class PlayerView {
   private windupMs = 0;
   private autoTempo = 1;
   private autoMotion: Motion = defaultAutoMotion();
+  /** Which THEME.fx entry colours the auto's muzzle burst and release ring. */
+  private autoFx: 'auto' | FxKey = 'auto';
   private aimAngle: number | null = null;
   /** Last direction the slime aimed or faced, for the shot flash. */
   private lastAim = 0;
@@ -162,10 +164,12 @@ export class PlayerView {
 
   // ------------------------------------------------------------ state feeds
 
-  /** The champion's cast looks and auto motion, once per run. */
-  setCastLooks(looks: Partial<Record<Slot, CastLook>>, autoMotion?: Motion): void {
+  /** The champion's cast looks, auto motion and auto look, once per run. */
+  setCastLooks(looks: Partial<Record<Slot, CastLook>>, autoMotion?: Motion, autoLook?: AutoLook): void {
     this.castLooks = looks;
     this.autoMotion = autoMotion ?? defaultAutoMotion();
+    this.autoFx = autoLook?.fx ?? 'auto';
+    this.muzzle.setTexture(autoLook?.muzzle ?? TEX.player.muzzle);
   }
 
   private lookOf(slot: Slot): CastLook {
@@ -218,7 +222,8 @@ export class PlayerView {
 
   playReleaseBurst(): void {
     const tip = this.muzzlePoint();
-    Fx.of(this.scene).sparks(tip.x, tip.y, [THEME.fx.auto.core, THEME.fx.auto.color], 4, 150, 140, 3, tip.angle, 1.2);
+    const f = THEME.fx[this.autoFx];
+    Fx.of(this.scene).sparks(tip.x, tip.y, [f.core, f.color], 4, 150, 140, 3, tip.angle, 1.2);
   }
 
   playCastRelease(ability: CastKind): void {
@@ -367,7 +372,7 @@ export class PlayerView {
     if (this.msSinceRelease < A.releaseRingMs) {
       const t = this.msSinceRelease / A.releaseRingMs;
       const radius = Phaser.Math.Linear(s.radius + A.chargeRingEndPad, A.releaseRingRadius, t);
-      dottedRing(g, s.x, s.y, radius, A.releaseColor, 1 - t, 3);
+      dottedRing(g, s.x, s.y, radius, this.autoFx === 'auto' ? A.releaseColor : THEME.fx[this.autoFx].core, 1 - t, 3);
       Object.assign(this.releaseRing, { visible: true, radius, strokeAlpha: 1 - t });
     } else {
       Object.assign(this.releaseRing, { visible: false, strokeAlpha: 0 });
@@ -397,13 +402,13 @@ export class PlayerView {
     }
     if (this.pose === 'windup') {
       const pose = sampleMotion(this.autoMotion.windup, this.windup, this.windupMs);
-      return { pose, frame: pose.frame ?? 'charge', angle: this.aimAngle ?? facingAngle, glowColor: this.autoMotion.glowColor ?? THEME.fx.auto.core };
+      return { pose, frame: pose.frame ?? 'charge', angle: this.aimAngle ?? facingAngle, glowColor: this.autoMotion.glowColor ?? THEME.fx[this.autoFx].core };
     }
     if (this.pose === 'release') {
       // Both playing (a cast resolved just after an auto, or the reverse): the newer one owns the body.
       if (autoFollowing && (!castFollowing || this.msSinceRelease <= this.castReleaseAge)) {
         const pose = sampleMotion(this.autoMotion.followThrough, this.msSinceRelease / this.autoTempo);
-        return { pose, frame: pose.frame ?? baseFrame, angle: this.aimAngle ?? facingAngle, glowColor: this.autoMotion.glowColor ?? THEME.fx.auto.core };
+        return { pose, frame: pose.frame ?? baseFrame, angle: this.aimAngle ?? facingAngle, glowColor: this.autoMotion.glowColor ?? THEME.fx[this.autoFx].core };
       }
       const look = this.lookOf(this.castReleaseKind);
       const pose = sampleMotion(look.motion.followThrough, this.castReleaseAge / this.castTempo);

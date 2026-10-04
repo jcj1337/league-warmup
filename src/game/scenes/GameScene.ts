@@ -31,6 +31,7 @@ import { Battlefield } from '../view/Battlefield';
 import { Fx } from '../view/Fx';
 import { RunFeedback } from '../view/RunFeedback';
 import { DEFAULT_CAST_MOTION, tempoOf } from '../view/motion';
+import { AUTO_MISSILE_SPEC } from '../entities/AutoAttackMissile';
 import type { CastLook } from '../view/PlayerView';
 
 export type { RoundResult, RoundState } from '../Run';
@@ -219,11 +220,11 @@ export class GameScene extends Phaser.Scene {
       const def = this.champion.slots[slot];
       if (def) looks[slot] = { style: def.castStyle, fx: def.fx, motion: def.motion ?? DEFAULT_CAST_MOTION };
     }
-    this.player.view.setCastLooks(looks, this.champion.autoMotion);
+    this.player.view.setCastLooks(looks, this.champion.autoMotion, this.champion.autoLook);
 
     this.attacks = new AttackSystem(this, this.player, this.metrics, this.progression, this.kit, {
       onHit: (target, killed) => this.combat.hit(target, killed),
-    });
+    }, () => AUTO_MISSILE_SPEC(this.champion.autoLook));
 
     this.enemyProjectiles = new EnemyProjectileSystem(this, this.player, this.director, {
       onPlayerHit: (damage) => this.combat.playerHit(damage, 'edgeFire'),

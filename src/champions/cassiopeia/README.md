@@ -36,13 +36,17 @@ the slow and for setting up E, not for damage on its own. **Spellcasters** (the 
 Sovereign) can't be poisoned to death: poisoned above one pip, it wears them down to one and
 stops, so tagging one with Q and running doesn't kill it. Poisoned at one pip, it can.
 
-**One feel for the whole kit.** Everything she casts bursts open into soft, blotchy puffs
-that pop a little past their size, splatter droplets and shrink away, with smooth outlines
-rather than dotted ones. W set the tone; Q, E and R share it.
+**How her spells look.** Her lingering venom (W's clouds, E's bite) bursts open into soft,
+blotchy puffs that pop a little past their size, splatter droplets and shrink away. Her
+quick spells land clean: Q in a splash of droplets and rings, R as a pale stone front.
+Outlines are smooth, not dotted. Her auto is her own, a slim violet needle of venom where
+Ezreal fires a fat cyan bolt.
+
+**Her look.** The same friendly dome as Ezreal's, in venom green, with two small fangs
+under her smile and a snake's tail curling up out of her coil behind her.
 
 **Q and W are telegraphed.** Q lands 400ms after you place it: venom wells up in place
-under the target, the ring filling from its centre as puffs bubble up inside it, then it
-bursts. Anything that walks out of the ring before then is missed. Q is
+under the target, the ring filling from its centre, then it lands in a splash. Anything that walks out of the ring before then is missed. Q is
 small on purpose: in League it's about three champion radii wide, so you aim it at one
 enemy, from a little further out than your auto.
 
@@ -70,8 +74,8 @@ she lands, aimed the same way: W's bolts leave from the Flash destination and th
 as far ahead of her as you aimed it; R's cone strikes from there.
 
 **R is a half-second cast.** As in League, she's rooted for 500ms while the cone fills
-toward the cursor, and it strikes the instant the cast ends: a wave of venom puffs sweeps
-out from her to the cone's edge, and a puff bursts on every enemy it catches, stone on the
+toward the cursor, and it strikes the instant the cast ends: a pale stone front sweeps out
+from her to the cone's edge, and a splash rings every enemy it catches, stone grey on the
 ones it petrifies. A move order given during it waits, and goes as soon as the gaze lands.
 
 **Her body says what's coming** ([motions.ts](motions.ts)). She's a cobra. Her auto coils

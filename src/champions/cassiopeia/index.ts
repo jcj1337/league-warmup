@@ -27,6 +27,8 @@ export const CASSIOPEIA: Champion = {
   levels: LEVELS,
   art: CASSIOPEIA_ART,
   autoMotion: AUTO_MOTION,
+  /** A slim violet needle of venom, where Ezreal's is a fat cyan bolt. */
+  autoLook: { missile: 'venom', fx: 'venom', muzzle: TEX.player.muzzleVenom },
   slots: {
     q: {
       label: 'Noxious Blast', targeting: 'point', range: Q.range,

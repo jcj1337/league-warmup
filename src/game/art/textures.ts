@@ -11,7 +11,7 @@ export const TEX = {
   px: 'px',
   shadow: { s: 'shadow_s', m: 'shadow_m', l: 'shadow_l' },
   /** The player's body frames are composed per champion and look (src/game/art/look.ts); only this is static. */
-  player: { muzzle: 'fx_muzzle' },
+  player: { muzzle: 'fx_muzzle', muzzleVenom: 'fx_muzzle_venom' },
   basic: { frames: ['basic_0', 'basic_1'], spit: 'basic_spit' },
   pursuer: {
     walk: ['pursuer_walk_0', 'pursuer_walk_1'],
@@ -32,6 +32,7 @@ export const TEX = {
   mark: 'fx_mark',
   proj: {
     auto: 'proj_auto',
+    venom: 'proj_venom',
     q: 'proj_q',
     w: 'proj_w',
     e: 'proj_e',

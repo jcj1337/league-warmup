@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { ATTACK } from '../../config/balance';
+import type { AutoLook } from '../../champions/types';
 import { Fx, type ShotFx } from '../view/Fx';
 import { PROJECTILE_ART } from '../view/projectileArt';
 import { ProjectileView, type ProjectileArt } from '../view/ProjectileView';
@@ -14,12 +15,12 @@ export interface HomingMissileSpec {
   impact: ShotFx;
 }
 
-/** The player's basic attack missile spec. */
-export const AUTO_MISSILE_SPEC = (): HomingMissileSpec => ({
+/** The player's basic attack missile spec, in the champion's look (the cyan bolt by default). */
+export const AUTO_MISSILE_SPEC = (look?: AutoLook): HomingMissileSpec => ({
   speed: ATTACK.projectileSpeed,
   radius: ATTACK.projectileRadius,
-  art: PROJECTILE_ART.auto,
-  impact: 'auto',
+  art: PROJECTILE_ART[look?.missile ?? 'auto'],
+  impact: look?.fx ?? 'auto',
 });
 
 /**
