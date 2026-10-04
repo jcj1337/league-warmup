@@ -78,6 +78,12 @@ export interface AbilityDef {
   castStyle: CastStyle;
   /** Drawn on the ground through the cast window; none for most slots. */
   telegraph?: CastTelegraph;
+  /**
+   * A mid-cast Flash leaves this cast where it began: it goes off from the
+   * spot she stood when the key went down, aimed as clicked (Ezreal's R, as in
+   * League). Otherwise the cast travels with her (Cassiopeia's W-Flash).
+   */
+  anchored?: boolean;
   fx: FxKey;
 }
 
@@ -122,6 +128,8 @@ export interface Aim {
   y: number;
   /** The picked enemy, for unit targeting. */
   target?: Enemy | null;
+  /** An anchored cast (AbilityDef.anchored): where she stood when the key went down, to fire from. */
+  from?: { x: number; y: number };
 }
 
 /** The passive readout above the ability bar, or null for a champion without stacks. */

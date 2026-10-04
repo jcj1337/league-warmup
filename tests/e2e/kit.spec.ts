@@ -469,6 +469,24 @@ test('kit: W mark + detonation, E blink + bolt priority, Flash, Q cooldown refun
     : fail(`R charge: ${JSON.stringify({ charge, fast })}`);
   await page.waitForFunction(() => !window.__warmup.scene.getScene('GameScene').cast.isCasting, null, { timeout: 2000 });
 
+  // R then Flash: he lands elsewhere, but the wave leaves from where he began, as in League.
+  await setup([{ type: 'basic', x: 950, y: 360 }], 3);
+  await page.mouse.move(1270, 360);
+  await page.keyboard.press('r');
+  await page.mouse.move(640, 540);
+  await page.keyboard.press('f');
+  await page.waitForFunction(() => window.__warmup.scene.getScene('GameScene').projectiles.missilesInFlight > 0, null, { timeout: 3000 });
+  const rFlash = await page.evaluate(() => {
+    const g = window.__warmup.scene.getScene('GameScene');
+    const m = g.projectiles.missiles[0].projectile;
+    return { px: g.player.x, py: g.player.y, my: m.y, flashCd: g.cooldowns.remainingMs('flash') };
+  });
+  await page.waitForFunction(() => window.__warmup.scene.getScene('GameScene').projectiles.missilesInFlight === 0, null, { timeout: 4000 });
+  const rFlashHp = (await hps())[0];
+  rFlash.flashCd > 0 && Math.abs(rFlash.py - 540) < 1 && Math.abs(rFlash.my - 360) < 2 && rFlashHp === 3 - cfg.r.firstPips
+    ? pass('R then Flash: he lands 180px away, the wave still leaves from where he began and hits what he aimed at')
+    : fail(`R-Flash: ${JSON.stringify({ rFlash, rFlashHp })}`);
+
   // === HUD slots =============================================================
   section('HUD slots');
   const slots = await page.evaluate(() => {

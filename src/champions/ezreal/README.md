@@ -45,8 +45,9 @@ back: there's no stage refresh, so the more Qs you land, the more often you have
 speed, level and passive alike, so ~625ms at level 11 and ~495ms at 18), then one wave that crosses the whole arena and passes through every enemy
 in its path, 40px either side of its line. The first enemy it touches loses two pips and
 every one after loses one, so it clears a line of slimes and softens the rest. Every enemy
-it hits is a passive stack, and it detonates W marks like any other hit. Flash during the
-charge and the wave leaves from where you land.
+it hits is a passive stack, and it detonates W marks like any other hit. As in League,
+Flash during the charge doesn't take the wave with you: it still leaves from where you
+began, toward where you clicked, while you land somewhere else.
 
 **W combo.** W marks on contact and removes no pips. The next auto, Q or E bolt hit on
 that enemy removes its own pip plus one more from the detonation (W → Q = 2 pips); an

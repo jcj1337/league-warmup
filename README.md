@@ -260,7 +260,8 @@ can also carry a `telegraph` (a cone, for now) drawn on the ground through its c
 **Flash mid-cast.** You're rooted through a cast window, and other abilities are ignored,
 but Flash still goes off, as in League. The cast then resolves from where you land, aimed
 the same relative to you as when you pressed it: Q-Flash, W-Flash and R-Flash all carry
-the spell with you.
+the spell with you. A slot can be `anchored` instead (Ezreal's R, as in League): it goes
+off from where you began, toward where you clicked, wherever Flash took you.
 
 ## Attack cycle
 

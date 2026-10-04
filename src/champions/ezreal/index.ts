@@ -51,6 +51,8 @@ export const EZREAL: Champion = {
       label: 'Trueshot Barrage', targeting: 'direction',
       // The charge speeds up with his attack speed, level and passive alike.
       castTimeMs: ({ attackSpeed }) => ULT_R.castTimeMs / attackSpeed, cooldownMs: () => ULT_R.cooldownMs,
+      // As in League, Flash mid-charge doesn't take the wave along: it leaves from where he began.
+      anchored: true,
       icon: TEX.icons.r, accent: THEME.ability.accents.r, castStyle: 'orb', fx: 'r',
     },
   },

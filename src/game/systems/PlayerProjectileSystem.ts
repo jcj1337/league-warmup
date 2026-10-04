@@ -42,17 +42,21 @@ export class PlayerProjectileSystem {
     return this.missiles.length;
   }
 
-  /** Spawn a shot from the player toward (worldX, worldY), with its cast flash at the slime's edge. */
-  fire(spec: ShotSpec, worldX: number, worldY: number): void {
-    const angle = Math.atan2(worldY - this.player.y, worldX - this.player.x);
+  /**
+   * Spawn a shot toward (worldX, worldY), with its cast flash at the slime's
+   * edge. From the player, or from `from` (an anchored cast: where the player
+   * stood when the key went down).
+   */
+  fire(spec: ShotSpec, worldX: number, worldY: number, from: { x: number; y: number } = this.player): void {
+    const angle = Math.atan2(worldY - from.y, worldX - from.x);
 
     this.missiles.push({
       kind: spec.fx,
       spec,
       struck: new Set(),
       projectile: new Projectile(this.scene, {
-        x: this.player.x,
-        y: this.player.y,
+        x: from.x,
+        y: from.y,
         angle,
         speed: spec.speed,
         radius: spec.radius,
@@ -64,8 +68,8 @@ export class PlayerProjectileSystem {
 
     Fx.of(this.scene).castFlash(
       spec.fx,
-      this.player.x + Math.cos(angle) * this.player.radius,
-      this.player.y + Math.sin(angle) * this.player.radius,
+      from.x + Math.cos(angle) * this.player.radius,
+      from.y + Math.sin(angle) * this.player.radius,
       angle,
     );
   }

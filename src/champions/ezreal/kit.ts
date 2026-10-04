@@ -87,7 +87,7 @@ export class EzrealKit implements Kit {
       projectiles.fire({
         speed: ULT_R.speed, radius: ULT_R.radius, maxRange: ULT_R.maxRange, pierce: true,
         art: PROJECTILE_ART.r, fx: 'r', onHit: (target) => this.onRHit(target, struck++ === 0),
-      }, aim.x, aim.y);
+      }, aim.x, aim.y, aim.from);   // anchored: from where he stood when it began, Flash or not
     }
   }
 

@@ -331,7 +331,7 @@ export class GameScene extends Phaser.Scene {
     this.cooldowns.start(slot);
     // Level and passive together, as the auto windup reads them.
     const attackSpeed = this.progression.attackSpeedMultiplier * this.kit.attackSpeedMultiplier;
-    this.beginCastOrResolve(slot, payload, def.castTimeMs({ attackSpeed }));
+    this.beginCastOrResolve(slot, payload, def.castTimeMs({ attackSpeed }), def.anchored ?? false);
   }
 
   /** Where a cast goes, from the cursor and the slot's targeting. Null: nothing to cast at. */
@@ -401,12 +401,12 @@ export class GameScene extends Phaser.Scene {
    * Start a cast window, or resolve immediately when castTimeMs is 0 — so any
    * ability can be made instant from config alone.
    */
-  private beginCastOrResolve(ability: CastAbility, payload: CastPayload, castTimeMs: number): void {
+  private beginCastOrResolve(ability: CastAbility, payload: CastPayload, castTimeMs: number, anchored: boolean): void {
     if (castTimeMs <= 0) {
-      this.resolveCast(ability, payload);
+      this.resolveCast(ability, anchored ? { ...payload, from: { x: this.player.x, y: this.player.y } } : payload);
       return;
     }
-    this.cast.begin(ability, payload, castTimeMs, this.clock.now);
+    this.cast.begin(ability, payload, castTimeMs, this.clock.now, anchored);
   }
 
   /** What a slot actually does once its commitment window elapses is the kit's. */

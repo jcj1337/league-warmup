@@ -21,6 +21,8 @@ interface PendingCast {
   /** Where she stood when the key went down; the aim travels with her from here. */
   fromX: number;
   fromY: number;
+  /** Stays where it began: no shift, and resolves with `from`. */
+  anchored: boolean;
   startedAt: number;
   endsAt: number;
   durationMs: number;
@@ -47,6 +49,8 @@ interface CastCallbacks {
  * Flash is the one thing that can move her mid-cast, and the cast goes with
  * her, as in League (W-Flash, R-Flash): it resolves from where she is at the
  * end of the window, aimed the same relative to her as when it was committed.
+ * An anchored cast stays put instead: its aim is never shifted, and it carries
+ * `from`, the spot the key went down, to fire from (Ezreal's R).
  *
  * All timing is GameClock time, so a pause preserves partial cast progress
  * exactly: nothing is rescheduled, the clock simply stops advancing.
@@ -89,6 +93,7 @@ export class CastSystem {
   }
 
   private carried(cast: PendingCast): CastPayload {
+    if (cast.anchored) return { ...cast.payload, from: { x: cast.fromX, y: cast.fromY } };
     const dx = this.player.x - cast.fromX;
     const dy = this.player.y - cast.fromY;
     if (dx === 0 && dy === 0) return cast.payload;
@@ -99,12 +104,13 @@ export class CastSystem {
    * Start a cast. The caller has already checked the cooldown and started it —
    * cooldowns run from cast START so the window never extends the cooldown.
    */
-  begin(ability: CastAbility, payload: CastPayload, durationMs: number, nowMs: number): void {
+  begin(ability: CastAbility, payload: CastPayload, durationMs: number, nowMs: number, anchored = false): void {
     this.pending = {
       ability,
       payload,
       fromX: this.player.x,
       fromY: this.player.y,
+      anchored,
       startedAt: nowMs,
       endsAt: nowMs + durationMs,
       durationMs,
