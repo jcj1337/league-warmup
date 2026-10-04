@@ -87,6 +87,11 @@ export class CastSystem {
     return Math.min(1, Math.max(0, 1 - remaining / this.pending.durationMs));
   }
 
+  /** The pending window's full length; 0 when nothing is casting. */
+  get durationMs(): number {
+    return this.pending?.durationMs ?? 0;
+  }
+
   /** Where the pending cast is aimed right now: the committed aim, carried along by a mid-cast Flash. */
   get aim(): CastPayload | null {
     return this.pending ? this.carried(this.pending) : null;

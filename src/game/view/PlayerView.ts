@@ -1,9 +1,10 @@
 import Phaser from 'phaser';
-import type { CastStyle, FxKey, Slot } from '../../champions/types';
+import type { CastStyle, FxKey, Motion, Slot } from '../../champions/types';
 import { THEME, actorDepth } from '../../config/theme';
 import type { PlayerFrames } from '../art/look';
 import { TEX } from '../art/textures';
 import { Fx } from './Fx';
+import { DEFAULT_CAST_MOTION, defaultAutoMotion, followThroughMs, REST_POSE, sampleMotion, type MotionPose } from './motion';
 import { PixelBar } from './PixelBar';
 import { dottedRing, pixelDisc } from './pixelDraw';
 
@@ -11,8 +12,12 @@ import { dottedRing, pixelDisc } from './pixelDraw';
 export interface AttackVisual {
   /** 0 outside a windup, 0 -> 1 through it. Comes straight from AttackSystem. */
   windupProgress: number;
-  /** Time since the last missile release, for the recoil kick. */
+  /** Time since the last missile release, for the follow-through. */
   msSinceRelease: number;
+  /** The windup's real length, which decides the motion keys that play. */
+  windupMs: number;
+  /** The follow-through's compression: the auto cycle now against level 1's (see tempoOf). */
+  tempo: number;
   /** Where the attack is aimed, if anywhere. */
   targetX: number | null;
   targetY: number | null;
@@ -37,12 +42,26 @@ export interface PlayerViewState {
 
 export type CastKind = Slot;
 
-/** How a slot's cast window is drawn on the slime: the charge-up shape and its colours. */
+/** What the scene hands the player each frame about the cast window. */
+export interface CastVisual {
+  ability: CastKind | null;
+  /** 0 -> 1 across the window. Comes straight from CastSystem. */
+  progress: number;
+  aimX: number | null;
+  aimY: number | null;
+  /** The window's real length, which decides the motion keys that play. */
+  windowMs: number;
+  /** The follow-through's compression: this window against the slot's level-1 window. */
+  tempo: number;
+}
+
+/** How a slot's cast is drawn on the slime: the charge-up over it, its colours, and what the body does. */
 export interface CastLook {
   style: CastStyle;
   fx: FxKey;
+  motion: Motion;
 }
-const NO_LOOK: CastLook = { style: 'none', fx: 'q' };
+const NO_LOOK: CastLook = { style: 'none', fx: 'q', motion: DEFAULT_CAST_MOTION };
 export type PlayerPose = 'idle' | 'walk' | 'windup' | 'release' | 'cast' | 'stunned';
 
 /** Plain readouts of the dotted rings, so they can be inspected without touching Graphics. */
@@ -53,10 +72,11 @@ export interface RingReadout {
 }
 
 /**
- * Everything the player looks like: the blue slime (idle breathing, hop while
- * moving, hunker on windup, pop on release, "o" mouth while casting), the
- * shot flash at its edge, shadow, health bar, range / charge / release rings
- * and cast charge-ups.
+ * Everything the player looks like: the champion's slime (idle breathing, hop
+ * while moving, and its motions: what the body does through each auto and
+ * cast, see src/game/view/motion.ts), the glow on its art, the shot flash at
+ * its edge, shadow, health bar, range / charge / release rings and cast
+ * charge-ups.
  *
  * A pure observer. It is handed attack, cast and movement state every frame
  * and never feeds anything back: gameplay position stays on the Player; this
@@ -64,6 +84,8 @@ export interface RingReadout {
  */
 export class PlayerView {
   readonly sprite: Phaser.GameObjects.Image;
+  /** The art's glow pixels over the body, lit by a motion's `glow`. Null when the art has none. */
+  readonly glowSprite: Phaser.GameObjects.Image | null;
   readonly muzzle: Phaser.GameObjects.Image;
   readonly shadow: Phaser.GameObjects.Image;
   readonly destPip: Phaser.GameObjects.Image;
@@ -78,13 +100,20 @@ export class PlayerView {
   readonly releaseRing: RingReadout = { visible: false, radius: 0, strokeAlpha: 0 };
 
   pose: PlayerPose = 'idle';
+  /** The body frame drawn this frame, by name ('idle', 'charge', or a champion's own pose like 'gulp'). */
+  motionFrame = 'idle';
+  /** The motion's channels this frame, for inspection. */
+  motionPose: MotionPose = { ...REST_POSE };
   /** 1 = facing right, -1 = facing left. */
   facing: 1 | -1 = 1;
-  /** Visual-only lean/recoil offset of the sprite from the gameplay position. */
+  /** Visual-only offset of the sprite from the gameplay position: the motion's lean, recoil, hop and shake. */
   offsetX = 0;
   offsetY = 0;
 
   private windup = 0;
+  private windupMs = 0;
+  private autoTempo = 1;
+  private autoMotion: Motion = defaultAutoMotion();
   private aimAngle: number | null = null;
   /** Last direction the slime aimed or faced, for the shot flash. */
   private lastAim = 0;
@@ -92,7 +121,9 @@ export class PlayerView {
   private castKind: CastKind | null = null;
   private castProgress = 0;
   private castAngle: number | null = null;
-  /** The last cast's aim, kept past its release for the 'fang' lunge. */
+  private castWindowMs = 0;
+  private castTempo = 1;
+  /** The last cast's aim, kept past its release for its follow-through. */
   private lastCastAngle = 0;
   private rangeVisibility = 0;
   private rangeInRange = false;
@@ -118,6 +149,7 @@ export class PlayerView {
     this.destPip = scene.add.image(x, y, TEX.fx.dest).setScale(S).setAlpha(0.7).setDepth(THEME.depth.ping).setVisible(false);
     this.groundGfx = scene.add.graphics().setDepth(THEME.depth.groundFx);
     this.sprite = scene.add.image(x, y, look.frames.idle[0]).setOrigin(0.5, look.originY).setScale(S);
+    this.glowSprite = look.glow ? scene.add.image(x, y, look.frames.idle[0]).setOrigin(0.5, look.originY).setVisible(false) : null;
     this.muzzle = scene.add.image(x, y, TEX.player.muzzle).setScale(S).setDepth(THEME.depth.fx).setVisible(false);
     this.overGfx = scene.add.graphics().setDepth(THEME.depth.fx);
     this.hpBar = new PixelBar(scene, THEME.player.hpBarWidth, THEME.hpBar.player);
@@ -130,9 +162,10 @@ export class PlayerView {
 
   // ------------------------------------------------------------ state feeds
 
-  /** The champion's cast looks, once per run. */
-  setCastLooks(looks: Partial<Record<Slot, CastLook>>): void {
+  /** The champion's cast looks and auto motion, once per run. */
+  setCastLooks(looks: Partial<Record<Slot, CastLook>>, autoMotion?: Motion): void {
     this.castLooks = looks;
+    this.autoMotion = autoMotion ?? defaultAutoMotion();
   }
 
   private lookOf(slot: Slot): CastLook {
@@ -140,28 +173,35 @@ export class PlayerView {
   }
 
   applyAttackVisual(v: AttackVisual, x: number, y: number): void {
-    const A = THEME.player.attack;
-    const lean = A.windupLeanPx * v.windupProgress;
-    const kick = v.msSinceRelease < A.releaseKickMs ? A.releaseKickPx * (1 - v.msSinceRelease / A.releaseKickMs) : 0;
-
-    this.offsetX = 0;
-    this.offsetY = 0;
-    this.aimAngle = null;
-    if (v.targetX !== null && v.targetY !== null && (v.windupProgress > 0 || v.msSinceRelease < A.releasePoseMs)) {
-      const angle = Math.atan2(v.targetY - y, v.targetX - x);
-      this.offsetX = Math.cos(angle) * (lean - kick);
-      this.offsetY = Math.sin(angle) * (lean - kick);
-      this.aimAngle = angle;
-    }
     this.windup = v.windupProgress;
+    this.windupMs = v.windupMs;
+    this.autoTempo = v.tempo;
     this.msSinceRelease = v.msSinceRelease;
+    this.aimAngle = null;
+    if (v.targetX !== null && v.targetY !== null && (v.windupProgress > 0 || this.autoFollowing)) {
+      this.aimAngle = Math.atan2(v.targetY - y, v.targetX - x);
+    }
   }
 
-  setCastVisual(ability: CastKind | null, progress: number, aimX: number | null, aimY: number | null, x: number, y: number): void {
-    this.castKind = ability;
-    this.castProgress = Phaser.Math.Clamp(progress, 0, 1);
-    this.castAngle = ability !== null && aimX !== null && aimY !== null ? Math.atan2(aimY - y, aimX - x) : null;
+  setCastVisual(v: CastVisual, x: number, y: number): void {
+    this.castKind = v.ability;
+    this.castProgress = Phaser.Math.Clamp(v.progress, 0, 1);
+    this.castAngle = v.ability !== null && v.aimX !== null && v.aimY !== null ? Math.atan2(v.aimY - y, v.aimX - x) : null;
     if (this.castAngle !== null) this.lastCastAngle = this.castAngle;
+    if (v.ability !== null) {
+      this.castWindowMs = v.windowMs;
+      this.castTempo = v.tempo;
+    }
+  }
+
+  /** The auto's follow-through is still playing. */
+  private get autoFollowing(): boolean {
+    return this.msSinceRelease < followThroughMs(this.autoMotion) * this.autoTempo;
+  }
+
+  /** The last cast's follow-through is still playing. */
+  private get castFollowing(): boolean {
+    return this.castReleaseAge < followThroughMs(this.lookOf(this.castReleaseKind).motion) * this.castTempo;
   }
 
   setRangeRingState(inRange: boolean, attackMovePending: boolean, visibility: number): void {
@@ -213,29 +253,46 @@ export class PlayerView {
     const desired = this.aimAngle ?? this.castAngle ?? this.moveAngle(s);
     if (desired !== null && Math.abs(Math.cos(desired)) > 0.15) this.facing = Math.cos(desired) >= 0 ? 1 : -1;
 
+    // A new windup cuts any follow-through: the next cue is never hidden behind the last.
+    const autoFollowing = this.autoFollowing;
+    const castFollowing = this.castFollowing;
     this.pose = s.stunned ? 'stunned'
       : this.castKind !== null ? 'cast'
       : this.windup > 0 ? 'windup'
-      : this.msSinceRelease < A.releasePoseMs ? 'release'
+      : autoFollowing || castFollowing ? 'release'
       : s.moving ? 'walk'
       : 'idle';
 
     // Stunned: slumped in the squash frame, no breathing, until it wears off.
-    const F = this.look.frames;
-    const frame = this.pose === 'stunned' ? F.idle[1]
-      : this.pose === 'cast' ? F.cast
-      : this.pose === 'windup' ? F.charge
-      : this.pose === 'release' ? F.release
-      : this.pose === 'walk' ? F.walk[Math.floor(this.visualMs / P.walkFrameMs) % 2]
-      : F.idle[Math.floor(this.visualMs / P.idleFrameMs) % 2];
+    const baseFrame = this.pose === 'stunned' ? 'squash'
+      : s.moving ? (Math.floor(this.visualMs / P.walkFrameMs) % 2 ? 'squash' : 'stretch')
+      : Math.floor(this.visualMs / P.idleFrameMs) % 2 ? 'squash' : 'idle';
 
-    const lunge = this.fangOffset();
-    const bx = Math.round(s.x + this.offsetX + lunge.x);
-    const by = Math.round(s.y + this.offsetY + lunge.y);
+    const { pose, frame, angle, glowColor } = this.sampleBody(baseFrame, autoFollowing, castFollowing);
+    this.motionPose = pose;
+    this.motionFrame = frame;
 
-    this.sprite.setTexture(frame).setFlipX(this.facing < 0).setPosition(bx, by).setDepth(actorDepth(s.y));
+    const shake = pose.tremble > 0 ? this.trembleOffset(pose.tremble) : { x: 0, y: 0 };
+    this.offsetX = Math.cos(angle) * pose.along - Math.sin(angle) * pose.side + shake.x;
+    this.offsetY = Math.sin(angle) * pose.along + Math.cos(angle) * pose.side - pose.up + shake.y;
+    const S = THEME.art.scale;
+    this.sprite.setTexture(this.look.named[frame]);
+    // Scaled about the feet, so a squash sinks into the ground rather than shrinking toward the middle.
+    const footPx = (1 - this.look.originY) * this.sprite.height * S;
+    const bx = Math.round(s.x + this.offsetX);
+    const by = Math.round(s.y + this.offsetY + footPx * (1 - pose.sy));
+
+    this.sprite.setFlipX(this.facing < 0).setPosition(bx, by).setScale(S * pose.sx, S * pose.sy).setDepth(actorDepth(s.y));
     // Hit: a brief white pop, then a red wash — the hero never vanishes into a silhouette.
     this.applyHitTint(this.sprite, P.hitFlashMs);
+
+    const glowKey = this.look.glow?.[frame];
+    if (this.glowSprite && glowKey && pose.glow > 0.01) {
+      this.glowSprite.setVisible(true).setTexture(glowKey).setTintFill(glowColor).setAlpha(Math.min(1, pose.glow))
+        .setFlipX(this.facing < 0).setPosition(bx, by).setScale(S * pose.sx, S * pose.sy).setDepth(actorDepth(s.y) + 0.001);
+    } else {
+      this.glowSprite?.setVisible(false);
+    }
 
     // Shots and casts visibly leave from the slime's edge toward the aim.
     this.lastAim = this.aimAngle ?? this.castAngle ?? (this.facing > 0 ? 0 : Math.PI);
@@ -320,22 +377,45 @@ export class PlayerView {
 
     if (s.stunned) this.drawStun(g, bx, by);
 
-    if (this.castReleaseAge < THEME.cast.releaseFlashMs) {
+    if (this.castReleaseAge < THEME.cast.releaseFlashMs && this.lookOf(this.castReleaseKind).style !== 'none') {
       const t = this.castReleaseAge / THEME.cast.releaseFlashMs;
       pixelDisc(g, hand.x, hand.y, 9 * (1 - t) + 3, THEME.fx[this.lookOf(this.castReleaseKind).fx].core, 1 - t, 3);
     }
   }
 
-  /** The 'fang' style moves the whole body: it rears back through the cast and lunges as it goes. */
-  private fangOffset(): { x: number; y: number } {
-    const C = THEME.cast;
-    let d = 0;
-    if (this.castKind !== null) {
-      if (this.lookOf(this.castKind as Slot).style === 'fang') d = -C.fangRearPx * Math.pow(this.castProgress, C.anticipationCurve);
-    } else if (this.castReleaseAge < C.fangLungeMs && this.lookOf(this.castReleaseKind as Slot).style === 'fang') {
-      d = C.fangLungePx * (1 - this.castReleaseAge / C.fangLungeMs);
+  /**
+   * The body this frame: the motion of whatever owns it (the cast window, the
+   * auto windup, or the latest follow-through), sampled from the real timing.
+   * Walking and idling are the plain breathing / hop frames at rest.
+   */
+  private sampleBody(baseFrame: string, autoFollowing: boolean, castFollowing: boolean): { pose: MotionPose; frame: string; angle: number; glowColor: number } {
+    const facingAngle = this.facing > 0 ? 0 : Math.PI;
+    if (this.pose === 'cast' && this.castKind !== null) {
+      const look = this.lookOf(this.castKind);
+      const pose = sampleMotion(look.motion.windup, this.castProgress, this.castWindowMs);
+      return { pose, frame: pose.frame ?? 'cast', angle: this.castAngle ?? facingAngle, glowColor: look.motion.glowColor ?? THEME.fx[look.fx].core };
     }
-    return { x: Math.cos(this.lastCastAngle) * d, y: Math.sin(this.lastCastAngle) * d };
+    if (this.pose === 'windup') {
+      const pose = sampleMotion(this.autoMotion.windup, this.windup, this.windupMs);
+      return { pose, frame: pose.frame ?? 'charge', angle: this.aimAngle ?? facingAngle, glowColor: this.autoMotion.glowColor ?? THEME.fx.auto.core };
+    }
+    if (this.pose === 'release') {
+      // Both playing (a cast resolved just after an auto, or the reverse): the newer one owns the body.
+      if (autoFollowing && (!castFollowing || this.msSinceRelease <= this.castReleaseAge)) {
+        const pose = sampleMotion(this.autoMotion.followThrough, this.msSinceRelease / this.autoTempo);
+        return { pose, frame: pose.frame ?? baseFrame, angle: this.aimAngle ?? facingAngle, glowColor: this.autoMotion.glowColor ?? THEME.fx.auto.core };
+      }
+      const look = this.lookOf(this.castReleaseKind);
+      const pose = sampleMotion(look.motion.followThrough, this.castReleaseAge / this.castTempo);
+      return { pose, frame: pose.frame ?? baseFrame, angle: this.lastCastAngle, glowColor: look.motion.glowColor ?? THEME.fx[look.fx].core };
+    }
+    return { pose: { ...REST_POSE }, frame: baseFrame, angle: facingAngle, glowColor: 0xffffff };
+  }
+
+  /** A strained shake: two out-of-step swings, up to `px` either way. */
+  private trembleOffset(px: number): { x: number; y: number } {
+    const phase = (this.visualMs / THEME.motion.trembleMs) * Math.PI;
+    return { x: Math.sin(phase) * px, y: Math.sin(phase * 1.37 + 1) * px * 0.6 };
   }
 
   /** Cast charge-ups, driven only by cast progress. */
@@ -443,6 +523,7 @@ export class PlayerView {
   }
 
   destroy(): void {
+    this.glowSprite?.destroy();
     for (const o of [this.sprite, this.muzzle, this.shadow, this.destPip, this.groundGfx, this.overGfx]) o.destroy();
     this.hpBar.destroy();
   }

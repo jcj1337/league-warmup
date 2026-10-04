@@ -30,6 +30,8 @@ import { CastTelegraphView } from '../view/CastTelegraphView';
 import { Battlefield } from '../view/Battlefield';
 import { Fx } from '../view/Fx';
 import { RunFeedback } from '../view/RunFeedback';
+import { DEFAULT_CAST_MOTION, tempoOf } from '../view/motion';
+import type { CastLook } from '../view/PlayerView';
 
 export type { RoundResult, RoundState } from '../Run';
 
@@ -88,6 +90,8 @@ export class GameScene extends Phaser.Scene {
   private cast!: CastSystem;
   /** The casting slot's ground telegraph, if it has one (AbilityDef.telegraph). */
   private castTelegraph!: CastTelegraphView;
+  /** The current (or last) cast's follow-through tempo: its window against the slot's level-1 window. */
+  private castTempo = 1;
   /** Last cast resolve we have already flashed for. */
   private lastCastShownAt = -Infinity;
 
@@ -210,12 +214,12 @@ export class GameScene extends Phaser.Scene {
       projectiles: this.projectiles,
       combat: this.combat,
     });
-    const looks: Partial<Record<Slot, { style: AbilityDef['castStyle']; fx: AbilityDef['fx'] }>> = {};
+    const looks: Partial<Record<Slot, CastLook>> = {};
     for (const slot of ['q', 'w', 'e', 'r'] as const) {
       const def = this.champion.slots[slot];
-      if (def) looks[slot] = { style: def.castStyle, fx: def.fx };
+      if (def) looks[slot] = { style: def.castStyle, fx: def.fx, motion: def.motion ?? DEFAULT_CAST_MOTION };
     }
-    this.player.view.setCastLooks(looks);
+    this.player.view.setCastLooks(looks, this.champion.autoMotion);
 
     this.attacks = new AttackSystem(this, this.player, this.metrics, this.progression, this.kit, {
       onHit: (target, killed) => this.combat.hit(target, killed),
@@ -329,7 +333,10 @@ export class GameScene extends Phaser.Scene {
     this.attacks.onMoveOrder();
     const payload = this.kit.commit(slot, aim);
     this.cooldowns.start(slot);
-    this.beginCastOrResolve(slot, payload, def.castTimeMs(this.castPace), def.anchored ?? false);
+    const castTimeMs = def.castTimeMs(this.castPace);
+    // The follow-through compresses as the window does: this window against the slot's level-1 one.
+    this.castTempo = tempoOf(castTimeMs, def.castTimeMs({ castSpeed: 1, attackSpeed: 1 }));
+    this.beginCastOrResolve(slot, payload, castTimeMs, def.anchored ?? false);
   }
 
   /** How fast she casts right now: haste for most slots, level and passive attack speed for some. */
@@ -571,6 +578,8 @@ export class GameScene extends Phaser.Scene {
     const aimTarget = this.attacks.currentTarget;
     this.player.applyAttackVisual({
       windupProgress: this.attacks.windupProgress,
+      windupMs: this.attacks.windupMs,
+      tempo: tempoOf(this.attacks.cooldownMs, this.champion.attack.baseCooldownMs),
       msSinceRelease: now - this.attacks.lastReleaseAt,
       targetX: aimTarget ? aimTarget.x : null,
       targetY: aimTarget ? aimTarget.y : null,
@@ -589,12 +598,14 @@ export class GameScene extends Phaser.Scene {
 
     // Cast animation is a pure read of the cast timer.
     const aim = this.cast.aim;
-    this.player.setCastVisual(
-      this.cast.castingAbility,
-      this.cast.progress,
-      aim ? aim.x : null,
-      aim ? aim.y : null,
-    );
+    this.player.setCastVisual({
+      ability: this.cast.castingAbility,
+      progress: this.cast.progress,
+      aimX: aim ? aim.x : null,
+      aimY: aim ? aim.y : null,
+      windowMs: this.cast.durationMs,
+      tempo: this.castTempo,
+    });
     const casting = this.cast.castingAbility;
     const castDef = casting ? this.champion.slots[casting] : undefined;
     this.castTelegraph.draw(

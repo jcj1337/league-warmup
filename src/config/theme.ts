@@ -261,7 +261,6 @@ export const THEME = {
       windupLeanPx: 6,
       releaseKickPx: 6,
       releaseKickMs: 120,
-      releasePoseMs: 110,
       muzzleMs: 90,
       chargeRingStartPad: 20,
       chargeRingEndPad: 3,
@@ -493,6 +492,14 @@ export const THEME = {
    * Ability cast animations. Pure presentation — the CastSystem timer decides
    * when a cast completes; these only shape how that reads on screen.
    */
+  /** Champion motions (src/game/view/motion.ts): how the slime's body acts out autos and casts. */
+  motion: {
+    /** A follow-through never plays faster than this share of its authored length. */
+    minTempo: 0.35,
+    /** How fast a `tremble` shakes: one swing every this many ms. */
+    trembleMs: 45,
+  },
+
   cast: {
     /** <1 front-loads the charge so a 165ms cast still reads. Applied as pow(progress, this). */
     anticipationCurve: 0.55,
@@ -502,11 +509,8 @@ export const THEME = {
     eRingEndPad: 2,
     releaseFlashMs: 105,
     releaseFlashRadius: 30,
-    /** The 'fang' style: she rears back with her jaws opening, then lunges as the cast goes. */
-    fangRearPx: 5,
+    /** The 'fang' style: her jaws opening at the mouth (the rear and lunge are her E's motion). */
     fangJawPx: 10,
-    fangLungePx: 9,
-    fangLungeMs: 120,
   },
 
   passive: {

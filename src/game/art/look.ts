@@ -1,13 +1,15 @@
 import type Phaser from 'phaser';
-import type { BodyFrame, Champion } from '../../champions/types';
+import type { Champion } from '../../champions/types';
 import { THEME } from '../../config/theme';
+import { motionFrames } from '../view/motion';
 import { addPixelTexture, type PixelColor, type PixelSprite } from './pixel';
 
 /**
  * The player's look: a champion's body frames with cosmetic layers composed
  * on top, rasterised to textures on demand.
  *
- * A champion authors only its body (idle, squash, stretch, charge, cast). A
+ * A champion authors only its body (idle, squash, stretch, charge, cast, and
+ * any extra poses its motions use). A
  * hat is a small pixel map stacked on the body's top row, so it squashes and
  * stretches with the hop; a skin is a palette override on the body. Layers
  * are composed here, once per look, so no champion frame is ever hand-merged
@@ -41,6 +43,10 @@ export interface PlayerFrames {
     release: string;
     cast: string;
   };
+  /** Every pose by name, the five shared ones and the champion's extras, for motions. */
+  named: Readonly<Record<string, string>>;
+  /** The same, as glow masks: only the art's `glow` pixels, in white. Null when the art has none. */
+  glow: Readonly<Record<string, string>> | null;
   /** Sprite origin (fraction of height) putting the body centre on the gameplay position. */
   originY: number;
   /** Screen pixels the hat adds above the head: text over the slime starts this much higher. */
@@ -51,10 +57,25 @@ export interface PlayerFrames {
 export function ensurePlayerFrames(scene: Phaser.Scene, champion: Champion, look: PlayerLook): PlayerFrames {
   const art = champion.art;
   const hatRows = look.hat?.rows.length ?? 0;
-  const key = (frame: BodyFrame) => `player_${champion.id}_${frame}_${look.id}`;
+  const key = (frame: string) => `player_${champion.id}_${frame}_${look.id}`;
 
-  for (const frame of ['idle', 'squash', 'stretch', 'charge', 'cast'] as const) {
-    addPixelTexture(scene, key(frame), compose(art.frames[frame], art.pal, art.frameHeight, look));
+  const bodies: Record<string, readonly string[]> = { ...art.frames, ...(art.extraFrames ?? {}) };
+  const named: Record<string, string> = {};
+  const glow: Record<string, string> | null = art.glow ? {} : null;
+  for (const [frame, rows] of Object.entries(bodies)) {
+    const sprite = compose(rows, art.pal, art.frameHeight, look);
+    addPixelTexture(scene, key(frame), sprite);
+    named[frame] = key(frame);
+    if (glow && art.glow) {
+      addPixelTexture(scene, `${key(frame)}_glow`, glowMask(sprite, rows, art.glow));
+      glow[frame] = `${key(frame)}_glow`;
+    }
+  }
+
+  // Authoring guard: a motion naming a pose the art doesn't have fails at load, not mid-run.
+  const used = [champion.autoMotion, ...Object.values(champion.slots).map((d) => d?.motion)].flatMap(motionFrames);
+  for (const frame of used) {
+    if (!(frame in named)) throw new Error(`${champion.id}: a motion uses frame "${frame}", which its art doesn't have`);
   }
 
   const totalHeight = art.frameHeight + hatRows;
@@ -66,6 +87,8 @@ export function ensurePlayerFrames(scene: Phaser.Scene, champion: Champion, look
       release: key('stretch'),
       cast: key('cast'),
     },
+    named,
+    glow,
     originY: (hatRows + art.frameHeight * art.originY) / totalHeight,
     hatPx: hatRows * THEME.art.scale,
   };
@@ -102,4 +125,18 @@ export function compose(body: readonly string[], pal: Readonly<Record<string, Pi
   const padding = Math.max(0, frameHeight - body.length);
   const rows = [...hat, ...Array.from({ length: padding }, () => blank), ...body];
   return { rows, pal: merged };
+}
+
+/**
+ * A composed frame reduced to its glow pixels (the body characters in
+ * `chars`), in white, everything else transparent: tinted and faded over the
+ * body by PlayerView. The hat sits above the body rows, so it never glows.
+ */
+function glowMask(sprite: PixelSprite, body: readonly string[], chars: string): PixelSprite {
+  const offset = sprite.rows.length - body.length;
+  const rows = sprite.rows.map((row, y) => {
+    const src = body[y - offset];
+    return src === undefined ? '.'.repeat(row.length) : [...src].map((ch) => (chars.includes(ch) ? '*' : '.')).join('');
+  });
+  return { rows, pal: { '*': 0xffffff } };
 }

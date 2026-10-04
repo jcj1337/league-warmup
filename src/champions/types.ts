@@ -38,7 +38,7 @@ export const SLOTS: readonly Slot[] = ['q', 'w', 'e', 'r'];
  */
 export type Targeting = 'direction' | 'point' | 'unit' | 'self';
 
-/** The charge-up drawn on the slime during the cast window (PlayerView). */
+/** The charge-up drawn over the slime during the cast window (PlayerView). 'none' draws nothing, not even the release flash. */
 export type CastStyle = 'bolt' | 'orb' | 'blink' | 'fang' | 'none';
 
 /**
@@ -87,6 +87,8 @@ export interface AbilityDef {
   castStyle: CastStyle;
   /** Drawn on the ground through the cast window; none for most slots. */
   telegraph?: CastTelegraph;
+  /** What the slime's body does for this cast (see Motion). The engine's plain 'cast' pose when omitted. */
+  motion?: Motion;
   /**
    * A mid-cast Flash leaves this cast where it began: it goes off from the
    * spot she stood when the key went down, aimed as clicked (Ezreal's R, as in
@@ -115,9 +117,59 @@ export interface LevelPerks {
 /** The poses a champion's slime is drawn in. Cosmetics are composed on top (src/game/art/look.ts). */
 export type BodyFrame = 'idle' | 'squash' | 'stretch' | 'charge' | 'cast';
 
+/**
+ * How a motion eases INTO a key from the one before it. 'snap' holds the
+ * previous key's values and cuts over on the key itself.
+ */
+export type MotionEase = 'linear' | 'in' | 'out' | 'inOut' | 'snap';
+
+/**
+ * One pose of a Motion. A key only changes what it names: everything else
+ * carries over from the key before (the first key starts from rest: scale 1,
+ * no offset, no glow). Numbers ease between keys; `frame` cuts.
+ */
+export interface MotionKey {
+  /** Windup keys: 0..1 through the window. Follow-through keys: ms after release, at level-1 tempo. */
+  at: number;
+  /** A body frame by name: the five shared poses, or one of the champion's `extraFrames`. */
+  frame?: string;
+  /** Body scale, about the feet: sx 1.2 is 20% wider, sy 0.8 is 20% shorter. */
+  sx?: number;
+  sy?: number;
+  /** Screen px toward the aim (negative: drawn back), across it, and up off the ground. */
+  along?: number;
+  side?: number;
+  up?: number;
+  /** ±px of shake, for a strained hold. */
+  tremble?: number;
+  /** 0..1: how brightly the art's `glow` pixels light (her eyes, his gauntlet). */
+  glow?: number;
+  ease?: MotionEase;
+  /** Windup keys only: skipped when the window is shorter than this, so a quick cast drops its beats instead of flickering through them. */
+  minWindowMs?: number;
+}
+
+/**
+ * What the body does for one auto or ability. The windup is sampled from the
+ * real window's progress, so it can never run ahead of the spell or lag
+ * behind it, and it quickens with the window (attack speed, haste). The
+ * follow-through runs on after release in ms, compressed as the window
+ * shrinks, and any new windup cuts it at once.
+ */
+export interface Motion {
+  windup: readonly MotionKey[];
+  followThrough: readonly MotionKey[];
+  /** What the glow pixels light as; the slot's fx core when omitted. */
+  glowColor?: number;
+}
+
 export interface ChampionArt {
   /** One pixel map per pose, one string per row, bottom-aligned into `frameHeight`. */
   frames: Record<BodyFrame, readonly string[]>;
+  /** Poses only this champion's motions use, by name. Rasterised with the cosmetics like the rest. */
+  extraFrames?: Readonly<Record<string, readonly string[]>>;
+  /** Palette characters whose pixels light up with a motion's `glow` (eyes, a gem). */
+  glow?: string;
   pal: Readonly<Record<string, PixelColor>>;
   frameHeight: number;
   /** Sprite origin (fraction of the body frame) that puts the body centre on the gameplay position. */
@@ -206,6 +258,8 @@ export interface Champion {
   attack: AttackProfile;
   levels: LevelPerks;
   art: ChampionArt;
+  /** What the body does for an auto. The engine's plain hunker-and-pop when omitted. */
+  autoMotion?: Motion;
   slots: { q: AbilityDef; w: AbilityDef; e: AbilityDef; r?: AbilityDef };
   createKit(ctx: KitContext): Kit;
 }

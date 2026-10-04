@@ -5,6 +5,7 @@ import type { Champion } from '../types';
 import { CASSIOPEIA_ART } from './art';
 import { AUTO, E, LEVELS, PETRIFY_STATUS, POISON_STATUS, Q, R, STATS, W } from './balance';
 import { CassiopeiaKit } from './kit';
+import { E_MOTION } from './motions';
 
 /** Poisoned: a violet drip overhead and a venom ring at the feet. Petrified: a stone eye. */
 registerStatusLook(POISON_STATUS, { icon: TEX.fx.poison, ringColor: THEME.fx.poison.color, warnMs: 800, bobPx: 2 });
@@ -39,7 +40,7 @@ export const CASSIOPEIA: Champion = {
     e: {
       label: 'Twin Fang', targeting: 'unit', range: E.range,
       castTimeMs: ({ castSpeed }) => E.castTimeMs / castSpeed, cooldownMs: () => E.cooldownMs,
-      icon: TEX.icons.cassioE, accent: THEME.ability.accents.fang, castStyle: 'fang', fx: 'fang',
+      icon: TEX.icons.cassioE, accent: THEME.ability.accents.fang, castStyle: 'fang', fx: 'fang', motion: E_MOTION,
     },
     r: {
       label: 'Petrifying Gaze', targeting: 'direction',

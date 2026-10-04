@@ -241,13 +241,24 @@ head through every squash and stretch, a skin recolours the body. What you wear 
 profile's `equipped` (the crown by default; `__profile.update((d) => { d.equipped = { hat: 'none' }; })`
 takes it off on the next run). No cosmetic ever changes gameplay.
 
+**Motions.** What the slime's body does for each auto and cast is the champion's
+`motions.ts`: keyframes of frame, squash and stretch, lean, hop, shake and glow
+([motion.ts](src/game/view/motion.ts)). A windup is keyed to the real window's progress
+(0 → 1), so it can't drift from the mechanic and quickens with attack speed and haste;
+the strike pose lands the frame the spell fires. A key with `minWindowMs` drops out of a
+window shorter than that, so a fast cast loses beats rather than flickering. The
+follow-through is in ms after release, compressed as the window shrinks, and any new
+windup cuts it. A champion's own poses go in `art.extraFrames`; `art.glow` names the
+palette characters a motion's `glow` lights (her eyes, his gauntlet).
+
 ### Adding a champion
 
 1. A folder `src/champions/<id>/` with `balance.ts` (stats, level perks, each ability's
    numbers), `kit.ts` (a `Kit`: what each slot does when its cast resolves, its passive,
    its end-screen lines) and `index.ts` (the `Champion`: stats, attack pacing, level
    perks, a `slots` entry per ability saying how it is aimed, its cast time, cooldown,
-   icon and cast look, and `createKit`).
+   icon, cast look and `motion`, an `autoMotion`, and `createKit`), with `motions.ts` and
+   `art.ts` beside it.
 2. One line in `CHAMPIONS` in [src/champions/index.ts](src/champions/index.ts).
 3. Any enemy status it applies (a poison, a mark): apply it with
    `enemy.applyStatus(id, now, ms)` and register its look with `registerStatusLook`.

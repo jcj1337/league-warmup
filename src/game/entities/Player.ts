@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { ARENA, ATTACK, attackReach, DEBUG, PLAYER, TARGETS } from '../../config/balance';
-import { PlayerView, type AttackVisual, type CastKind, type PlayerViewState } from '../view/PlayerView';
+import { PlayerView, type AttackVisual, type CastKind, type CastVisual, type PlayerViewState } from '../view/PlayerView';
 import type { ChampionStats } from '../../champions/types';
 import type { PlayerFrames } from '../art/look';
 
@@ -224,8 +224,8 @@ export class Player {
     this.view.applyAttackVisual(v, this.x, this.y);
   }
 
-  setCastVisual(ability: CastKind | null, progress: number, aimX: number | null, aimY: number | null): void {
-    this.view.setCastVisual(ability, progress, aimX, aimY, this.x, this.y);
+  setCastVisual(v: CastVisual): void {
+    this.view.setCastVisual(v, this.x, this.y);
   }
 
   setRangeRingState(inRange: boolean, attackMovePending: boolean, visibility: number): void {
