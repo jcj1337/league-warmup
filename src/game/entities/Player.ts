@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { ARENA, attackReach, DEBUG, PLAYER, TARGETS } from '../../config/balance';
 import { PlayerView, type AttackVisual, type CastKind, type PlayerViewState } from '../view/PlayerView';
 import type { ChampionStats } from '../../champions/types';
+import type { PlayerFrames } from '../art/look';
 
 export type { AttackVisual } from '../view/PlayerView';
 
@@ -55,6 +56,7 @@ export class Player {
     x: number,
     y: number,
     stats: ChampionStats,
+    look: PlayerFrames,
     private readonly levelSpeed: () => number = () => 1,
   ) {
     this.x = x;
@@ -63,11 +65,16 @@ export class Player {
     this.hp = stats.maxHp;
     this.maxHp = stats.maxHp;
     this.baseMoveSpeed = stats.moveSpeed;
-    this.view = new PlayerView(scene, x, y);
+    this.view = new PlayerView(scene, x, y, look);
     this.viewState = {
       x, y, radius: this.radius, moving: false, destX: null, destY: null,
       hp: this.hp, maxHp: this.maxHp, rangeRadius: this.attackRingRadius(), stunned: false, slowed: false,
     };
+  }
+
+  /** Screen pixels the worn hat adds above the head, for text over the slime. */
+  get headPx(): number {
+    return this.view.hatPx;
   }
 
   get isRooted(): boolean {

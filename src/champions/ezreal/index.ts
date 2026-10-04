@@ -3,6 +3,7 @@ import { TEX } from '../../game/art/textures';
 import { registerStatusLook } from '../../game/view/statusLooks';
 import type { Champion } from '../types';
 import { BLINK_E, LEVELS, MARK_STATUS, SKILLSHOT_Q, SKILLSHOT_W, STATS } from './balance';
+import { EZREAL_ART } from './art';
 import { EzrealKit } from './kit';
 
 /** The W mark, as the enemy wears it: a violet rune overhead and a ring at the feet. */
@@ -24,6 +25,7 @@ export const EZREAL: Champion = {
   stats: STATS,
   attack: { get baseCooldownMs() { return LEVELS.baseAttackCooldownMs; } },
   levels: LEVELS,
+  art: EZREAL_ART,
   slots: {
     q: {
       label: 'Mystic Shot', targeting: 'direction',

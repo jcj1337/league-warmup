@@ -232,6 +232,13 @@ Keys are bound **per slot** (Q / W / E / R, plus Flash) and shared across champi
 League; the pause menu names each row after the champion's ability. Your best runs are
 kept per champion. From the console: `__champions`, `__ezreal.SKILLSHOT_Q.speed = 1400`.
 
+**Looks.** A champion draws only its slime's body frames (`art.ts`). The crown and any
+later hat or skin are cosmetics in [src/cosmetics/catalogue.ts](src/cosmetics/catalogue.ts),
+composed onto the body at run start ([look.ts](src/game/art/look.ts)): a hat rides the
+head through every squash and stretch, a skin recolours the body. What you wear is the
+profile's `equipped` (the crown by default; `__profile.update((d) => { d.equipped = { hat: 'none' }; })`
+takes it off on the next run). No cosmetic ever changes gameplay.
+
 ### Adding a champion
 
 1. A folder `src/champions/<id>/` with `balance.ts` (stats, level perks, each ability's

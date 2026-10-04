@@ -28,40 +28,8 @@ const doubled = (rows: readonly string[], index: number) => [...rows.slice(0, in
 // One family, one silhouette: an ink-outlined dome lit from the top-left, with
 // the face set one pixel toward the direction it faces (right; flipX turns it).
 //   m body · L light · w shine · d dark · D deepest · k ink
-// The hero is friendly (dot eyes, smile, cheeks). Hostiles glow and snarl.
-
-// ---- player: blue slime -------------------------------------------------------
-
-const BLUE_PAL = { k: P.ink, m: P.blue, L: P.blueLight, w: P.blueShine, d: P.blueDeep, c: P.cheek };
-
-const BLUE_BODY = [
-  '....kkkkkk....',
-  '..kkmmmmmmkk..',
-  '.kmwwLmmmmmmk.',
-  '.kmwLmmmmmmmk.',
-  'kmmLmmmmmmmmmk',
-  'kmmmmkmmmmkmmk',
-  'kmmmmkmmmmkmmk',
-  'kmmcmmmmmmmmck',
-  'kdmmmmkmmkmmdk',
-  'kddmmmmkkmmddk',
-  '.kddddddddddk.',
-  '..kkkkkkkkkk..',
-];
-
-// A small gold crown riding on top of the dome, one pixel toward the face like
-// the rest of it. It is added to every player frame, so it squashes and
-// stretches with the hop.   W glint · g gold · o dark gold · r ruby
-const CROWN = [
-  '....W..W..W...',
-  '....g.ggg.g...',
-  '....ggrgrgg...',
-  '....ooooooo...',
-];
-const CROWN_PAL = { W: P.eyeHot, g: P.gold, o: P.goldDark, r: P.red };
-const crowned = (body: readonly string[]) => [...CROWN, ...body];
-const PLAYER_PAL = { ...BLUE_PAL, ...CROWN_PAL };
-const PLAYER_H = 18;
+// Hostiles glow and snarl. The playable slimes live with their champions
+// (src/champions/<id>/art.ts) and are composed with cosmetics at run start.
 
 // ---- basic: red slime ------------------------------------------------------------
 
@@ -184,16 +152,6 @@ export const SPRITES: Record<string, PixelSprite> = {
     pal: { s: SHADOW },
   },
 
-  // ---- player ----------------------------------------------------------------
-  player_idle: { rows: frame(crowned(BLUE_BODY), PLAYER_H), pal: PLAYER_PAL },
-  /** Breath out / landing half of the hop. */
-  player_squash: { rows: frame(crowned(without(BLUE_BODY, 4)), PLAYER_H), pal: PLAYER_PAL },
-  /** Airborne half of the hop, and the release pop. */
-  player_stretch: { rows: frame(crowned(doubled(BLUE_BODY, 4)), PLAYER_H), pal: PLAYER_PAL },
-  /** Attack windup: hunkered down, eyes narrowed. */
-  player_charge: { rows: frame(crowned(without(withRow(BLUE_BODY, 5, 'kmmmmmmmmmmmmk'), 4)), PLAYER_H), pal: PLAYER_PAL },
-  /** Casting: little "o" mouth. */
-  player_cast: { rows: frame(crowned(withRow(BLUE_BODY, 8, 'kdmmmmmkkmmmdk')), PLAYER_H), pal: PLAYER_PAL },
   /** Kill gold coin: lit top-left, shaded bottom-right. */
   fx_coin: {
     rows: ['..kkk..', '.kWWgk.', 'kWWggok', 'kWgggok', 'kggggok', '.kgook.', '..kkk..'],

@@ -222,13 +222,6 @@ export const THEME = {
 
   // --------------------------------------------------------------- player
   player: {
-    /**
-     * Sprite origin (fraction of height) — puts the body centre on the gameplay
-     * position. The 18px frame is the 14px body frame plus the 4px crown on top.
-     */
-    originY: 0.6656,
-    /** Screen pixels the crown adds above the head: popups over the slime start this much higher. */
-    crownPx: 12,
     shadowOffsetY: 17,
     /** Distance from the body centre to where shots / casts visibly leave the slime. */
     muzzleDistance: 20,

@@ -7,6 +7,7 @@ import type { BlinkSystem } from '../game/systems/BlinkSystem';
 import type { GameClock } from '../game/systems/GameClock';
 import type { PlayerProjectileSystem } from '../game/systems/PlayerProjectileSystem';
 import type { Progression } from '../game/systems/Progression';
+import type { PixelColor } from '../game/art/pixel';
 
 /**
  * What a playable champion is to the engine.
@@ -72,6 +73,18 @@ export interface LevelPerks {
   attackSpeedPerLevel: number;
   /** Multiplies move speed: +0.03 is 3% per level. */
   moveSpeedPerLevel: number;
+}
+
+/** The poses a champion's slime is drawn in. Cosmetics are composed on top (src/game/art/look.ts). */
+export type BodyFrame = 'idle' | 'squash' | 'stretch' | 'charge' | 'cast';
+
+export interface ChampionArt {
+  /** One pixel map per pose, one string per row, bottom-aligned into `frameHeight`. */
+  frames: Record<BodyFrame, readonly string[]>;
+  pal: Readonly<Record<string, PixelColor>>;
+  frameHeight: number;
+  /** Sprite origin (fraction of the body frame) that puts the body centre on the gameplay position. */
+  originY: number;
 }
 
 export interface AttackProfile {
@@ -151,6 +164,7 @@ export interface Champion {
   stats: ChampionStats;
   attack: AttackProfile;
   levels: LevelPerks;
+  art: ChampionArt;
   slots: { q: AbilityDef; w: AbilityDef; e: AbilityDef; r?: AbilityDef };
   createKit(ctx: KitContext): Kit;
 }

@@ -10,14 +10,8 @@ import { SPRITES } from './sprites';
 export const TEX = {
   px: 'px',
   shadow: { s: 'shadow_s', m: 'shadow_m', l: 'shadow_l' },
-  player: {
-    idle: ['player_idle', 'player_squash'],
-    walk: ['player_stretch', 'player_squash'],
-    charge: 'player_charge',
-    release: 'player_stretch',
-    cast: 'player_cast',
-    muzzle: 'fx_muzzle',
-  },
+  /** The player's body frames are composed per champion and look (src/game/art/look.ts); only this is static. */
+  player: { muzzle: 'fx_muzzle' },
   basic: { frames: ['basic_0', 'basic_1'], spit: 'basic_spit' },
   pursuer: {
     walk: ['pursuer_walk_0', 'pursuer_walk_1'],

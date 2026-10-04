@@ -55,7 +55,7 @@ export class RunFeedback {
 
   /** Where text over the slime starts: just above the crown, `row` popup rows up. */
   private overHead(row: number): number {
-    return this.player.y - this.player.radius - 18 - THEME.player.crownPx - row * 24;
+    return this.player.y - this.player.radius - 18 - this.player.headPx - row * 24;
   }
 
   private scorePopup(text: string, row: number): void {

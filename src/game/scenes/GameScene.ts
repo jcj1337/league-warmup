@@ -3,7 +3,10 @@ import { ARENA, ATTACK, DEBUG, FLASH } from '../../config/balance';
 import { activeChampion, type Champion, type Kit, type Slot } from '../../champions';
 import type { AbilityDef, Aim } from '../../champions/types';
 import { THEME } from '../../config/theme';
+import { ensurePlayerFrames } from '../art/look';
 import { ensureArt } from '../art/textures';
+import { resolveLook } from '../../cosmetics/catalogue';
+import { Profile } from '../../profile/Profile';
 import { Player } from '../entities/Player';
 import type { DamageKind, Enemy, EnemyArchetype } from '../entities/Enemy';
 import { Run, type RoundResult } from '../Run';
@@ -141,8 +144,10 @@ export class GameScene extends Phaser.Scene {
     this.fx = new Fx(this);
 
     this.champion = activeChampion();
+    // The champion's slime wearing the profile's cosmetics, composed once per look.
+    const look = ensurePlayerFrames(this, this.champion, resolveLook(Profile.data));
     this.player = new Player(
-      this, ARENA.width / 2, ARENA.height / 2, this.champion.stats,
+      this, ARENA.width / 2, ARENA.height / 2, this.champion.stats, look,
       () => this.progression.moveSpeedMultiplier,
     );
 

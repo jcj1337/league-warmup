@@ -227,5 +227,35 @@ test('visuals: pixel-art setup, no tether line, command markers, sprite units + 
     : fail(`props: ${scene.props}, below units: ${scene.propsBelowUnits}`);
   scene.uiPanels >= 3 ? pass(`HUD grouped onto ${scene.uiPanels} panels`) : fail('HUD panels missing');
 
+  // === Looks: the champion's body plus the profile's cosmetics, composed per look ====
+  section('Looks');
+  const lookOf = () => page.evaluate(() => {
+    const g = window.__warmup.scene.getScene('GameScene');
+    const img = g.player.view.sprite;
+    return { key: img.texture.key as string, rows: img.height as number, originY: img.originY as number, headPx: g.player.headPx as number };
+  });
+  const crowned = await lookOf();
+  /** Equip `equipped` and start a new round wearing it. */
+  const restartAs = async (equipped: Record<string, string>) => {
+    const round = await page.evaluate((equipped) => {
+      window.__profile.update((d) => { d.equipped = equipped; });
+      const g = window.__warmup.scene.getScene('GameScene');
+      const was = g.getHudState().round;
+      g.restartRound();
+      return was;
+    }, equipped);
+    await page.waitForFunction((was) => window.__warmup.scene.getScene('GameScene').getHudState().round !== was, round);
+    await page.waitForTimeout(150);
+  };
+  await restartAs({ hat: 'none' });
+  const bare = await lookOf();
+  /^player_ezreal_idle_crown-base$/.test(crowned.key) && crowned.rows === 18 && crowned.headPx === 12
+    ? pass(`the default look is Ezreal in the crown: ${crowned.key}, 18 rows, 12px of hat`)
+    : fail(`crowned: ${JSON.stringify(crowned)}`);
+  /^player_ezreal_idle_none-base$/.test(bare.key) && bare.rows === 14 && bare.headPx === 0 && bare.originY < crowned.originY
+    ? pass(`taking the crown off composes a shorter frame under its own key: ${bare.key}, 14 rows`)
+    : fail(`bare: ${JSON.stringify(bare)}`);
+  await restartAs({});
+
   await finish();
 });

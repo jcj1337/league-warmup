@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import type { CastStyle, FxKey, Slot } from '../../champions/types';
 import { THEME, actorDepth } from '../../config/theme';
+import type { PlayerFrames } from '../art/look';
 import { TEX } from '../art/textures';
 import { Fx } from './Fx';
 import { PixelBar } from './PixelBar';
@@ -103,15 +104,26 @@ export class PlayerView {
   private hitAge = Number.POSITIVE_INFINITY;
   private ghostHp = -1;
 
-  constructor(private readonly scene: Phaser.Scene, x: number, y: number) {
+  constructor(
+    private readonly scene: Phaser.Scene,
+    x: number,
+    y: number,
+    /** The champion's frames wearing the profile's cosmetics, and where the body sits in them. */
+    private readonly look: PlayerFrames,
+  ) {
     const S = THEME.art.scale;
     this.shadow = scene.add.image(x, y, TEX.shadow.m).setScale(S).setDepth(THEME.depth.shadow);
     this.destPip = scene.add.image(x, y, TEX.fx.dest).setScale(S).setAlpha(0.7).setDepth(THEME.depth.ping).setVisible(false);
     this.groundGfx = scene.add.graphics().setDepth(THEME.depth.groundFx);
-    this.sprite = scene.add.image(x, y, TEX.player.idle[0]).setOrigin(0.5, THEME.player.originY).setScale(S);
+    this.sprite = scene.add.image(x, y, look.frames.idle[0]).setOrigin(0.5, look.originY).setScale(S);
     this.muzzle = scene.add.image(x, y, TEX.player.muzzle).setScale(S).setDepth(THEME.depth.fx).setVisible(false);
     this.overGfx = scene.add.graphics().setDepth(THEME.depth.fx);
     this.hpBar = new PixelBar(scene, THEME.player.hpBarWidth, THEME.hpBar.player);
+  }
+
+  /** Screen pixels the hat adds above the head: text over the slime starts this much higher. */
+  get hatPx(): number {
+    return this.look.hatPx;
   }
 
   // ------------------------------------------------------------ state feeds
@@ -177,7 +189,7 @@ export class PlayerView {
   }
 
   showCancelTag(radius: number): void {
-    Fx.of(this.scene).popup(this.sprite.x, this.sprite.y - radius - 16 - THEME.player.crownPx, 'CANCEL', THEME.fx.cancel, 420, 18);
+    Fx.of(this.scene).popup(this.sprite.x, this.sprite.y - radius - 16 - this.look.hatPx, 'CANCEL', THEME.fx.cancel, 420, 18);
   }
 
   flashHit(): void {
@@ -206,12 +218,13 @@ export class PlayerView {
       : 'idle';
 
     // Stunned: slumped in the squash frame, no breathing, until it wears off.
-    const frame = this.pose === 'stunned' ? TEX.player.idle[1]
-      : this.pose === 'cast' ? TEX.player.cast
-      : this.pose === 'windup' ? TEX.player.charge
-      : this.pose === 'release' ? TEX.player.release
-      : this.pose === 'walk' ? TEX.player.walk[Math.floor(this.visualMs / P.walkFrameMs) % 2]
-      : TEX.player.idle[Math.floor(this.visualMs / P.idleFrameMs) % 2];
+    const F = this.look.frames;
+    const frame = this.pose === 'stunned' ? F.idle[1]
+      : this.pose === 'cast' ? F.cast
+      : this.pose === 'windup' ? F.charge
+      : this.pose === 'release' ? F.release
+      : this.pose === 'walk' ? F.walk[Math.floor(this.visualMs / P.walkFrameMs) % 2]
+      : F.idle[Math.floor(this.visualMs / P.idleFrameMs) % 2];
 
     const bx = Math.round(s.x + this.offsetX);
     const by = Math.round(s.y + this.offsetY);

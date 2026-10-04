@@ -1,6 +1,6 @@
 # Architecture Proposal: Foundation for Champions and Cosmetics
 
-Status: **Phases 0a and 0b implemented** 2026-10-04; 0c (layered art) next. Written 2026-10-04. Companion to
+Status: **Phases 0a, 0b and 0c implemented** 2026-10-04 (foundation, champions, layered art). Written 2026-10-04. Companion to
 [CHAMPIONS_PROPOSAL.md](CHAMPIONS_PROPOSAL.md): that one says how a champion plugs in,
 this one says what the codebase underneath needs first, and sets the phase order for both.
 
