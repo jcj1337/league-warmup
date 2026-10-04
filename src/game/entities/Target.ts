@@ -98,7 +98,7 @@ export class Target extends Enemy {
     const dy = this.goalY - this.y;
     const dist = Math.hypot(dx, dy);
     if (dist > 2) {
-      const step = Math.min(this.moveSpeed * deltaSeconds, dist);
+      const step = Math.min(this.moveSpeed * this.slowFactor * deltaSeconds, dist);
       this.x += (dx / dist) * step;
       this.y += (dy / dist) * step;
       this.pose.moving = true;

@@ -50,6 +50,8 @@ export interface SuiteOptions {
    * real staggered opening.
    */
   arriveAll?: boolean;
+  /** Play as this champion: the profile's pick is seeded before the page loads (default: Ezreal). */
+  champion?: string;
 }
 
 export async function startSuite(page: Page, testInfo: TestInfo, settleMs = 400, opts: SuiteOptions = {}): Promise<Suite> {
@@ -63,6 +65,18 @@ export async function startSuite(page: Page, testInfo: TestInfo, settleMs = 400,
     if (m.type() === 'error') errors.push('console: ' + m.text());
   });
 
+  if (opts.champion) {
+    await page.addInitScript((id: string) => {
+      try {
+        const raw = localStorage.getItem('warmup.profile.v1');
+        const data = raw ? JSON.parse(raw) : { version: 2 };
+        data.champion = id;
+        localStorage.setItem('warmup.profile.v1', JSON.stringify(data));
+      } catch {
+        // Storage blocked: the default champion plays.
+      }
+    }, opts.champion);
+  }
   await page.goto('/', { waitUntil: 'load' });
   await waitForGame(page, settleMs);
   if (opts.arriveAll ?? true) {

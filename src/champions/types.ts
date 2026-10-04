@@ -40,7 +40,7 @@ export type Targeting = 'direction' | 'point' | 'unit' | 'self';
 export type CastStyle = 'bolt' | 'orb' | 'blink' | 'none';
 
 /** Which THEME.fx entry colours a slot's effects. Grows with each champion. */
-export type FxKey = 'q' | 'w' | 'e';
+export type FxKey = 'q' | 'w' | 'e' | 'poison' | 'miasma' | 'fang' | 'gaze';
 
 export interface AbilityDef {
   /** 'Mystic Shot': the pause menu's key row and the champion's README. */

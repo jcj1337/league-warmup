@@ -74,7 +74,8 @@ export interface ParticleOptions {
   rotation?: number;
 }
 
-export type ShotFx = 'auto' | 'q' | 'w' | 'e';
+/** What an impact can look like: the auto's own entry or any champion fx key (all carry impact numbers). */
+export type ShotFx = 'auto' | FxKey;
 
 const TAU = Math.PI * 2;
 const REGISTRY = new WeakMap<Phaser.Scene, Fx>();

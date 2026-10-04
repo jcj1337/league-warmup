@@ -146,6 +146,19 @@ export const PALETTE = {
   panelHover: 0x2e2a36,
   danger: 0xff6b57,
   good: 0x7fdc6a,
+
+  // ---- cassiopeia: a venom-green slime with a coiled tail -------------------------
+  venomDeepest: 0x173d2a,
+  venomDeep: 0x24734a,
+  venom: 0x4fc96d,
+  venomLight: 0x9cf09a,
+  venomShine: 0xeaffe6,
+  venomScale: 0x3a9c5a,
+  venomCore: 0xf2fff0,
+  miasma: 0x8de0a0,
+  stone: 0x9aa0ad,
+  stoneCore: 0xeef1f7,
+  stoneDeep: 0x5c6270,
 } as const;
 
 const P = PALETTE;
@@ -399,6 +412,11 @@ export const THEME = {
     q: { color: P.q, core: P.qCore, deep: P.qDeep, castFlashRadius: 24, castFlashMs: 120, impactRadius: 30, impactMs: 200, sparks: 9 },
     w: { color: P.w, core: P.wCore, deep: P.wDeep, castFlashRadius: 28, castFlashMs: 130, impactRadius: 34, impactMs: 220, sparks: 8 },
     e: { color: P.e, core: P.eCore, deep: P.eDeep, blue: P.eBlue, blinkMs: 180, impactRadius: 24, impactMs: 200, sparks: 7 },
+    // Cassiopeia: venom for Q and the poison, a paler haze for W, bright fangs for E, stone for R.
+    poison: { color: P.venom, core: P.venomCore, deep: P.venomDeep, castFlashRadius: 22, castFlashMs: 120, impactRadius: 28, impactMs: 220, sparks: 8 },
+    miasma: { color: P.miasma, core: P.venomCore, deep: P.venomDeep, castFlashRadius: 26, castFlashMs: 130, impactRadius: 30, impactMs: 220, sparks: 6 },
+    fang: { color: P.venomLight, core: P.venomCore, deep: P.venom, castFlashRadius: 18, castFlashMs: 100, impactRadius: 20, impactMs: 170, sparks: 6 },
+    gaze: { color: P.stone, core: P.stoneCore, deep: P.stoneDeep, castFlashRadius: 30, castFlashMs: 160, impactRadius: 36, impactMs: 260, sparks: 10 },
     flash: { color: P.flash, core: P.flashCore, burstMs: 220 },
     hostile: { color: P.fireOrange, core: P.fireCore, deep: P.fire },
     detonation: { color: P.wHot, accent: P.wCore, deep: P.w, radius: 46, ms: 280, shards: 12 },
@@ -416,6 +434,7 @@ export const THEME = {
       orb: { color: P.arcane, spacing: 10, life: 200, size: 4 },
       sphere: { color: P.voidGlow, spacing: 10, life: 220, size: 5 },
       glob: { color: P.redDeep, spacing: 10, life: 160, size: 3 },
+      fang: { color: P.venomLight, spacing: 10, life: 140, size: 3 },
     },
   },
 
@@ -549,7 +568,7 @@ export const THEME = {
     sweepColor: P.ink,
     sweepAlpha: 0.7,
     /** Per-slot accent: the ability's own colour. */
-    accents: { q: P.q, w: P.w, e: P.e, flash: P.flash } as Record<string, number>,
+    accents: { q: P.q, w: P.w, e: P.e, flash: P.flash, venom: P.venom, miasma: P.miasma, fang: P.venomLight, stone: P.stone } as Record<string, number>,
   },
 
   /** Title card before the first run of a page load. Presentation only. */
@@ -558,6 +577,27 @@ export const THEME = {
     /** The start prompt fades to this alpha and back, once per pulse each way. */
     promptMinAlpha: 0.35,
     promptPulseMs: 700,
+  },
+
+  /**
+   * The player's ground spells (PlayerZoneView): green, never the red that
+   * means "this hurts you". A telegraph fills over its delay; a cloud is a
+   * soft disc with motes drifting up.
+   */
+  playerZone: {
+    fill: P.venomDeep,
+    fillAlphaStart: 0.1,
+    fillAlphaEnd: 0.32,
+    edge: P.venom,
+    edgeAlphaStart: 0.5,
+    edgeAlphaEnd: 1,
+    cloudFill: P.venomDeep,
+    cloudFillAlpha: 0.28,
+    cloudEdgeAlpha: 0.55,
+    cloudPulseMs: 1400,
+    cloudMotes: 6,
+    mote: P.miasma,
+    moteRiseMs: 1100,
   },
 
   /** Pause / settings menu. */

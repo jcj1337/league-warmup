@@ -227,6 +227,7 @@ nothing in it switches on who is being played.
 | Champion | Kit |
 | --- | --- |
 | **Ezreal** (default) | [src/champions/ezreal/README.md](src/champions/ezreal/README.md): linear poke, a mark to cash in, a committed blink, attack-speed passive |
+| **Cassiopeia** | [src/champions/cassiopeia/README.md](src/champions/cassiopeia/README.md): ground spells that poison (Q, W), a fast point-and-click fang that bites poisoned targets twice (E), a once-a-stage cone that petrifies enemies facing you (R), move speed per level |
 
 Keys are bound **per slot** (Q / W / E / R, plus Flash) and shared across champions, as in
 League; the pause menu names each row after the champion's ability. Your best runs are

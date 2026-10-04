@@ -121,7 +121,7 @@ export class Pursuer extends Enemy {
 
     // CHASE: walk down the player's *current* position — no stale targeting.
     if (dist > reach) {
-      const speed = PLAYER.referenceMoveSpeed * this.speedFraction;
+      const speed = PLAYER.referenceMoveSpeed * this.speedFraction * this.slowFactor;
       // Close to 1px inside reach: stopping exactly AT reach lets float error
       // strand it a hair outside, where it would never swing.
       const step = Math.min(speed * deltaSeconds, dist - (reach - 1));

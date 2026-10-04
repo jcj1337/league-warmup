@@ -39,9 +39,12 @@ export const TEX = {
     orb: ['proj_orb_0', 'proj_orb_1'],
     glob: 'proj_glob',
     sphere: 'proj_sphere',
+    fang: 'proj_fang',
   },
   fx: {
     coin: 'fx_coin',
+    poison: 'fx_poison',
+    petrify: 'fx_petrify',
     flashStar: 'fx_flash_star',
     pingMove: 'fx_ping_move',
     pingAttack: 'fx_ping_attack',
@@ -54,7 +57,10 @@ export const TEX = {
     emberRock: 'prop_ember_rock',
     deadShrub: 'prop_dead_shrub',
   } as Record<string, string>,
-  icons: { q: 'icon_q', w: 'icon_w', e: 'icon_e', flash: 'icon_flash' } as Record<string, string>,
+  icons: {
+    q: 'icon_q', w: 'icon_w', e: 'icon_e', flash: 'icon_flash',
+    cassioQ: 'icon_cassio_q', cassioW: 'icon_cassio_w', cassioE: 'icon_cassio_e', cassioR: 'icon_cassio_r',
+  } as Record<string, string>,
   ground: 'battlefield_ground',
 } as const;
 

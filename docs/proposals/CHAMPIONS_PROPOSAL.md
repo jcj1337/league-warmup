@@ -1,8 +1,8 @@
 # Playable Champions Proposal
 
-Status: **Phase 0b implemented** 2026-10-04 (contract, registry, slot keys, enemy statuses, Ezreal in
-`src/champions/ezreal/`, per-champion bests). Player ground zones wait for the first champion that
-needs them (Cassiopeia). Phases 1 and 2 follow. Written 2026-10-04.
+Status: **implemented** 2026-10-04: Phase 0b (contract, registry, slot keys, enemy statuses, Ezreal in
+`src/champions/ezreal/`, per-champion bests), Phase 1 (champion select) and Phase 2 (Cassiopeia, with
+player ground zones, enemy slows / stuns and a heading for facing checks). Written 2026-10-04.
 
 ## Summary
 

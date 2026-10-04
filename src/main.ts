@@ -11,6 +11,7 @@ import { Settings } from './game/Settings';
 import { Profile } from './profile/Profile';
 import { CHAMPIONS } from './champions';
 import * as ezreal from './champions/ezreal/balance';
+import * as cassiopeia from './champions/cassiopeia/balance';
 
 const game = new Phaser.Game({
   type: Phaser.AUTO,
@@ -45,6 +46,7 @@ const game = new Phaser.Game({
 //   __settings.all() / .pauseOnFocusLoss = false             // pause-menu settings (saved in this browser)
 //   __profile.data / .reset()                                // everything saved, in one place
 //   __ezreal.SKILLSHOT_Q.speed = 1400                        // Ezreal's numbers (src/champions/ezreal/balance.ts)
+//   __cassiopeia.Q.radius = 90                               // Cassiopeia's (src/champions/cassiopeia/balance.ts)
 //   __champions                                              // every playable champion
 const runs = {
   list: () => RunHistory.list(),
@@ -54,5 +56,5 @@ const runs = {
 };
 Object.assign(window as unknown as Record<string, unknown>, {
   __warmup: game, __balance: balance, __theme: THEME, __runs: runs, __keybinds: Keybinds, __mouseSpeed: MouseSpeed,
-  __settings: Settings, __profile: Profile, __ezreal: ezreal, __champions: CHAMPIONS,
+  __settings: Settings, __profile: Profile, __ezreal: ezreal, __cassiopeia: cassiopeia, __champions: CHAMPIONS,
 });

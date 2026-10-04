@@ -25,6 +25,9 @@ export type EnemyArchetype = EnemyId;
  */
 export type EnemyLifecycle = 'spawning' | 'active' | 'dead';
 
+/** Movement slower than this (px/s) doesn't turn an enemy: a nudge from crowd spacing is not a heading. */
+const HEADING_MIN_SPEED = 8;
+
 /** What an enemy's AI is allowed to see and do each frame. */
 export interface EnemyContext {
   player: {
@@ -103,8 +106,20 @@ export abstract class Enemy {
   public readonly scoreMultiplier: number;
   /** The stage it spawned on. */
   public readonly stage: number;
-  /** DIFFICULTY.moveSpeed on that stage: multiplies every speed the AI moves at. */
-  public readonly moveScale: number;
+  /** DIFFICULTY.moveSpeed on that stage, before slows. */
+  private readonly baseMoveScale: number;
+  /** Clock time of the last update, for status reads between frames. */
+  private now = 0;
+  /**
+   * Which way it is going, in radians (0 = right): the direction of its last
+   * movement, or toward the player while it winds up an attack or cast. An
+   * enemy that stops keeps the heading it arrived with. Read by abilities that
+   * care whether an enemy is facing the player (Cassiopeia's R).
+   */
+  public heading = 0;
+  private hadHeading = false;
+  /** Slows a champion applied: id → the fraction and when it lapses. The strongest live one counts. */
+  private readonly slows = new Map<string, { fraction: number; until: number }>();
 
   /** Remaining health pips. */
   public hp: number;
@@ -160,7 +175,7 @@ export abstract class Enemy {
     this.radius = opts.radius;
     this.scoreMultiplier = opts.scoreMultiplier;
     this.stage = opts.stage;
-    this.moveScale = scaled(DIFFICULTY.moveSpeed, opts.stage);
+    this.baseMoveScale = scaled(DIFFICULTY.moveSpeed, opts.stage);
     this.maxHp = opts.maxHp;
     this.hp = opts.maxHp;
   }
@@ -250,12 +265,52 @@ export abstract class Enemy {
     return false;
   }
 
+  /** Multiplies every speed the AI moves at: the stage's scale, cut by the strongest live slow. */
+  get moveScale(): number {
+    return this.baseMoveScale * this.slowFactor;
+  }
+
+  /** 1 unslowed; 0.65 under a 35% slow. */
+  get slowFactor(): number {
+    let strongest = 0;
+    for (const { fraction, until } of this.slows.values()) {
+      if (this.now < until) strongest = Math.max(strongest, fraction);
+    }
+    return 1 - strongest;
+  }
+
+  /** Slow by `fraction` for `ms` under `id`; re-applying refreshes it. */
+  applySlow(id: string, fraction: number, nowMs: number, ms: number): void {
+    this.now = Math.max(this.now, nowMs);
+    this.slows.set(id, { fraction, until: nowMs + ms });
+  }
+
+  /** No AI and no contact for `ms` (a petrify, a throw). Overlapping stuns never shorten one another. */
+  stun(nowMs: number, ms: number): void {
+    this.dazedUntil = Math.max(this.dazedUntil, nowMs + ms);
+  }
+
   update(deltaSeconds: number, nowMs: number, ctx: EnemyContext): void {
+    this.now = nowMs;
     // Activation happens at the GameClock deadline — never on an animation.
     if (this.spawning && nowMs >= this.activeAt) this.lifecycle = 'active';
+    const fromX = this.x;
+    const fromY = this.y;
+    if (!this.hadHeading && this.active) {
+      // It arrives looking at the player.
+      this.heading = Math.atan2(ctx.player.y - this.y, ctx.player.x - this.x);
+      this.hadHeading = true;
+    }
     if (this.active && !this.held && nowMs >= this.dazedUntil) {
       this.updateAi(deltaSeconds, nowMs, ctx);
       this.checkContact(nowMs, ctx);
+      // Heading: the way it moved this frame (any real speed; frames can be
+      // tiny), or while winding up, the player it is aiming at.
+      const dx = this.x - fromX;
+      const dy = this.y - fromY;
+      const minStep = HEADING_MIN_SPEED * deltaSeconds;
+      if (dx * dx + dy * dy > minStep * minStep) this.heading = Math.atan2(dy, dx);
+      else if (this.pose.windup >= 0) this.heading = Math.atan2(ctx.player.y - this.y, ctx.player.x - this.x);
     } else if (this.held) {
       this.pose.moving = false;
     }

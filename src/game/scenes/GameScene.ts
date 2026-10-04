@@ -123,7 +123,11 @@ export class GameScene extends Phaser.Scene {
    * survives scene.restart(), so this counts rounds for the persistent UIScene.
    */
   private roundId = 0;
-  /** Set by returnToStart(): the next round waits on the start screen like the first. */
+  /**
+   * Set by returnToStart(): every round until the player starts one waits on
+   * the start screen like the first (two quick champion picks queue two
+   * restarts; both must hold).
+   */
   private holdNextRound = false;
 
   constructor() {
@@ -134,7 +138,6 @@ export class GameScene extends Phaser.Scene {
     this.roundId++;
     // The first round after a page load waits on the start screen; so does one after "Change champion".
     this.run = new Run(this.roundId === 1 || this.holdNextRound);
-    this.holdNextRound = false;
     this.enemies = [];
     this.lastCancelShownAt = -Infinity;
     this.lastReleaseShownAt = -Infinity;
@@ -465,7 +468,9 @@ export class GameScene extends Phaser.Scene {
 
   /** Leave the start screen: the run's clock starts on the next frame. */
   startRun(): void {
-    if (this.run.start()) this.tweens.resumeAll();
+    if (!this.run.start()) return;
+    this.holdNextRound = false;
+    this.tweens.resumeAll();
   }
 
   /** The run's simulated clock. Systems and the suites read it; only update() advances it. */

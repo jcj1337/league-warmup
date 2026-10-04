@@ -20,6 +20,8 @@ declare global {
     __ezreal: any;
     /** Every playable champion by id, exposed by src/main.ts. */
     __champions: any;
+    /** Cassiopeia's live balance (Q, W, E, R, POISON, LEVELS, STATS), exposed by src/main.ts. */
+    __cassiopeia: any;
     /** Not exposed by the game; the hud suite falls back when it is absent. */
     __theme?: any;
   }

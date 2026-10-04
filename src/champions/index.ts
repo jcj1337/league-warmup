@@ -1,4 +1,5 @@
 import { Profile } from '../profile/Profile';
+import { CASSIOPEIA } from './cassiopeia';
 import { EZREAL } from './ezreal';
 import type { Champion } from './types';
 
@@ -8,6 +9,7 @@ export { SLOTS } from './types';
 /** Every playable champion, by id. Adding one is one line here plus its folder. */
 export const CHAMPIONS = {
   ezreal: EZREAL,
+  cassiopeia: CASSIOPEIA,
 } satisfies Record<string, Champion>;
 
 export type ChampionId = keyof typeof CHAMPIONS;

@@ -343,9 +343,12 @@ export class UIScene extends Phaser.Scene {
 
     // Any key, on its release. Only a key pressed while the card is up counts,
     // so the release of the F5 / Ctrl+R that reloaded the page can't start the run.
+    // Read straight from the window: a champion pick restarts GameScene, and
+    // Phaser's per-frame key queue can drop a press that lands in that frame.
+    // UIScene lives for the page, so these are added once.
     const pressed = new Set<string>();
-    this.input.keyboard?.on('keydown', (event: KeyboardEvent) => {
-      if (!this.game_.isAwaitingStart) return;
+    window.addEventListener('keydown', (event: KeyboardEvent) => {
+      if (!this.game_?.isAwaitingStart) return;
       // The arrow keys browse champions instead of starting.
       if (event.code === 'ArrowLeft' || event.code === 'ArrowRight') {
         if (!event.repeat) this.pickChampion(this.championRow.neighbour(event.code === 'ArrowLeft' ? -1 : 1));
@@ -353,8 +356,8 @@ export class UIScene extends Phaser.Scene {
       }
       pressed.add(event.code);
     });
-    this.input.keyboard?.on('keyup', (event: KeyboardEvent) => {
-      if (pressed.delete(event.code) && this.game_.isAwaitingStart) this.game_.startRun();
+    window.addEventListener('keyup', (event: KeyboardEvent) => {
+      if (pressed.delete(event.code) && this.game_?.isAwaitingStart) this.game_.startRun();
     });
 
     const panelW = 620;
