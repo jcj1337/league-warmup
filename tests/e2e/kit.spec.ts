@@ -435,6 +435,39 @@ test('kit: W mark + detonation, E blink + bolt priority, Flash, Q cooldown refun
   Math.abs(shaved - cfg.q.hitCooldownReductionMs) < 30
     ? pass(`a landed Q takes ${Math.round(shaved)}ms off R's cooldown, as off Q / W / E`)
     : fail(`Q on R: shaved ${shaved} (${JSON.stringify({ before: beforeQ.cd.r, after: afterQ.cd.r })})`);
+  // Each slot it cut flashes grey for a moment, then the flash fades.
+  const flash = () => page.evaluate(() => {
+    const cd = window.__warmup.scene.getScene('GameScene').getHudState().abilityCooldowns;
+    const slots = window.__warmup.scene.getScene('UIScene').abilityBar.slots;
+    return { r: cd.r.sinceReduced, w: cd.w.sinceReduced, rVisible: slots[3].reduceGfx.visible };
+  });
+  const flashing = await flash();
+  flashing.r < 500 && flashing.rVisible
+    ? pass(`the R slot flashes grey as the Q hit cuts it (${Math.round(flashing.r)}ms ago)`)
+    : fail(`no flash on R: ${JSON.stringify(flashing)}`);
+  flashing.w === Infinity || flashing.w > 1e9 ? pass('W was ready, so nothing was cut and it does not flash') : fail(`W flashed while ready: ${JSON.stringify(flashing)}`);
+  await page.waitForTimeout(650);
+  (await flash()).rVisible === false ? pass('the flash fades after half a second') : fail('flash still showing');
+
+  // The charge quickens with his attack speed: level and passive alike.
+  const fast = await page.evaluate(() => {
+    const g = window.__warmup.scene.getScene('GameScene');
+    g.progression.addXp(1e6, g.clock.now);
+    g.kit.passive.addStack(); g.kit.passive.addStack();
+    g.cooldowns.reset(); g.cast.cancel();
+    const attackSpeed = g.progression.attackSpeedMultiplier * g.kit.attackSpeedMultiplier;
+    return { attackSpeed, level: g.progression.level };
+  });
+  await page.keyboard.press('r');
+  await page.waitForTimeout(30);
+  const charge = await page.evaluate(() => {
+    const g = window.__warmup.scene.getScene('GameScene');
+    return g.cast.isCasting ? { ability: g.cast.castingAbility, ms: g.cast.pending.durationMs } : null;
+  });
+  charge && charge.ability === 'r' && Math.abs(charge.ms - cfg.r.castTimeMs / fast.attackSpeed) < 1
+    ? pass(`at level ${fast.level} with 2 passive stacks (attack speed ×${fast.attackSpeed.toFixed(2)}), R charges in ${Math.round(charge.ms)}ms, not ${cfg.r.castTimeMs}`)
+    : fail(`R charge: ${JSON.stringify({ charge, fast })}`);
+  await page.waitForFunction(() => !window.__warmup.scene.getScene('GameScene').cast.isCasting, null, { timeout: 2000 });
 
   // === HUD slots =============================================================
   section('HUD slots');

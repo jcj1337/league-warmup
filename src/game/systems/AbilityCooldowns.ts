@@ -16,6 +16,8 @@ export type AbilityId = Slot | 'flash';
  */
 export class AbilityCooldowns {
   private readonly readyAt: Record<AbilityId, number> = { q: 0, w: 0, e: 0, r: 0, flash: 0 };
+  /** When `reduce` last took time off each ability, for the HUD's flash. */
+  private readonly reducedAt: Record<AbilityId, number> = { q: -Infinity, w: -Infinity, e: -Infinity, r: -Infinity, flash: -Infinity };
   private now = 0;
 
   /**
@@ -59,8 +61,15 @@ export class AbilityCooldowns {
    */
   reduce(ms: number, ids: AbilityId[]): void {
     for (const id of ids) {
+      if (this.readyAt[id] <= this.now) continue;   // already ready: nothing to take off, nothing to show
       this.readyAt[id] = Math.max(this.now, this.readyAt[id] - ms);
+      this.reducedAt[id] = this.now;
     }
+  }
+
+  /** Time since `reduce` last took time off this ability (Infinity if never). */
+  msSinceReduced(id: AbilityId): number {
+    return this.now - this.reducedAt[id];
   }
 
   /** Make an ability ready again: its cast was interrupted before it happened. */
@@ -69,6 +78,9 @@ export class AbilityCooldowns {
   }
 
   reset(): void {
-    for (const id of Object.keys(this.readyAt) as AbilityId[]) this.readyAt[id] = 0;
+    for (const id of Object.keys(this.readyAt) as AbilityId[]) {
+      this.readyAt[id] = 0;
+      this.reducedAt[id] = -Infinity;
+    }
   }
 }

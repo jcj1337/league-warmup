@@ -73,7 +73,7 @@ stone eye over their head); enemies walking away are slowed instead. Everyone in
 loses a pip.
 
 **R comes back through E.** No stage refresh: every Twin Fang that lands on a poisoned
-enemy takes 500ms off R's remaining cooldown, so it returns faster the more you keep
+enemy takes 500ms off R's remaining cooldown (the R slot flashes grey), so it returns faster the more you keep
 enemies poisoned and bite them. This is this trainer's own rule, not League's.
 
 **Passive, Serpentine Grace.** +3% move speed per level, in place of attack speed.

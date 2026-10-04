@@ -12,6 +12,8 @@ export interface AbilitySlotState {
   cooldownTotalMs: number;
   /** 0..1 while this ability is mid-cast; 0 otherwise. */
   castProgress?: number;
+  /** Ms since something took time off this cooldown: the slot flashes grey for a moment. */
+  sinceReducedMs?: number;
 }
 
 export interface AbilitySlotSpec {
@@ -92,6 +94,8 @@ class AbilitySlot {
   private readonly sweep: Phaser.GameObjects.Graphics;
   /** Cast-in-progress highlight, drawn above the cooldown wash. */
   private readonly castGfx: Phaser.GameObjects.Graphics;
+  /** The grey wash when a cooldown is cut short. */
+  private readonly reduceGfx: Phaser.GameObjects.Graphics;
   private readonly cooldownText: Phaser.GameObjects.BitmapText;
   private readonly keyText: Phaser.GameObjects.BitmapText;
   private readonly accent: number;
@@ -113,6 +117,7 @@ class AbilitySlot {
     this.icon = scene.add.image(Math.round(cx), Math.round(cy), spec.icon).setScale(large ? 3 : 2).setDepth(101);
     this.sweep = scene.add.graphics().setDepth(102);
     this.castGfx = scene.add.graphics().setDepth(104);
+    this.reduceGfx = scene.add.graphics().setDepth(102.5);
 
     // Clip the cooldown sweep to the slot, so the wedge fills the square
     // cleanly instead of spilling a circle out over the arena.
@@ -135,6 +140,7 @@ class AbilitySlot {
     this.icon.destroy();
     this.sweep.clearMask(true).destroy();
     this.castGfx.destroy();
+    this.reduceGfx.destroy();
     this.cooldownText.destroy();
     this.keyText.destroy();
   }
@@ -147,6 +153,7 @@ class AbilitySlot {
 
   update(state: AbilitySlotState): void {
     this.drawCastProgress(state.castProgress ?? 0);
+    this.drawReduceFlash(state.sinceReducedMs ?? Infinity);
 
     const ready = state.cooldownMs <= 0;
 
@@ -191,6 +198,20 @@ class AbilitySlot {
     g.fillRect(x, y + size - 3, size, 3);
     g.fillRect(x, y, 3, size);
     g.fillRect(x + size - 3, y, 3, size);
+  }
+
+  /** A cooldown was just cut short: the slot washes grey, fading out. */
+  private drawReduceFlash(sinceMs: number): void {
+    const A = THEME.ability;
+    const g = this.reduceGfx;
+    if (!(sinceMs >= 0 && sinceMs < A.reduceFlashMs)) {
+      if (g.visible) g.clear().setVisible(false);
+      return;
+    }
+    const size = this.size;
+    g.clear().setVisible(true);
+    g.fillStyle(A.reduceFlash, A.reduceFlashAlpha * (1 - sinceMs / A.reduceFlashMs));
+    g.fillRect(Math.round(this.cx - size / 2) + 2, Math.round(this.cy - size / 2) + 2, size - 4, size - 4);
   }
 
   /** Slot plate: accent border when ready, dim border while on cooldown. */

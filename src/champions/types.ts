@@ -47,9 +47,13 @@ export type CastStyle = 'bolt' | 'orb' | 'blink' | 'fang' | 'none';
  * that goes off the moment its cast ends, so the window itself is the warning.
  * Coloured by `fx` (the slot's own fx when omitted).
  */
-export type CastTelegraph =
-  | { kind: 'cone'; radius(): number; /** Half the opening, in radians. */ halfAngle(): number; fx?: FxKey }
-  | { kind: 'line'; length(): number; halfWidth(): number; fx?: FxKey };
+export interface CastTelegraph {
+  kind: 'cone';
+  radius(): number;
+  /** Half the opening, in radians. */
+  halfAngle(): number;
+  fx?: FxKey;
+}
 
 /** Which THEME.fx entry colours a slot's effects. Grows with each champion. */
 export type FxKey = 'q' | 'w' | 'e' | 'r' | 'poison' | 'miasma' | 'fang' | 'gaze';
@@ -60,8 +64,12 @@ export interface AbilityDef {
   targeting: Targeting;
   /** Cast and pick range for point / unit targeting; the range ring for those. */
   range?: number;
-  /** Read live, so console tuning applies to the next cast. 0 means instant. */
-  castTimeMs(): number;
+  /**
+   * Read live, so console tuning applies to the next cast. 0 means instant.
+   * Handed the champion's attack speed right now (level and passive), for a
+   * cast that speeds up with it; most ignore it.
+   */
+  castTimeMs(pace: { attackSpeed: number }): number;
   cooldownMs(): number;
   /** Texture key of the slot icon. */
   icon: string;

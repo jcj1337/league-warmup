@@ -303,11 +303,11 @@ test('cassiopeia: picked from the profile, slow autos, Q blast + poison ticks, W
   await page.waitForFunction(() => window.__warmup.scene.getScene('GameScene').director.enemies[0]?.hp < 4, null, { timeout: 2000 });
   const rFang1 = await page.evaluate(() => {
     const g = window.__warmup.scene.getScene('GameScene');
-    return { r: g.cooldowns.remainingMs('r'), now: g.clock.now };
+    return { r: g.cooldowns.remainingMs('r'), now: g.clock.now, sinceReduced: g.getHudState().abilityCooldowns.r.sinceReduced };
   });
   const rFangShaved = rFang0.r - rFang1.r - (rFang1.now - rFang0.now);
-  Math.abs(rFangShaved - cfg.R.poisonedFangCooldownReductionMs) < 30
-    ? pass(`a poisoned Twin Fang takes ${Math.round(rFangShaved)}ms off R's cooldown`)
+  Math.abs(rFangShaved - cfg.R.poisonedFangCooldownReductionMs) < 30 && rFang1.sinceReduced < 500
+    ? pass(`a poisoned Twin Fang takes ${Math.round(rFangShaved)}ms off R's cooldown, and the R slot flashes (${Math.round(rFang1.sinceReduced)}ms ago)`)
     : fail(`fang on R: ${JSON.stringify({ rFang0, rFang1, rFangShaved })}`);
 
   // === 6. Heading comes from movement ========================================

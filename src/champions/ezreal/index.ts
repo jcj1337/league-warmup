@@ -49,8 +49,8 @@ export const EZREAL: Champion = {
     },
     r: {
       label: 'Trueshot Barrage', targeting: 'direction',
-      castTimeMs: () => ULT_R.castTimeMs, cooldownMs: () => ULT_R.cooldownMs,
-      telegraph: { kind: 'line', length: () => ULT_R.maxRange, halfWidth: () => ULT_R.radius },
+      // The charge speeds up with his attack speed, level and passive alike.
+      castTimeMs: ({ attackSpeed }) => ULT_R.castTimeMs / attackSpeed, cooldownMs: () => ULT_R.cooldownMs,
       icon: TEX.icons.r, accent: THEME.ability.accents.r, castStyle: 'orb', fx: 'r',
     },
   },

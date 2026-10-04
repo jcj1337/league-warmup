@@ -130,7 +130,11 @@ export const BLINK_E = {
  * cooldown like the others (SKILLSHOT_Q.hitCooldownReductionMs).
  */
 export const ULT_R = {
-  /** League's 1s: rooted while he charges it, the path drawn on the ground. */
+  /**
+   * League's 1s at base attack speed: rooted while he charges it. Divided by
+   * his attack speed (level and passive), so it quickens as the run goes on:
+   * ~625ms at level 11, ~495ms at 18, less with passive stacks.
+   */
   castTimeMs: 1000,
   cooldownMs: 60000,
   /** League's 2000 is ~950 here: about a second and a half to cross the arena. */

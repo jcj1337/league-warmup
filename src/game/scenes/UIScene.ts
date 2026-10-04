@@ -480,6 +480,7 @@ export class UIScene extends Phaser.Scene {
     this.abilityBar?.update([
       ...SLOTS.filter((slot) => champion.slots[slot] !== undefined).map((slot) => ({
         cooldownMs: cd[slot].remaining, cooldownTotalMs: cd[slot].total, castProgress: castOf(slot),
+        sinceReducedMs: cd[slot].sinceReduced,
       })),
       { cooldownMs: cd.flash.remaining, cooldownTotalMs: cd.flash.total, castProgress: 0 },
     ]);

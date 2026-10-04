@@ -48,7 +48,8 @@ export interface HudState {
   hp: number;
   maxHp: number;
   /** Remaining / total cooldown per ability slot, straight from AbilityCooldowns. */
-  abilityCooldowns: Record<string, { remaining: number; total: number }>;
+  /** Per slot: remaining and full cooldown, and ms since something last took time off it. */
+  abilityCooldowns: Record<string, { remaining: number; total: number; sinceReduced: number }>;
   /** Which ability is mid-cast, and how far through, for the slot highlight. */
   castingAbility: string | null;
   castProgress: number;
@@ -328,7 +329,9 @@ export class GameScene extends Phaser.Scene {
     this.attacks.onMoveOrder();
     const payload = this.kit.commit(slot, aim);
     this.cooldowns.start(slot);
-    this.beginCastOrResolve(slot, payload, def.castTimeMs());
+    // Level and passive together, as the auto windup reads them.
+    const attackSpeed = this.progression.attackSpeedMultiplier * this.kit.attackSpeedMultiplier;
+    this.beginCastOrResolve(slot, payload, def.castTimeMs({ attackSpeed }));
   }
 
   /** Where a cast goes, from the cursor and the slot's targeting. Null: nothing to cast at. */
@@ -738,9 +741,9 @@ export class GameScene extends Phaser.Scene {
     };
   }
 
-  private abilityCooldown(id: AbilityId): { remaining: number; total: number } {
-    if (!this.cooldowns) return { remaining: 0, total: 0 };
-    return { remaining: this.cooldowns.remainingMs(id), total: this.cooldowns.totalMs(id) };
+  private abilityCooldown(id: AbilityId): { remaining: number; total: number; sinceReduced: number } {
+    if (!this.cooldowns) return { remaining: 0, total: 0, sinceReduced: Infinity };
+    return { remaining: this.cooldowns.remainingMs(id), total: this.cooldowns.totalMs(id), sinceReduced: this.cooldowns.msSinceReduced(id) };
   }
 
   getRoundResult(): RoundResult | null {

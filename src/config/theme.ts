@@ -620,6 +620,10 @@ export const THEME = {
     cooldownEdge: P.panelEdge,
     fill: P.panel,
     cooldownWashAlpha: 0.55,
+    /** Something took time off a cooldown (Ezreal's Q hit, Cassiopeia's poisoned fang): the slot washes grey, fading over this long. */
+    reduceFlash: P.silver,
+    reduceFlashAlpha: 0.6,
+    reduceFlashMs: 500,
     sweepColor: P.ink,
     sweepAlpha: 0.7,
     /** Per-slot accent: the ability's own colour. */
