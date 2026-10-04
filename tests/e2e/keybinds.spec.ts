@@ -42,7 +42,7 @@ test('keybinds: rebind from the pause menu, swaps, Escape cancels, ability bar l
   section('1. Defaults');
   {
     const b = await binds();
-    b.skillshotQ === 'KeyQ' && b.skillshotW === 'KeyW' && b.blinkE === 'KeyE' && b.flash === 'KeyF' &&
+    b.abilityQ === 'KeyQ' && b.abilityW === 'KeyW' && b.abilityE === 'KeyE' && b.flash === 'KeyF' &&
       b.attackMoveClick === 'KeyT' && b.attackMove === 'KeyA' && b.stop === 'KeyS' && b.chatMode === 'KeyZ'
       ? pass('defaults: Q W E F, T / A attack-move, S stop, Z chat')
       : fail(`defaults: ${JSON.stringify(b)}`);
@@ -52,44 +52,44 @@ test('keybinds: rebind from the pause menu, swaps, Escape cancels, ability bar l
   await page.keyboard.press('Escape');
   {
     const m = await menu();
-    m.visible && Object.values(m.rows).join(',') === 'Q,W,E,F,T,A,S,Z'
-      ? pass('the pause menu lists all eight bindings')
+    m.visible && Object.values(m.rows).join(',') === 'Q,W,E,R,F,T,A,S,Z'
+      ? pass('the pause menu lists all nine bindings (R is the ultimate slot)')
       : fail(`menu rows: ${JSON.stringify(m)}`);
   }
 
   // === 2. Rebind Q to Y =======================================================
   section('2. Rebind');
-  await clickRow('skillshotQ');
+  await clickRow('abilityQ');
   {
     const m = await menu();
-    m.rows.skillshotQ === 'PRESS A KEY' && /PRESS A KEY/.test(m.status)
+    m.rows.abilityQ === 'PRESS A KEY' && /PRESS A KEY/.test(m.status)
       ? pass('clicking a row waits for a key')
       : fail(`waiting: ${JSON.stringify(m)}`);
   }
   await page.keyboard.press('y');
   {
     const [b, m, slots] = [await binds(), await menu(), await slotKeys()];
-    b.skillshotQ === 'KeyY' && m.rows.skillshotQ === 'Y' && slots[0].text === 'Y' && m.visible && m.paused
+    b.abilityQ === 'KeyY' && m.rows.abilityQ === 'Y' && slots[0].text === 'Y' && m.visible && m.paused
       ? pass('pressing Y binds Q to Y: menu row and ability bar both say Y, menu stays open')
       : fail(`rebind: ${JSON.stringify({ b, m, slots })}`);
   }
 
   // Escape while waiting cancels the rebind, not the menu.
-  await clickRow('skillshotW');
+  await clickRow('abilityW');
   await page.keyboard.press('Escape');
   {
     const [b, m] = [await binds(), await menu()];
-    b.skillshotW === 'KeyW' && m.rows.skillshotW === 'W' && m.visible && m.paused && m.status === ''
+    b.abilityW === 'KeyW' && m.rows.abilityW === 'W' && m.visible && m.paused && m.status === ''
       ? pass('Escape while waiting cancels the rebind and keeps the menu open')
       : fail(`escape cancel: ${JSON.stringify({ b, m })}`);
   }
 
   // A key already in use swaps.
-  await clickRow('skillshotW');
+  await clickRow('abilityW');
   await page.keyboard.press('e');
   {
     const [b, m] = [await binds(), await menu()];
-    b.skillshotW === 'KeyE' && b.blinkE === 'KeyW' && m.status === 'E MOVED TO W'
+    b.abilityW === 'KeyE' && b.abilityE === 'KeyW' && m.status === 'E MOVED TO W'
       ? pass(`a taken key swaps: W on E, E moved to W ("${m.status}")`)
       : fail(`swap: ${JSON.stringify({ b, m })}`);
   }
@@ -154,7 +154,7 @@ test('keybinds: rebind from the pause menu, swaps, Escape cancels, ability bar l
     await waitForGame(other, 100);
     const b = await other.evaluate(() => window.__keybinds.all());
     await other.close();
-    b.skillshotQ === 'KeyY' && b.flash === 'CapsLock' && b.chatMode === 'KeyX'
+    b.abilityQ === 'KeyY' && b.flash === 'CapsLock' && b.chatMode === 'KeyX'
       ? pass('bindings carry over to a new tab (localStorage)')
       : fail(`new tab: ${JSON.stringify(b)}`);
   }
@@ -163,7 +163,7 @@ test('keybinds: rebind from the pause menu, swaps, Escape cancels, ability bar l
   await waitForGame(page, 300);
   {
     const [b, slots] = [await binds(), await slotKeys()];
-    b.skillshotQ === 'KeyY' && b.flash === 'CapsLock' && b.chatMode === 'KeyX' && slots[0].text === 'Y' && slots[3].text === 'CAPS'
+    b.abilityQ === 'KeyY' && b.flash === 'CapsLock' && b.chatMode === 'KeyX' && slots[0].text === 'Y' && slots[3].text === 'CAPS'
       ? pass('bindings survive a reload, ability bar included')
       : fail(`after reload: ${JSON.stringify({ b, slots })}`);
   }
@@ -179,7 +179,7 @@ test('keybinds: rebind from the pause menu, swaps, Escape cancels, ability bar l
   if (resetAt) await page.mouse.click(resetAt.x, resetAt.y);
   {
     const [b, m, slots] = [await binds(), await menu(), await slotKeys()];
-    b.skillshotQ === 'KeyQ' && b.flash === 'KeyF' && b.chatMode === 'KeyZ' && slots.map((s) => s.text).join('') === 'QWEF' &&
+    b.abilityQ === 'KeyQ' && b.flash === 'KeyF' && b.chatMode === 'KeyZ' && slots.map((s) => s.text).join('') === 'QWEF' &&
       m.status === 'KEYS RESET TO DEFAULTS'
       ? pass('RESET KEYS restores the defaults, menu and ability bar')
       : fail(`reset: ${JSON.stringify({ resetAt, b, m, slots })}`);
@@ -187,12 +187,12 @@ test('keybinds: rebind from the pause menu, swaps, Escape cancels, ability bar l
   await page.keyboard.press('Escape');
 
   // Broken saved bindings (two actions on one key) fall back to the defaults.
-  await page.evaluate(() => window.__profile.update((d) => { d.keybinds = { skillshotQ: 'KeyW' }; }));
+  await page.evaluate(() => window.__profile.update((d) => { d.keybinds = { abilityQ: 'KeyW' }; }));
   await page.reload({ waitUntil: 'load' });
   await waitForGame(page, 300);
   {
     const b = await binds();
-    b.skillshotQ === 'KeyQ' && b.skillshotW === 'KeyW'
+    b.abilityQ === 'KeyQ' && b.abilityW === 'KeyW'
       ? pass('inconsistent saved bindings are ignored: defaults load')
       : fail(`corrupt: ${JSON.stringify(b)}`);
   }

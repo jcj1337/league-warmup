@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { statusLooks } from './statusLooks';
 import { DEBUG, PURSUER } from '../../config/balance';
 import { THEME, actorDepth } from '../../config/theme';
 import { TEX } from '../art/textures';
@@ -33,7 +34,8 @@ export interface EnemyArt {
 export class EnemyView {
   readonly sprite: Phaser.GameObjects.Image;
   readonly shadow: Phaser.GameObjects.Image;
-  readonly markIcon: Phaser.GameObjects.Image;
+  /** One icon per status the enemy has worn, by status id (see statusLooks). */
+  private readonly statusIcons = new Map<string, Phaser.GameObjects.Image>();
   readonly hpBar: PipBar;
   /** Ground overlays under the enemy: mark ring, attack telegraph. */
   protected readonly overlay: Phaser.GameObjects.Graphics;
@@ -54,7 +56,6 @@ export class EnemyView {
     this.shadow = scene.add.image(enemy.x, enemy.y, art.shadow).setScale(S).setDepth(THEME.depth.shadow);
     this.overlay = scene.add.graphics().setDepth(THEME.depth.groundFx);
     this.sprite = scene.add.image(enemy.x, enemy.y, art.idle[0]).setOrigin(0.5, art.originY).setScale(S);
-    this.markIcon = scene.add.image(enemy.x, enemy.y, TEX.mark).setScale(S).setDepth(THEME.depth.mark).setVisible(false);
     this.hpBar = new PipBar(scene);
   }
 
@@ -92,7 +93,7 @@ export class EnemyView {
       const cue = THEME.enemy.spawnCue;
       this.sprite.setVisible(false);
       this.shadow.setVisible(false);
-      this.markIcon.setVisible(false);
+      this.hideStatusIcons();
       this.hpBar.setVisible(false);
       this.overlay.clear();
       dottedRing(
@@ -122,7 +123,7 @@ export class EnemyView {
         this.sprite.setVisible(false);
       }
       this.shadow.setVisible(false);
-      this.markIcon.setVisible(false);
+      this.hideStatusIcons();
       this.hpBar.setVisible(false);
       this.overlay.clear();
       this.hideExtras();
@@ -152,23 +153,41 @@ export class EnemyView {
     this.hpBar.update(e.x, e.y + this.art.hpBarOffsetY, e.hp, e.maxHp, deltaSeconds);
 
     this.overlay.clear();
-    this.drawMark(nowMs, bx, by);
+    this.drawStatuses(nowMs, bx, by);
     this.drawExtras(nowMs, bx, by, deltaSeconds);
   }
 
-  /** Rune floating over the head plus a violet ring at the feet. Loud on purpose. */
-  private drawMark(nowMs: number, bx: number, by: number): void {
-    const remaining = this.enemy.markRemainingMs(nowMs);
-    if (remaining <= 0) {
-      this.markIcon.setVisible(false);
-      return;
+  /**
+   * Every registered status the enemy has: its icon bobbing over the head and
+   * a ring at the feet, blinking as it lapses. Loud on purpose.
+   */
+  private drawStatuses(nowMs: number, bx: number, by: number): void {
+    for (const [id, look] of statusLooks()) {
+      const remaining = this.enemy.statusRemainingMs(id, nowMs);
+      const icon = this.statusIcons.get(id);
+      if (remaining <= 0) {
+        icon?.setVisible(false);
+        continue;
+      }
+      const blinkOff = remaining < look.warnMs && Math.floor(remaining / 90) % 2 === 0;
+      const top = by - this.sprite.displayHeight * this.art.originY;
+      const bob = Math.round(Math.sin(this.visualMs * 0.008) * look.bobPx);
+      this.statusIcon(id, look.icon).setVisible(!blinkOff).setPosition(bx, Math.round(top - 14 + bob));
+      dottedRing(this.overlay, bx, by + 4, this.enemy.radius + 8, look.ringColor, blinkOff ? 0.35 : 0.9, 3);
     }
-    const M = THEME.mark;
-    const blinkOff = remaining < M.warnMs && Math.floor(remaining / 90) % 2 === 0;
-    const top = by - this.sprite.displayHeight * this.art.originY;
-    const bob = Math.round(Math.sin(this.visualMs * 0.008) * M.bobPx);
-    this.markIcon.setVisible(!blinkOff).setPosition(bx, Math.round(top - 14 + bob));
-    dottedRing(this.overlay, bx, by + 4, this.enemy.radius + 8, M.ringColor, blinkOff ? 0.35 : 0.9, 3);
+  }
+
+  private statusIcon(id: string, texture: string): Phaser.GameObjects.Image {
+    let icon = this.statusIcons.get(id);
+    if (!icon) {
+      icon = this.scene.add.image(0, 0, texture).setScale(THEME.art.scale).setDepth(THEME.depth.mark);
+      this.statusIcons.set(id, icon);
+    }
+    return icon;
+  }
+
+  private hideStatusIcons(): void {
+    for (const icon of this.statusIcons.values()) icon.setVisible(false);
   }
 
   /** Archetype-specific layers (weapon, telegraph). */
@@ -179,7 +198,7 @@ export class EnemyView {
   destroy(): void {
     this.sprite.destroy();
     this.shadow.destroy();
-    this.markIcon.destroy();
+    for (const icon of this.statusIcons.values()) icon.destroy();
     this.overlay.destroy();
     this.hpBar.destroy();
   }

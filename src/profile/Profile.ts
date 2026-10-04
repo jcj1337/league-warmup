@@ -19,7 +19,17 @@ import { MOUSE, PREFERENCES } from '../config/balance';
  */
 
 export const PROFILE_KEY = 'warmup.profile.v1';
-const CURRENT_VERSION = 1;
+const CURRENT_VERSION = 2;
+
+/** Key-binding actions renamed since they were first saved (v1 named Ezreal's abilities). */
+const KEYBIND_RENAMES: Record<string, string> = { skillshotQ: 'abilityQ', skillshotW: 'abilityW', blinkE: 'abilityE' };
+
+/** Saved bindings under their current action names. */
+function upgradeKeybinds(raw: Record<string, string>): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const [action, code] of Object.entries(raw)) out[KEYBIND_RENAMES[action] ?? action] = code;
+  return out;
+}
 
 /** Keys the stores used before the profile existed; read once and removed by `migrate`. */
 const LEGACY_KEYS = {
@@ -43,6 +53,8 @@ export interface RunRecord {
   killedBy: string | null;
   damageTaken: Record<string, number>;
   stageDamage?: Record<string, number>;
+  /** Who was played (absent on runs logged before champions existed: Ezreal). */
+  champion?: string;
 }
 
 export interface ProfileSettings {
@@ -174,7 +186,7 @@ function migrate(): ProfileData {
     }
   };
   const keybinds = legacy(LEGACY_KEYS.keybinds);
-  if (isRecord(keybinds)) data.keybinds = stringMap(keybinds);
+  if (isRecord(keybinds)) data.keybinds = upgradeKeybinds(stringMap(keybinds));
   let mouseRaw: string | null = null;
   try {
     mouseRaw = window.localStorage.getItem(LEGACY_KEYS.mouseSpeed);
@@ -201,7 +213,7 @@ function sanitize(parsed: unknown): ProfileData {
   const data = defaultProfile();
   if (!isRecord(parsed)) return data;
   if (typeof parsed.champion === 'string' && parsed.champion) data.champion = parsed.champion;
-  if (isRecord(parsed.keybinds)) data.keybinds = stringMap(parsed.keybinds);
+  if (isRecord(parsed.keybinds)) data.keybinds = upgradeKeybinds(stringMap(parsed.keybinds));
   if (typeof parsed.mouseSpeed === 'number' && Number.isFinite(parsed.mouseSpeed)) data.mouseSpeed = parsed.mouseSpeed;
   if (isRecord(parsed.settings)) data.settings = sanitizeSettings(parsed.settings, data.settings);
   if (typeof parsed.currency === 'number' && Number.isFinite(parsed.currency) && parsed.currency >= 0) {

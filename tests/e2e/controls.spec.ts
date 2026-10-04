@@ -11,7 +11,7 @@ test('controls: Q quick-cast, T attack-move-click, targeting modes, T orbwalk, T
     g.player.hp = 100;
     g.player.x = opts.px ?? 640; g.player.y = opts.py ?? 360; g.player.stop();
     g.attacks.cancel(); g.attacks.state = 'idle'; g.attacks.clearMissiles();
-    g.skillshot.clear();
+    g.projectiles.clear();
     if (opts.qReady) g.cooldowns.reduce(999999, ['q']);
     g.enemies.forEach((t, i) => {
       if (i < spots.length) {
@@ -31,9 +31,9 @@ test('controls: Q quick-cast, T attack-move-click, targeting modes, T orbwalk, T
       hasTarget: !!t, targetPos: t ? { x: t.x, y: t.y } : null,
       aMove: g.attacks.hasAttackMoveOrder,
       aPending: g.inputs.attackMovePending,
-      qMissiles: g.skillshot.missilesInFlight,
-      qFired: g.skillshot.shotsFired, qHit: g.skillshot.shotsHit,
-      qCd: g.skillshot.cooldownRemainingMs,
+      qMissiles: g.projectiles.missilesInFlight,
+      qFired: g.kit.qFired, qHit: g.kit.qHit,
+      qCd: g.cooldowns.remainingMs('q'),
       fired: g.metrics.attacksFired,
     };
   });
@@ -45,9 +45,9 @@ test('controls: Q quick-cast, T attack-move-click, targeting modes, T orbwalk, T
   const d = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
 
   const cfg = await page.evaluate(() => ({
-    qRange: window.__balance.SKILLSHOT_Q.maxRange,
-    qSpeed: window.__balance.SKILLSHOT_Q.speed,
-    qCd: window.__balance.SKILLSHOT_Q.cooldownMs,
+    qRange: window.__ezreal.SKILLSHOT_Q.maxRange,
+    qSpeed: window.__ezreal.SKILLSHOT_Q.speed,
+    qCd: window.__ezreal.SKILLSHOT_Q.cooldownMs,
     atkRange: window.__balance.ATTACK.range,
     targeting: window.__balance.ATTACK.attackMoveTargeting,
     keysT: window.__balance.KEYBINDS.attackMoveClick,
@@ -77,7 +77,7 @@ test('controls: Q quick-cast, T attack-move-click, targeting modes, T orbwalk, T
   // No targeting mode, no indicator objects.
   const noIndicator = await page.evaluate(() => {
     const g = window.__warmup.scene.getScene('GameScene');
-    const s = g.skillshot;
+    const s = g.projectiles;
     return {
       hasIsTargeting: 'isTargeting' in s,
       hasAimLine: 'aimLine' in s,
@@ -91,7 +91,7 @@ test('controls: Q quick-cast, T attack-move-click, targeting modes, T orbwalk, T
   // Direction: the missile must travel toward where the cursor was.
   const dir = await page.evaluate(() => {
     const g = window.__warmup.scene.getScene('GameScene');
-    const m = g.skillshot.missiles[0]?.projectile;
+    const m = g.projectiles.missiles[0]?.projectile;
     return m ? { x: m.x, y: m.y, px: g.player.x, py: g.player.y } : null;
   });
   dir && dir.x > dir.px + 5 && Math.abs(dir.y - dir.py) < 30
@@ -104,7 +104,7 @@ test('controls: Q quick-cast, T attack-move-click, targeting modes, T orbwalk, T
   await page.waitForTimeout(60);
   await page.keyboard.press('q');
   await page.waitForFunction(
-    () => window.__warmup.scene.getScene('GameScene').skillshot.missiles.length > 0,
+    () => window.__warmup.scene.getScene('GameScene').projectiles.missiles.length > 0,
     null,
     { timeout: 3000 },
   );
@@ -113,7 +113,7 @@ test('controls: Q quick-cast, T attack-move-click, targeting modes, T orbwalk, T
     const startX = g.player.x;
     let maxSeen = 0;
     const tick = () => {
-      const m = g.skillshot.missiles[0]?.projectile;
+      const m = g.projectiles.missiles[0]?.projectile;
       if (m) { maxSeen = Math.max(maxSeen, m.x - startX); requestAnimationFrame(tick); }
       else res({ maxSeen, qRange });
     };

@@ -1,14 +1,6 @@
-import { BLINK_E, FLASH, SKILLSHOT_Q, SKILLSHOT_W } from '../../config/balance';
+import type { Slot } from '../../champions/types';
 
-export type AbilityId = 'q' | 'w' | 'e' | 'flash';
-
-/** Full cooldown per ability, read from config. */
-const DURATIONS: Record<AbilityId, () => number> = {
-  q: () => SKILLSHOT_Q.cooldownMs,
-  w: () => SKILLSHOT_W.cooldownMs,
-  e: () => BLINK_E.cooldownMs,
-  flash: () => FLASH.cooldownMs,
-};
+export type AbilityId = Slot | 'flash';
 
 /**
  * One place that knows what is on cooldown and for how long.
@@ -18,17 +10,23 @@ const DURATIONS: Record<AbilityId, () => number> = {
  * call instead of three bits of duplicated arithmetic — and gives the HUD one
  * consistent source for every slot.
  *
- * All timing is GameClock time, so pausing freezes every cooldown at once.
+ * Durations come from the champion's slot definitions (and FLASH for the
+ * summoner), read live so console tuning applies to the next cast. All timing
+ * is GameClock time, so pausing freezes every cooldown at once.
  */
 export class AbilityCooldowns {
-  private readonly readyAt: Record<AbilityId, number> = { q: 0, w: 0, e: 0, flash: 0 };
+  private readonly readyAt: Record<AbilityId, number> = { q: 0, w: 0, e: 0, r: 0, flash: 0 };
   private now = 0;
 
   /**
-   * `haste()` multiplies the Q / W / E cooldowns (the player's level: see
+   * `durations(id)` is the full cooldown of a slot before haste. `haste()`
+   * multiplies the slot cooldowns (the player's level: see
    * Progression.cooldownMultiplier). Flash is a summoner spell and ignores it.
    */
-  constructor(private readonly haste: () => number = () => 1) {}
+  constructor(
+    private readonly durations: (id: AbilityId) => number,
+    private readonly haste: () => number = () => 1,
+  ) {}
 
   update(nowMs: number): void {
     this.now = nowMs;
@@ -42,9 +40,9 @@ export class AbilityCooldowns {
     return Math.max(0, this.readyAt[id] - this.now);
   }
 
-  /** The full cooldown right now: config value, shortened by level for Q / W / E. */
+  /** The full cooldown right now: the slot's value, shortened by level for everything but Flash. */
   totalMs(id: AbilityId): number {
-    return DURATIONS[id]() * (id === 'flash' ? 1 : this.haste());
+    return this.durations(id) * (id === 'flash' ? 1 : this.haste());
   }
 
   /** Put an ability on its full cooldown, starting now. */
@@ -71,9 +69,6 @@ export class AbilityCooldowns {
   }
 
   reset(): void {
-    this.readyAt.q = 0;
-    this.readyAt.w = 0;
-    this.readyAt.e = 0;
-    this.readyAt.flash = 0;
+    for (const id of Object.keys(this.readyAt) as AbilityId[]) this.readyAt[id] = 0;
   }
 }

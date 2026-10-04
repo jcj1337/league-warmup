@@ -7,8 +7,8 @@ test('progression: contact damage, levels from kills (haste, attack speed, Q ran
   const cfg = await page.evaluate(() => ({
     enemies: window.__balance.ENEMIES,
     contact: window.__balance.CONTACT,
-    levels: window.__balance.LEVELS,
-    q: window.__balance.SKILLSHOT_Q,
+    levels: { ...window.__balance.LEVELS, ...window.__ezreal.LEVELS },
+    q: window.__ezreal.SKILLSHOT_Q,
     flash: window.__balance.FLASH,
   }));
 
@@ -24,7 +24,7 @@ test('progression: contact damage, levels from kills (haste, attack speed, Q ran
     g.enemies = d.enemies;
     g.player.hp = 100; g.player.lastHitAt = Number.NEGATIVE_INFINITY;
     g.player.x = 640; g.player.y = 360; g.player.stop();
-    g.attacks.cancel(); g.attacks.state = 'idle'; g.attacks.clearMissiles(); g.skillshot.clear();
+    g.attacks.cancel(); g.attacks.state = 'idle'; g.attacks.clearMissiles(); g.projectiles.clear();
     g.cooldowns.reset();
     g.progression.level = 1; g.progression.xp = 0; g.progression.totalXp = 0;
   }, stage);
@@ -135,7 +135,7 @@ test('progression: contact damage, levels from kills (haste, attack speed, Q ran
     const out = {};
     for (const l of [1, 9, 18]) {
       g.progression.level = l;
-      out[l] = { q: g.cooldowns.totalMs('q'), w: g.cooldowns.totalMs('w'), e: g.cooldowns.totalMs('e'), flash: g.cooldowns.totalMs('flash'), base: g.attacks.baseCooldownMs, qPips: g.progression.qPips };
+      out[l] = { q: g.cooldowns.totalMs('q'), w: g.cooldowns.totalMs('w'), e: g.cooldowns.totalMs('e'), flash: g.cooldowns.totalMs('flash'), base: g.attacks.baseCooldownMs, qPips: g.kit.qPips };
     }
     g.progression.level = 1;
     return out;
@@ -163,14 +163,14 @@ test('progression: contact damage, levels from kills (haste, attack speed, Q ran
     await page.evaluate((l) => { window.__warmup.scene.getScene('GameScene').progression.level = l; }, level);
     await page.mouse.move(900, 360);
     await page.keyboard.press('q');
-    await page.waitForFunction(() => window.__warmup.scene.getScene('GameScene').skillshot.shotsHit > 0
+    await page.waitForFunction(() => window.__warmup.scene.getScene('GameScene').kit.qHit > 0
       || window.__warmup.scene.getScene('GameScene').director.enemies[0].hp < 3, null, { timeout: 3000 }).catch(() => {});
     await page.waitForTimeout(100);
     return page.evaluate(() => window.__warmup.scene.getScene('GameScene').director.enemies[0].hp);
   };
-  await page.evaluate(() => { window.__warmup.scene.getScene('GameScene').skillshot.shotsHit = 0; });
+  await page.evaluate(() => { window.__warmup.scene.getScene('GameScene').kit.qHit = 0; });
   const lowQ = await qHit(cfg.levels.qRankUp.level - 1);
-  await page.evaluate(() => { window.__warmup.scene.getScene('GameScene').skillshot.shotsHit = 0; });
+  await page.evaluate(() => { window.__warmup.scene.getScene('GameScene').kit.qHit = 0; });
   const highQ = await qHit(cfg.levels.qRankUp.level);
   lowQ === 2 && highQ === 1
     ? pass(`a real Q hit on a 3-pip Pursuer leaves ${lowQ} at level ${cfg.levels.qRankUp.level - 1}, ${highQ} at level ${cfg.levels.qRankUp.level}`)

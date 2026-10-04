@@ -9,6 +9,8 @@ import { MouseSpeed } from './game/MouseSpeed';
 import { RunHistory } from './game/RunHistory';
 import { Settings } from './game/Settings';
 import { Profile } from './profile/Profile';
+import { CHAMPIONS } from './champions';
+import * as ezreal from './champions/ezreal/balance';
 
 const game = new Phaser.Game({
   type: Phaser.AUTO,
@@ -42,13 +44,15 @@ const game = new Phaser.Game({
 //   __mouseSpeed.value / .set(2.5) / .reset()                // Mouse Speed (saved in this browser)
 //   __settings.all() / .pauseOnFocusLoss = false             // pause-menu settings (saved in this browser)
 //   __profile.data / .reset()                                // everything saved, in one place
+//   __ezreal.SKILLSHOT_Q.speed = 1400                        // Ezreal's numbers (src/champions/ezreal/balance.ts)
+//   __champions                                              // every playable champion
 const runs = {
   list: () => RunHistory.list(),
-  summary: (growth: number = balance.DIFFICULTY.growth, version: number = balance.BALANCE_VERSION) =>
-    RunHistory.summary(growth, version),
+  summary: (growth: number = balance.DIFFICULTY.growth, version: number = balance.BALANCE_VERSION, champion: string = Profile.data.champion) =>
+    RunHistory.summary(growth, version, champion),
   clear: () => RunHistory.clear(),
 };
 Object.assign(window as unknown as Record<string, unknown>, {
   __warmup: game, __balance: balance, __theme: THEME, __runs: runs, __keybinds: Keybinds, __mouseSpeed: MouseSpeed,
-  __settings: Settings, __profile: Profile,
+  __settings: Settings, __profile: Profile, __ezreal: ezreal, __champions: CHAMPIONS,
 });

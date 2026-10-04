@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { ARENA, attackReach, DEBUG, PLAYER, TARGETS } from '../../config/balance';
 import { PlayerView, type AttackVisual, type CastKind, type PlayerViewState } from '../view/PlayerView';
+import type { ChampionStats } from '../../champions/types';
 
 export type { AttackVisual } from '../view/PlayerView';
 
@@ -16,10 +17,11 @@ export type { AttackVisual } from '../view/PlayerView';
 export class Player {
   public x: number;
   public y: number;
-  public readonly radius = PLAYER.radius;
+  public readonly radius: number;
 
-  public hp: number = PLAYER.maxHp;
-  public readonly maxHp: number = PLAYER.maxHp;
+  public hp: number;
+  public readonly maxHp: number;
+  private readonly baseMoveSpeed: number;
 
   /** Current move order, or null when standing still. */
   private destX: number | null = null;
@@ -47,9 +49,20 @@ export class Player {
   readonly view: PlayerView;
   private readonly viewState: PlayerViewState;
 
-  constructor(scene: Phaser.Scene, x: number, y: number) {
+  /** `levelSpeed()` multiplies move speed by the champion's level perk (Progression.moveSpeedMultiplier). */
+  constructor(
+    scene: Phaser.Scene,
+    x: number,
+    y: number,
+    stats: ChampionStats,
+    private readonly levelSpeed: () => number = () => 1,
+  ) {
     this.x = x;
     this.y = y;
+    this.radius = stats.radius;
+    this.hp = stats.maxHp;
+    this.maxHp = stats.maxHp;
+    this.baseMoveSpeed = stats.moveSpeed;
     this.view = new PlayerView(scene, x, y);
     this.viewState = {
       x, y, radius: this.radius, moving: false, destX: null, destY: null,
@@ -73,9 +86,9 @@ export class Player {
     return this.now < this.slowUntil;
   }
 
-  /** Base move speed, scaled down while slowed. */
+  /** The champion's move speed at this level, scaled down while slowed. */
   get moveSpeed(): number {
-    return PLAYER.moveSpeed * (this.isSlowed ? 1 - this.slowFraction : 1);
+    return this.baseMoveSpeed * this.levelSpeed() * (this.isSlowed ? 1 - this.slowFraction : 1);
   }
 
   /** Bring the status timers up to this frame. Called before anything reads them. */

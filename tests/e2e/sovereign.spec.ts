@@ -24,7 +24,7 @@ test('sovereign: unlock, Dark Sphere + cap + cleanup, Force of Will (sphere and 
     g.player.stunnedUntil = 0; g.player.slowUntil = 0; g.player.slowFraction = 0;
     g.stunBuffered = null;
     g.player.x = px; g.player.y = py; g.player.stop();
-    g.attacks.cancel(); g.attacks.state = 'idle'; g.attacks.clearMissiles(); g.skillshot.clear();
+    g.attacks.cancel(); g.attacks.state = 'idle'; g.attacks.clearMissiles(); g.projectiles.clear();
   }, { px, py });
   /** The Sovereign at (x, y), holding still and silent until castNow(); optional harmless basics. */
   const place = (x, y, basics: { x: number; y: number }[] = []) => page.evaluate(({ x, y, basics }) => {

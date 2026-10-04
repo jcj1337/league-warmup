@@ -50,11 +50,12 @@ const SLIDER_VALUE_W = 64;
 /** One rebindable key row. */
 interface BindRow {
   action: BindableAction;
+  name: Phaser.GameObjects.BitmapText;
   value: Phaser.GameObjects.BitmapText;
 }
 
 /** Pixel height of a controls row. */
-const KEY_ROW_H = 22;
+const KEY_ROW_H = 20;
 
 /** First settings row, from the panel's top edge, and the pitch between rows. */
 const SETTINGS_TOP = 220;
@@ -87,12 +88,15 @@ export class PauseMenu {
   /**
    * @param controls fixed (mouse) controls listed above the key rows, as
    *   'INPUT | what it does'.
+   * @param labelFor names a key row ('Q: Mystic Shot'); null keeps the
+   *   action's own label. Re-applied through `setLabels` when the champion changes.
    */
   constructor(
     private readonly scene: Phaser.Scene,
     actions: PauseMenuActions,
     settings: SettingRow[],
     controls: string[] = [],
+    labelFor: (action: BindableAction) => string | null = () => null,
   ) {
     const w = 480;
     // Offsets from the panel's top edge.
@@ -181,8 +185,9 @@ export class PauseMenu {
       hit.on('pointerout', () => hit.setFillStyle(THEME.menu.buttonHover, 0));
       hit.on('pointerdown', () => this.startRebind(action));
       parts.push(hit, name, value);
-      this.bindRows.push({ action, value });
+      this.bindRows.push({ action, name, value });
     });
+    this.setLabels(labelFor);
 
     parts.push(...this.button(x, top + resetY, 220, 28, 'RESET KEYS', () => {
       this.stopRebind();
@@ -207,6 +212,13 @@ export class PauseMenu {
     });
     // A rebind from anywhere (this menu, a reset, the console) shows at once.
     Keybinds.onChange(() => this.refreshBinds());
+  }
+
+  /** Rename the key rows for the active champion. */
+  setLabels(labelFor: (action: BindableAction) => string | null): void {
+    for (const { action, name } of this.bindRows) {
+      name.setText(labelFor(action) ?? BINDABLE.find((b) => b.action === action)?.label ?? action);
+    }
   }
 
   /** Wait for the next key press and bind it to `action`. Escape backs out. */
@@ -350,7 +362,7 @@ export class PauseMenu {
 /** Short name of an action, for the status line. */
 function shortName(action: BindableAction): string {
   const names: Record<BindableAction, string> = {
-    skillshotQ: 'Q', skillshotW: 'W', blinkE: 'E', flash: 'FLASH',
+    abilityQ: 'Q', abilityW: 'W', abilityE: 'E', abilityR: 'R', flash: 'FLASH',
     attackMoveClick: 'ATTACK-MOVE CLICK', attackMove: 'ATTACK-MOVE', stop: 'STOP', chatMode: 'CHAT MODE',
   };
   return names[action];

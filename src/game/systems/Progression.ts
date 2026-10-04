@@ -1,18 +1,20 @@
 import { LEVELS } from '../../config/balance';
+import type { AttackProfile, LevelPerks } from '../../champions/types';
 import type { AttackPacing } from './AttackSystem';
 
 /**
  * The player's level, League style: kills give XP (ENEMIES[id].xp), levels run
- * 1 → LEVELS.max, and each level makes the kit faster —
+ * 1 → LEVELS.max on the world's XP curve, and each level makes the champion
+ * faster by its own perks —
  *
- *   ability haste    LEVELS.abilityHastePerLevel per level on Q / W / E
+ *   ability haste    perks.abilityHastePerLevel per level on the slots
  *                    (cooldown = base / (1 + haste / 100); Flash is a summoner, untouched)
- *   attack speed     +LEVELS.attackSpeedPerLevel per level on the base auto cycle
- *   Q rank-up        Q removes LEVELS.qRankUp.pips from LEVELS.qRankUp.level on
+ *   attack speed     +perks.attackSpeedPerLevel per level on the base auto cycle
+ *   move speed       +perks.moveSpeedPerLevel per level
  *
- * It is the AttackPacing source: the base auto cycle comes from the level
- * (it used to come from the stage), and the passive multiplies on top.
- * Every number is read live from LEVELS, so console edits apply at once.
+ * It is the AttackPacing source: the base auto cycle comes from the champion's
+ * level-1 cycle and the level, and a passive multiplies on top. Every number
+ * is read live, so console edits apply at once.
  */
 export class Progression implements AttackPacing {
   /** 1-based level. */
@@ -23,6 +25,11 @@ export class Progression implements AttackPacing {
   totalXp = 0;
   /** Clock time of the last level-up, for the HUD flash. */
   lastLevelUpAt = Number.NEGATIVE_INFINITY;
+
+  constructor(
+    private readonly perks: LevelPerks,
+    private readonly attack: AttackProfile,
+  ) {}
 
   get isMaxLevel(): boolean {
     return this.level >= LEVELS.max;
@@ -39,26 +46,25 @@ export class Progression implements AttackPacing {
   }
 
   get abilityHaste(): number {
-    return LEVELS.abilityHastePerLevel * (this.level - 1);
+    return this.perks.abilityHastePerLevel * (this.level - 1);
   }
 
-  /** Multiplies Q / W / E cooldowns. */
+  /** Multiplies the slot cooldowns. */
   get cooldownMultiplier(): number {
     return 100 / (100 + this.abilityHaste);
   }
 
   get attackSpeedMultiplier(): number {
-    return 1 + LEVELS.attackSpeedPerLevel * (this.level - 1);
+    return 1 + this.perks.attackSpeedPerLevel * (this.level - 1);
+  }
+
+  get moveSpeedMultiplier(): number {
+    return 1 + this.perks.moveSpeedPerLevel * (this.level - 1);
   }
 
   /** AttackPacing: the base auto cycle at this level, before passive stacks. */
   get baseAttackCooldownMs(): number {
-    return LEVELS.baseAttackCooldownMs / this.attackSpeedMultiplier;
-  }
-
-  /** Pips one Q hit removes. */
-  get qPips(): number {
-    return this.level >= LEVELS.qRankUp.level ? LEVELS.qRankUp.pips : 1;
+    return this.attack.baseCooldownMs / this.attackSpeedMultiplier;
   }
 
   /**

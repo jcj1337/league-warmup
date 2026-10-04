@@ -166,13 +166,13 @@ test('visuals: pixel-art setup, no tether line, command markers, sprite units + 
   await page.keyboard.press('q');
   // Q has a cast window — wait for the bolt to actually spawn.
   await page.waitForFunction(
-    () => window.__warmup.scene.getScene('GameScene').skillshot.missiles.length > 0,
+    () => window.__warmup.scene.getScene('GameScene').projectiles.missiles.length > 0,
     null,
     { timeout: 3000 },
   );
   const kinds = await page.evaluate(() => {
     const g = window.__warmup.scene.getScene('GameScene');
-    const q = g.skillshot.missiles[0]?.projectile;
+    const q = g.projectiles.missiles[0]?.projectile;
     const e = g.enemyProjectiles.missiles[0];
     return {
       q: q ? { r: q.radius, key: q.view.textureKey } : null,
@@ -191,12 +191,12 @@ test('visuals: pixel-art setup, no tether line, command markers, sprite units + 
   });
   await page.keyboard.press('w');
   await page.waitForFunction(
-    () => window.__warmup.scene.getScene('GameScene').skillshot.missiles.some((m) => m.kind === 'w'),
+    () => window.__warmup.scene.getScene('GameScene').projectiles.missiles.some((m) => m.kind === 'w'),
     null,
     { timeout: 3000 },
   ).catch(() => {});
   const wKey = await page.evaluate(() => {
-    const m = window.__warmup.scene.getScene('GameScene').skillshot.missiles.find((x) => x.kind === 'w');
+    const m = window.__warmup.scene.getScene('GameScene').projectiles.missiles.find((x) => x.kind === 'w');
     return m ? { key: m.projectile.view.textureKey, rotates: m.projectile.view.art.rotate } : null;
   });
   wKey && wKey.key === 'proj_w' && !wKey.rotates

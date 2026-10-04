@@ -29,10 +29,8 @@ export class ScoreSystem {
   public score = 0;
   /** Where the score came from, for the end screen. */
   public readonly scoreFrom = { kills: 0, speed: 0, hp: 0 };
-  /** Pip-removing hits landed by autos, Q and the E bolt. */
+  /** Pip-removing hits landed by autos and abilities. */
   public hitsLanded = 0;
-  /** W marks cashed in for their extra pip. */
-  public markProcs = 0;
   public targetsKilled = 0;
   /** Kills broken down by archetype id, for the end screen. */
   public readonly killsByType: Record<string, number> = {};
@@ -46,10 +44,6 @@ export class ScoreSystem {
 
   addHit(): void {
     this.hitsLanded++;
-  }
-
-  addMarkProc(): void {
-    this.markProcs++;
   }
 
   /**

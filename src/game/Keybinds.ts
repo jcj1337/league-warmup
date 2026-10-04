@@ -16,11 +16,16 @@ import { Profile } from '../profile/Profile';
  * of everything, including a rebind in progress.
  */
 
-/** The rebindable actions, in the order the pause menu lists them. */
+/**
+ * The rebindable actions, in the order the pause menu lists them. A slot's
+ * label here is the fallback; the menu names it after the active champion's
+ * ability ("Q: Mystic Shot").
+ */
 export const BINDABLE = [
-  { action: 'skillshotQ', label: 'Q: damage skillshot' },
-  { action: 'skillshotW', label: 'W: mark skillshot' },
-  { action: 'blinkE', label: 'E: blink + homing bolt' },
+  { action: 'abilityQ', label: 'Q' },
+  { action: 'abilityW', label: 'W' },
+  { action: 'abilityE', label: 'E' },
+  { action: 'abilityR', label: 'R' },
   { action: 'flash', label: 'Flash' },
   { action: 'attackMoveClick', label: 'Attack-move at cursor' },
   { action: 'attackMove', label: 'Attack-move (then LMB)' },

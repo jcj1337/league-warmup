@@ -8,7 +8,7 @@ test('enemy attacks: unlock stages, basic spit + attack tokens, Pursuer dash', a
     spit: window.__balance.TARGETS.spit,
     dash: window.__balance.PURSUER.dash,
     pursuer: window.__balance.PURSUER,
-    playerRadius: window.__balance.PLAYER.radius,
+    playerRadius: window.__ezreal.STATS.radius,
   }));
 
   /**
@@ -25,7 +25,7 @@ test('enemy attacks: unlock stages, basic spit + attack tokens, Pursuer dash', a
     g.player.hp = 100; g.player.lastHitAt = Number.NEGATIVE_INFINITY;
     g.player.stunnedUntil = 0; g.stunBuffered = null;
     g.player.x = px; g.player.y = py; g.player.stop();
-    g.attacks.cancel(); g.attacks.state = 'idle'; g.attacks.clearMissiles(); g.skillshot.clear();
+    g.attacks.cancel(); g.attacks.state = 'idle'; g.attacks.clearMissiles(); g.projectiles.clear();
     return g.director.difficulty;
   }, { stage, px, py });
   /** Damage an enemy hit really deals on the current stage. */

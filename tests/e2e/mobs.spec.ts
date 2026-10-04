@@ -8,14 +8,14 @@ test('mobs: passive stacks, Q cooldown refund, Pursuer AI, stage pips + segmente
     const g = window.__warmup.scene.getScene('GameScene');
     const hud = g.getHudState();
     return {
-      stacks: g.passive.stackCount,
-      passiveMult: g.passive.attackSpeedMultiplier,
-      passiveRemaining: g.passive.remainingMs,
+      stacks: g.kit.passive.stackCount,
+      passiveMult: g.kit.passive.attackSpeedMultiplier,
+      passiveRemaining: g.kit.passive.remainingMs,
       cooldownMs: g.attacks.cooldownMs,
       baseCooldownMs: g.attacks.baseCooldownMs,
       aps: g.attacks.attacksPerSecond,
-      qCd: g.skillshot.cooldownRemainingMs,
-      qFired: g.skillshot.shotsFired, qHit: g.skillshot.shotsHit,
+      qCd: g.cooldowns.remainingMs('q'),
+      qFired: g.kit.qFired, qHit: g.kit.qHit,
       stage: hud.stage,
       enemies: g.director.enemies.map((e) => ({ type: e.archetype, hp: e.hp, maxHp: e.maxHp, x: e.x, y: e.y, active: e.active, r: e.radius })),
       px: g.player.x, py: g.player.y, playerHp: g.player.hp,
@@ -43,28 +43,28 @@ test('mobs: passive stacks, Q cooldown refund, Pursuer AI, stage pips + segmente
     e.__tag = 1;
     d.enemies.push(e);
     g.enemies = d.enemies;
-    g.attacks.cancel(); g.attacks.state = 'idle'; g.attacks.clearMissiles(); g.skillshot.clear();
+    g.attacks.cancel(); g.attacks.state = 'idle'; g.attacks.clearMissiles(); g.projectiles.clear();
     g.player.x = 640; g.player.y = 360; g.player.stop();
     // Pursuer swings cost 25: start each placement healthy so earlier sections can't kill the run.
     g.player.hp = 100;
     return { type: e.archetype, hp: e.hp, maxHp: e.maxHp, r: e.radius };
   }, { type, x, y, hp });
   const cfg = await page.evaluate(() => ({
-    qCd: window.__balance.SKILLSHOT_Q.cooldownMs,
-    qSpeed: window.__balance.SKILLSHOT_Q.speed,
-    qRefund: window.__balance.SKILLSHOT_Q.hitCooldownReductionMs,
-    passive: window.__balance.PASSIVE,
+    qCd: window.__ezreal.SKILLSHOT_Q.cooldownMs,
+    qSpeed: window.__ezreal.SKILLSHOT_Q.speed,
+    qRefund: window.__ezreal.SKILLSHOT_Q.hitCooldownReductionMs,
+    passive: window.__ezreal.PASSIVE,
     pursuer: window.__balance.PURSUER,
-    playerSpeed: window.__balance.PLAYER.moveSpeed,
+    playerSpeed: window.__ezreal.STATS.moveSpeed,
     // The first ten stages as played: hand-written ones, then generated ones.
     stages: Array.from({ length: 10 }, (_, s) => window.__warmup.scene.getScene('GameScene').director.describeStage(s)),
     obsolete: {
       targetsMaxHp: 'maxHp' in window.__balance.TARGETS,
       pursuerHpMult: 'baseHpMultiplier' in window.__balance.PURSUER,
       autoDamage: 'damage' in window.__balance.ATTACK,
-      qDamage: 'damage' in window.__balance.SKILLSHOT_Q,
-      wDetonation: 'detonationDamage' in window.__balance.SKILLSHOT_W,
-      eDamage: 'damage' in window.__balance.BLINK_E,
+      qDamage: 'damage' in window.__ezreal.SKILLSHOT_Q,
+      wDetonation: 'detonationDamage' in window.__ezreal.SKILLSHOT_W,
+      eDamage: 'damage' in window.__ezreal.BLINK_E,
       pointsPerDamage: 'pointsPerDamage' in window.__balance.SCORE,
       stageHpMult: window.__balance.STAGES.some((s) => 'enemyHpMultiplier' in s),
     },
@@ -101,7 +101,7 @@ test('mobs: passive stacks, Q cooldown refund, Pursuer AI, stage pips + segmente
     await page.waitForTimeout(30);
     await page.keyboard.press('q');
     await page.waitForFunction(
-      (n) => window.__warmup.scene.getScene('GameScene').skillshot.shotsHit > n,
+      (n) => window.__warmup.scene.getScene('GameScene').kit.qHit > n,
       before,
       { timeout: 4000 },
     );
@@ -130,7 +130,7 @@ test('mobs: passive stacks, Q cooldown refund, Pursuer AI, stage pips + segmente
   // Cooldown must be stage base / multiplier — sampled in ONE snapshot.
   const formula = await page.evaluate(() => {
     const a = window.__warmup.scene.getScene('GameScene').attacks;
-    const p = window.__warmup.scene.getScene('GameScene').passive;
+    const p = window.__warmup.scene.getScene('GameScene').kit.passive;
     return { cd: a.cooldownMs, base: a.baseCooldownMs, mult: p.attackSpeedMultiplier };
   });
   Math.abs(formula.cd - formula.base / formula.mult) < 1e-6
@@ -148,7 +148,7 @@ test('mobs: passive stacks, Q cooldown refund, Pursuer AI, stage pips + segmente
 
   // Expiry: all stacks drop together.
   await page.waitForFunction(
-    () => window.__warmup.scene.getScene('GameScene').passive.stackCount === 0,
+    () => window.__warmup.scene.getScene('GameScene').kit.passive.stackCount === 0,
     null,
     { timeout: cfg.passive.durationMs + 3000 },
   );
@@ -188,14 +188,14 @@ test('mobs: passive stacks, Q cooldown refund, Pursuer AI, stage pips + segmente
   // Sample the cooldown across the hit: it must DROP by the refund, not restart.
   const refund = await page.evaluate((qRefund) => new Promise<any>((res) => {
     const g = window.__warmup.scene.getScene('GameScene');
-    const hitsBefore = g.skillshot.shotsHit;
-    let prev = g.skillshot.cooldownRemainingMs;
+    const hitsBefore = g.kit.qHit;
+    let prev = g.cooldowns.remainingMs('q');
     let jump = null;
     const tick = () => {
-      const cd = g.skillshot.cooldownRemainingMs;
-      if (g.skillshot.shotsHit > hitsBefore && jump === null) jump = { before: prev, after: cd };
+      const cd = g.cooldowns.remainingMs('q');
+      if (g.kit.qHit > hitsBefore && jump === null) jump = { before: prev, after: cd };
       prev = cd;
-      if (jump && g.skillshot.shotsHit > hitsBefore) res({ jump, qRefund });
+      if (jump && g.kit.qHit > hitsBefore) res({ jump, qRefund });
       else requestAnimationFrame(tick);
     };
     tick();
@@ -291,7 +291,7 @@ test('mobs: passive stacks, Q cooldown refund, Pursuer AI, stage pips + segmente
   // Q it -> a pip AND a passive stack.
   await page.evaluate(() => {
     const g = window.__warmup.scene.getScene('GameScene');
-    g.cooldowns.reduce(999999, ['q']); g.passive.reset();
+    g.cooldowns.reduce(999999, ['q']); g.kit.passive.reset();
     g.player.x = 640; g.player.y = 360; g.player.hp = 100;
     const e = g.director.enemies[0]; e.x = 900; e.y = 360;
   });
@@ -473,14 +473,14 @@ test('mobs: passive stacks, Q cooldown refund, Pursuer AI, stage pips + segmente
   await placeOne('pursuer', 900, 360, 9999);
   await page.evaluate(() => {
     const g = window.__warmup.scene.getScene('GameScene');
-    g.cooldowns.reduce(999999, ['q']); g.passive.reset(); g.player.hp = 100;
+    g.cooldowns.reduce(999999, ['q']); g.kit.passive.reset(); g.player.hp = 100;
     g.player.x = 640; g.player.y = 360;
     const e = g.director.enemies[0];
     if (e) { e.x = 900; e.y = 360; e.hp = 9999; }
   });
   await page.mouse.move(1100, 360);
   await page.keyboard.press('q');
-  await page.waitForFunction(() => window.__warmup.scene.getScene('GameScene').passive.stackCount > 0, null, { timeout: 4000 });
+  await page.waitForFunction(() => window.__warmup.scene.getScene('GameScene').kit.passive.stackCount > 0, null, { timeout: 4000 });
   await page.keyboard.press('Escape');
   await page.waitForTimeout(60);
   const pz0 = await G();

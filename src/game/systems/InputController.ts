@@ -1,7 +1,11 @@
 import Phaser from 'phaser';
+import type { Slot } from '../../champions/types';
 import { KEYBINDS } from '../../config/balance';
 import type { Enemy } from '../entities/Enemy';
-import { Keybinds } from '../Keybinds';
+import { Keybinds, type BindableAction } from '../Keybinds';
+
+/** Which ability slot each slot action drives. */
+const SLOT_OF: Partial<Record<BindableAction, Slot>> = { abilityQ: 'q', abilityW: 'w', abilityE: 'e', abilityR: 'r' };
 
 /**
  * Everything the input layer is allowed to ask the game to do. GameScene
@@ -21,12 +25,8 @@ export interface CommandHandler {
   /** Stop: freeze in place, drop pending orders. */
   commandStop(): void;
 
-  /** Q: quick-cast the damage skillshot toward a world point. */
-  castSkillshot(x: number, y: number): void;
-  /** W: quick-cast the mark skillshot. */
-  castMark(x: number, y: number): void;
-  /** E: blink toward the cursor, then a homing bolt. */
-  castBlink(x: number, y: number): void;
+  /** Quick-cast a champion slot toward the cursor's world point. */
+  castSlot(slot: Slot, x: number, y: number): void;
   /** F: summoner-style blink. */
   castFlash(x: number, y: number): void;
 
@@ -195,29 +195,17 @@ export class InputController {
       return;
     }
 
-    // All four abilities are quick-cast: they resolve this frame toward the
-    // cursor, are no-ops on cooldown, and never disturb a pending attack move.
+    // Every ability is quick-cast: it resolves this frame toward the cursor,
+    // is a no-op on cooldown, and never disturbs a pending attack move.
     const { x, y } = this.cursor();
-
-    if (action === 'skillshotQ') {
-      this.cmd.castSkillshot(x, y);
-      return;
-    }
-
-    if (action === 'skillshotW') {
-      this.cmd.castMark(x, y);
-      return;
-    }
-
-    if (action === 'blinkE') {
-      this.cmd.castBlink(x, y);
-      return;
-    }
 
     if (action === 'flash') {
       this.cmd.castFlash(x, y);
       return;
     }
+
+    const slot = SLOT_OF[action];
+    if (slot) this.cmd.castSlot(slot, x, y);
   }
 
   destroy(): void {

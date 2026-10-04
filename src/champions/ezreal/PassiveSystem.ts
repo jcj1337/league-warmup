@@ -1,12 +1,12 @@
-import { PASSIVE } from '../../config/balance';
+import { PASSIVE } from './balance';
 
 /**
- * The Q passive: landing a skillshot ramps your attack speed.
+ * Ezreal's passive: landing an ability ramps his attack speed.
  *
  * Ownership is deliberately narrow:
- *   - SkillshotSystem decides *when* a Q hits and calls `addStack()`
+ *   - the kit decides *when* an ability hit and calls `addStack()`
  *   - this system owns the stack count and the expiry
- *   - AttackSystem only ever reads `attackSpeedMultiplier`
+ *   - AttackSystem only ever reads `attackSpeedMultiplier` (through the kit)
  *
  * Nobody else stores passive state, so there is one place to change how it
  * behaves. All timing is on the GameClock, so it freezes with a pause.
@@ -52,7 +52,7 @@ export class PassiveSystem {
     return 1 + this.stacks * PASSIVE.attackSpeedPerStack;
   }
 
-  /** A Q connected: one more stack (to the cap) and a full refresh either way. */
+  /** An ability connected: one more stack (to the cap) and a full refresh either way. */
   addStack(): void {
     this.stacks = Math.min(PASSIVE.maxStacks, this.stacks + 1);
     this.expiresAt = this.now + PASSIVE.durationMs;

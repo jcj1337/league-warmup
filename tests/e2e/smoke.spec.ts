@@ -15,8 +15,8 @@ test('smoke: movement, attack, Q, enemy fire, context menu, run end + restart, d
       // Clicks on the chat panel never reach the game, so spawns under it are not clickable.
       enemies: s.enemies.filter((t) => t.active).map((t) => ({ x: t.x, y: t.y, hp: t.hp, underChat: chat.contains(t.x, t.y, 80) })),
       enemyShots: s.enemyProjectiles.activeCount,
-      qFired: s.skillshot.shotsFired,
-      qHit: s.skillshot.shotsHit,
+      qFired: s.kit.qFired,
+      qHit: s.kit.qHit,
       result: s.getRoundResult(),
       attackState: s.attacks.state,
     };
@@ -117,8 +117,8 @@ test('smoke: movement, attack, Q, enemy fire, context menu, run end + restart, d
   // Wait for the bolt to resolve (hit, or expired at max range) instead of a
   // fixed sleep. Bounded; on timeout fall through so the checks below report it.
   await page.waitForFunction(() => {
-    const sk = window.__warmup.scene.getScene('GameScene').skillshot;
-    return sk.shotsFired >= 1 && sk.missilesInFlight === 0;
+    const sk = window.__warmup.scene.getScene('GameScene');
+    return sk.kit.qFired >= 1 && sk.projectiles.missilesInFlight === 0;
   }, null, { timeout: 3000 }).catch(() => {});
   const fired = await state();
   fired.qFired === 1 ? pass('Q quick-casts one bolt on keypress') : fail('qFired=' + fired.qFired);

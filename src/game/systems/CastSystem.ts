@@ -1,22 +1,19 @@
+import type { Aim, Slot } from '../../champions/types';
 import type { Player } from '../entities/Player';
 
 /**
- * Abilities that have a commitment window. Flash stays instant by design.
- * An ability whose castTimeMs is 0 skips this system entirely (see GameScene).
+ * Slots that have a commitment window. Flash stays instant by design.
+ * A slot whose castTimeMs is 0 skips this system entirely (see GameScene).
  */
-export type CastAbility = 'q' | 'w' | 'e';
+export type CastAbility = Slot;
 
 /**
- * What was committed at the moment the key went down.
- *
- * Both the aim (W) and the destination (E) are frozen here, which is the whole
- * point of the cast: moving the mouse during the window cannot re-aim the spell.
+ * What was committed at the moment the key went down: the aim as the engine
+ * resolved it and the kit committed it (a blink's destination, a picked
+ * target). Frozen here, which is the whole point of the cast: moving the
+ * mouse during the window cannot re-aim the spell.
  */
-export interface CastPayload {
-  /** W: the world point the orb was aimed at. E: the blink destination. */
-  x: number;
-  y: number;
-}
+export type CastPayload = Aim;
 
 interface PendingCast {
   ability: CastAbility;

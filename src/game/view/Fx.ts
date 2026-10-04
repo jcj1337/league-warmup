@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import type { FxKey } from '../../champions/types';
 import { THEME } from '../../config/theme';
 import { mulberry32 } from '../art/pixel';
 import { pixelText } from '../art/font';
@@ -278,10 +279,12 @@ export class Fx {
     this.sparks(x, y, [f.core, f.color, f.color], f.sparks, 170, f.impactMs * 1.2);
   }
 
-  castFlash(kind: 'q' | 'w', x: number, y: number, angle: number): void {
+  castFlash(kind: FxKey, x: number, y: number, angle: number): void {
     const f = THEME.fx[kind];
-    this.ring(x, y, 6, f.castFlashRadius, f.castFlashMs, f.core, 0.9, 3, angle - 0.9, angle + 0.9);
-    this.sparks(x, y, [f.core, f.color], kind === 'q' ? 6 : 8, 220, f.castFlashMs * 1.6, 3, angle, 0.9);
+    const radius = 'castFlashRadius' in f ? f.castFlashRadius : 24;
+    const ms = 'castFlashMs' in f ? f.castFlashMs : 120;
+    this.ring(x, y, 6, radius, ms, f.core, 0.9, 3, angle - 0.9, angle + 0.9);
+    this.sparks(x, y, [f.core, f.color], kind === 'q' ? 6 : 8, 220, ms * 1.6, 3, angle, 0.9);
   }
 
   detonation(x: number, y: number): void {
@@ -335,7 +338,7 @@ export class Fx {
     this.ring(x, y, radius + 2, radius + (maxed ? 34 : 24), 320, THEME.fx.passive, 0.9, maxed ? 6 : 3);
   }
 
-  castRelease(x: number, y: number, kind: 'q' | 'w' | 'e'): void {
+  castRelease(x: number, y: number, kind: FxKey): void {
     const f = THEME.fx[kind];
     this.ring(x, y, 12, THEME.cast.releaseFlashRadius, THEME.cast.releaseFlashMs * 1.6, f.core, 1);
   }

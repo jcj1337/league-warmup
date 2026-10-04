@@ -16,25 +16,25 @@ test('kit: W mark + detonation, E blink + bolt priority, Flash, Q cooldown refun
         flash: g.cooldowns.remainingMs('flash'),
       },
       hudCd: hud.abilityCooldowns,
-      stacks: g.passive.stackCount,
+      stacks: g.kit.passive.stackCount,
       px: g.player.x, py: g.player.y,
-      marked: e0 ? e0.isMarked(g.clock.now) : false,
+      marked: e0 ? e0.hasStatus('ezreal.mark', g.clock.now) : false,
       hp0: e0 ? e0.hp : null,
-      qMissiles: g.skillshot.missilesInFlight,
-      bolts: g.blink.boltsInFlight,
+      qMissiles: g.projectiles.missilesInFlight,
+      bolts: g.kit.boltsInFlight,
       clock: g.clock.now,
       paused: g.isPaused,
     };
   });
   const castWait = 420;   // cast time (250ms) + comfortable margin
   const cfg = await page.evaluate(() => ({
-    q: window.__balance.SKILLSHOT_Q,
-    w: window.__balance.SKILLSHOT_W,
-    e: window.__balance.BLINK_E,
+    q: window.__ezreal.SKILLSHOT_Q,
+    w: window.__ezreal.SKILLSHOT_W,
+    e: window.__ezreal.BLINK_E,
     f: window.__balance.FLASH,
     atkRange: window.__balance.ATTACK.range,
     arena: window.__balance.ARENA,
-    playerRadius: window.__balance.PLAYER.radius,
+    playerRadius: window.__ezreal.STATS.radius,
   }));
 
   /** One enemy of a given type at a fixed spot; player reset to centre. */
@@ -48,7 +48,7 @@ test('kit: W mark + detonation, E blink + bolt priority, Flash, Q cooldown refun
       d.enemies.length = 0;
       for (const s of spots) {
         const e = d.spawnEnemy(s.type);
-        e.x = s.x; e.y = s.y; e.hp = hp; e.clearMark();
+        e.x = s.x; e.y = s.y; e.hp = hp; e.clearStatus('ezreal.mark');
         // Basic slimes hold their spot (they now close in on the player); Pursuers still chase.
         e.goalX = e.x; e.goalY = e.y; e.nextPlanAt = Number.POSITIVE_INFINITY;
         d.enemies.push(e);
@@ -56,9 +56,9 @@ test('kit: W mark + detonation, E blink + bolt priority, Flash, Q cooldown refun
       g.enemies = d.enemies;
       g.player.x = 640; g.player.y = 360; g.player.hp = 100; g.player.stop();
       g.attacks.cancel(); g.attacks.state = 'idle'; g.attacks.clearMissiles();
-      g.skillshot.clear(); g.blink.clear();
+      g.projectiles.clear(); g.kit.clear();
       g.cast.cancel();                       // W/E now have a cast window
-      g.cooldowns.reset(); g.passive.reset();
+      g.cooldowns.reset(); g.kit.passive.reset();
     }, { spots, hp });
 
   // === W: mark skillshot =====================================================
@@ -72,7 +72,7 @@ test('kit: W mark + detonation, E blink + bolt priority, Flash, Q cooldown refun
 
   await page.waitForFunction(() => {
     const g = window.__warmup.scene.getScene('GameScene');
-    return g.director.enemies[0].isMarked(g.clock.now);
+    return g.director.enemies[0].hasStatus('ezreal.mark', g.clock.now);
   }, null, { timeout: 4000 });
   const wHit = await G();
   wHit.marked ? pass('W projectile marks the enemy it touches') : fail('W did not mark');
@@ -86,7 +86,7 @@ test('kit: W mark + detonation, E blink + bolt priority, Flash, Q cooldown refun
   const autoDet = await page.waitForFunction(() => {
     const g = window.__warmup.scene.getScene('GameScene');
     const e = g.director.enemies[0];
-    return e.isMarked(g.clock.now) ? null : { hp0: e.hp, procs: g.scoring.markProcs, hits: g.scoring.hitsLanded };
+    return e.hasStatus('ezreal.mark', g.clock.now) ? null : { hp0: e.hp, procs: g.kit.markProcs, hits: g.scoring.hitsLanded };
   }, null, { timeout: 5000 }).then((h) => h.jsonValue());
   await page.keyboard.press('s');
   const afterAuto = await G();
@@ -103,11 +103,11 @@ test('kit: W mark + detonation, E blink + bolt priority, Flash, Q cooldown refun
   await setup();
   await page.evaluate(() => {
     const g = window.__warmup.scene.getScene('GameScene');
-    g.director.enemies[0].applyMark(g.clock.now);
+    g.kit.mark(g.director.enemies[0]);
   });
   await page.mouse.move(1100, 360);
   await page.keyboard.press('q');
-  await page.waitForFunction(() => window.__warmup.scene.getScene('GameScene').skillshot.shotsHit > 0, null, { timeout: 4000 });
+  await page.waitForFunction(() => window.__warmup.scene.getScene('GameScene').kit.qHit > 0, null, { timeout: 4000 });
   await page.waitForTimeout(120);
   const qDet = await G();
   const qTotal = 9999 - qDet.hp0;
@@ -120,7 +120,7 @@ test('kit: W mark + detonation, E blink + bolt priority, Flash, Q cooldown refun
   await setup();
   await page.evaluate(() => {
     const g = window.__warmup.scene.getScene('GameScene');
-    g.director.enemies[0].applyMark(g.clock.now);
+    g.kit.mark(g.director.enemies[0]);
   });
   const beforeExpiry = (await G()).hp0;
   await page.waitForTimeout(cfg.w.markDurationMs + 600);
@@ -205,7 +205,7 @@ test('kit: W mark + detonation, E blink + bolt priority, Flash, Q cooldown refun
       const g = window.__warmup.scene.getScene('GameScene');
       if (g.cast.isCasting || g.player.x > 600) return null;
       const e = g.director.enemies[0];
-      return { bolts: g.blink.boltsInFlight, landed: g.player.x, gap: Math.hypot(e.x - g.player.x, e.y - g.player.y) };
+      return { bolts: g.kit.boltsInFlight, landed: g.player.x, gap: Math.hypot(e.x - g.player.x, e.y - g.player.y) };
     }, null, { timeout: 3000 }).then((h) => h.jsonValue()).catch(() => null);
   };
   const acq = cfg.e.boltAcquisitionRange;
@@ -226,7 +226,7 @@ test('kit: W mark + detonation, E blink + bolt priority, Flash, Q cooldown refun
   ]);
   const priority = await page.evaluate(() => {
     const g = window.__warmup.scene.getScene('GameScene');
-    g.director.enemies[1].applyMark(g.clock.now);
+    g.kit.mark(g.director.enemies[1]);
     return { nearX: g.director.enemies[0].x, markedX: g.director.enemies[1].x };
   });
   await page.mouse.move(660, 360);
@@ -234,12 +234,12 @@ test('kit: W mark + detonation, E blink + bolt priority, Flash, Q cooldown refun
   // Sample as soon as the blink resolves — the bolt is short-lived.
   await page.waitForFunction(() => {
     const g = window.__warmup.scene.getScene('GameScene');
-    return !g.cast.isCasting && g.blink.bolts.length > 0;
+    return !g.cast.isCasting && g.kit.bolts.length > 0;
   }, null, { timeout: 3000 });
   const boltTarget = await page.evaluate(() => {
     const g = window.__warmup.scene.getScene('GameScene');
-    const b = g.blink.bolts[0];
-    return b ? { tx: b.target.x, marked: b.target.isMarked(g.clock.now) } : null;
+    const b = g.kit.bolts[0];
+    return b ? { tx: b.target.x, marked: b.target.hasStatus('ezreal.mark', g.clock.now) } : null;
   });
   boltTarget && boltTarget.marked && Math.abs(boltTarget.tx - priority.markedX) < 20
     ? pass(`E bolt prioritises the W-marked enemy (x${boltTarget.tx.toFixed(0)}) over the nearer one (x${priority.nearX.toFixed(0)})`)
@@ -279,11 +279,11 @@ test('kit: W mark + detonation, E blink + bolt priority, Flash, Q cooldown refun
     // Make Q castable again without touching the others.
     window.__warmup.scene.getScene('GameScene').cooldowns.reduce(999999, ['q']);
   });
-  const hitsBeforeQ = await page.evaluate(() => window.__warmup.scene.getScene('GameScene').skillshot.shotsHit);
+  const hitsBeforeQ = await page.evaluate(() => window.__warmup.scene.getScene('GameScene').kit.qHit);
   await page.mouse.move(1100, 360);
   await page.keyboard.press('q');
   await page.waitForFunction(
-    (n) => window.__warmup.scene.getScene('GameScene').skillshot.shotsHit > n,
+    (n) => window.__warmup.scene.getScene('GameScene').kit.qHit > n,
     hitsBeforeQ,
     { timeout: 4000 },
   );
@@ -352,7 +352,7 @@ test('kit: W mark + detonation, E blink + bolt priority, Flash, Q cooldown refun
   await setup([{ type: 'basic', x: 820, y: 360 }]);
   await page.evaluate(() => {
     const g = window.__warmup.scene.getScene('GameScene');
-    g.director.enemies[0].applyMark(g.clock.now);
+    g.kit.mark(g.director.enemies[0]);
     g.cooldowns.start('w'); g.cooldowns.start('flash');
   });
   await page.mouse.move(700, 360);
@@ -362,22 +362,22 @@ test('kit: W mark + detonation, E blink + bolt priority, Flash, Q cooldown refun
   await page.waitForTimeout(60);
   const pz0 = await page.evaluate(() => {
     const g = window.__warmup.scene.getScene('GameScene');
-    const b = g.blink.bolts[0];
+    const b = g.kit.bolts[0];
     return {
       w: g.cooldowns.remainingMs('w'), e: g.cooldowns.remainingMs('e'), flash: g.cooldowns.remainingMs('flash'),
-      boltX: b ? b.x : null, bolts: g.blink.boltsInFlight,
-      markedNow: g.director.enemies[0].isMarked(g.clock.now),
+      boltX: b ? b.x : null, bolts: g.kit.boltsInFlight,
+      markedNow: g.director.enemies[0].hasStatus('ezreal.mark', g.clock.now),
       clock: g.clock.now,
     };
   });
   await page.waitForTimeout(900);
   const pz1 = await page.evaluate(() => {
     const g = window.__warmup.scene.getScene('GameScene');
-    const b = g.blink.bolts[0];
+    const b = g.kit.bolts[0];
     return {
       w: g.cooldowns.remainingMs('w'), e: g.cooldowns.remainingMs('e'), flash: g.cooldowns.remainingMs('flash'),
-      boltX: b ? b.x : null, bolts: g.blink.boltsInFlight,
-      markedNow: g.director.enemies[0].isMarked(g.clock.now),
+      boltX: b ? b.x : null, bolts: g.kit.boltsInFlight,
+      markedNow: g.director.enemies[0].hasStatus('ezreal.mark', g.clock.now),
       clock: g.clock.now,
     };
   });

@@ -2,6 +2,7 @@ import { BALANCE_VERSION, DIFFICULTY } from '../config/balance';
 import { RunEvents } from './RunEvents';
 import { RunHistory } from './RunHistory';
 import { GameClock } from './systems/GameClock';
+import type { KitStat } from '../champions/types';
 
 /**
  * One run, from the start screen to the end screen: its simulated clock, its
@@ -35,14 +36,14 @@ export interface RoundResult {
   /** Total run time on the GameClock, in seconds. */
   runTimeSeconds: number;
   score: number;
-  /** Pip-removing hits landed by autos, Q and the E bolt. */
+  /** Pip-removing hits landed by autos and abilities. */
   hitsLanded: number;
-  /** W marks detonated for their extra pip. */
-  markProcs: number;
   targetsKilled: number;
   projectileHitsTaken: number;
-  qFired: number;
-  qHit: number;
+  /** Who was played, their raw counters for the log, and their end-screen lines. */
+  champion: string;
+  kit: Record<string, number>;
+  kitRows: KitStat[];
   /** Mechanical counters for the kiting drill — see KitingMetrics. */
   attacksStarted: number;
   attacksFired: number;
@@ -137,7 +138,7 @@ export class Run {
    */
   finish(summary: RoundSummary): RoundResult {
     this.state = 'over';
-    const previousBest = RunHistory.summary(DIFFICULTY.growth, BALANCE_VERSION).best;
+    const previousBest = RunHistory.summary(DIFFICULTY.growth, BALANCE_VERSION, summary.champion).best;
     const result: RoundResult = {
       ...summary,
       outcome: 'defeated',
@@ -160,6 +161,7 @@ export class Run {
       killedBy: result.killedBy,
       damageTaken: result.damageTaken,
       stageDamage: result.stageDamage,
+      champion: result.champion,
     });
     return result;
   }

@@ -18,9 +18,9 @@ test('hud: contextual range ring, pause freeze + input gate, Q slot, settings me
       atkState: g.attacks.state,
       windupProgress: g.attacks.windupProgress,
       autoMissiles: g.attacks.missilesInFlight,
-      qMissiles: g.skillshot.missilesInFlight,
+      qMissiles: g.projectiles.missilesInFlight,
       enemyShots: g.enemyProjectiles.missiles.length,
-      qCd: g.skillshot.cooldownRemainingMs,
+      qCd: g.cooldowns.remainingMs('q'),
       px: g.player.x, py: g.player.y,
       menuVisible: ui.pauseMenu.visible,
       hasDebugPanel: 'debugPanel' in ui || 'debugText' in ui || 'stateText' in ui,
@@ -33,7 +33,7 @@ test('hud: contextual range ring, pause freeze + input gate, Q slot, settings me
     g.player.hp = 100;
     g.player.x = 640; g.player.y = 360; g.player.stop();
     g.attacks.cancel(); g.attacks.state = 'idle'; g.attacks.clearMissiles();
-    g.skillshot.clear();
+    g.projectiles.clear();
     if (opts.qReady) g.cooldowns.reduce(999999, ['q']);
     g.enemies.forEach((t, i) => {
       if (i < spots.length) {
@@ -48,7 +48,7 @@ test('hud: contextual range ring, pause freeze + input gate, Q slot, settings me
     hold: window.__theme?.rangeHint?.holdMs ?? 320,
     atkRange: window.__balance.ATTACK.range,
     tRadius: window.__balance.TARGETS.radius,
-    qCd: window.__balance.SKILLSHOT_Q.cooldownMs,
+    qCd: window.__ezreal.SKILLSHOT_Q.cooldownMs,
   }));
 
   // === 1. Attack-range circle is contextual ==================================
@@ -201,7 +201,7 @@ test('hud: contextual range ring, pause freeze + input gate, Q slot, settings me
       cdVisible: slot.cooldownText.visible,
       cdText: slot.cooldownText.text,
       iconAlpha: slot.icon.alpha,
-      realCd: g.skillshot.cooldownRemainingMs,
+      realCd: g.cooldowns.remainingMs('q'),
     };
   });
   qCd.cdVisible && qCd.iconAlpha < 1 ? pass('Q on cooldown: slot darkens, number shown') : fail(`cooldown state wrong: ${JSON.stringify(qCd)}`);
@@ -212,7 +212,7 @@ test('hud: contextual range ring, pause freeze + input gate, Q slot, settings me
   // Sub-second shows one decimal.
   await page.evaluate(() => {
     const g = window.__warmup.scene.getScene('GameScene');
-    g.cooldowns.reduce(999999, ['q']); g.cooldowns.start('q'); g.cooldowns.reduce(window.__balance.SKILLSHOT_Q.cooldownMs - 800, ['q']);
+    g.cooldowns.reduce(999999, ['q']); g.cooldowns.start('q'); g.cooldowns.reduce(window.__ezreal.SKILLSHOT_Q.cooldownMs - 800, ['q']);
   });
   await page.waitForTimeout(120);
   const qSub = await page.evaluate(() => window.__warmup.scene.getScene('UIScene').abilityBar.slots[0].cooldownText.text);

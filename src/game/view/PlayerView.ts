@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import type { CastStyle, FxKey, Slot } from '../../champions/types';
 import { THEME, actorDepth } from '../../config/theme';
 import { TEX } from '../art/textures';
 import { Fx } from './Fx';
@@ -33,7 +34,14 @@ export interface PlayerViewState {
   slowed: boolean;
 }
 
-export type CastKind = 'q' | 'w' | 'e';
+export type CastKind = Slot;
+
+/** How a slot's cast window is drawn on the slime: the charge-up shape and its colours. */
+export interface CastLook {
+  style: CastStyle;
+  fx: FxKey;
+}
+const NO_LOOK: CastLook = { style: 'none', fx: 'q' };
 export type PlayerPose = 'idle' | 'walk' | 'windup' | 'release' | 'cast' | 'stunned';
 
 /** Plain readouts of the dotted rings, so they can be inspected without touching Graphics. */
@@ -90,6 +98,8 @@ export class PlayerView {
   private visualMs = 0;
   private castReleaseAge = Number.POSITIVE_INFINITY;
   private castReleaseKind: CastKind = 'q';
+  /** Per slot, from the champion. Unknown slots draw nothing. */
+  private castLooks: Partial<Record<Slot, CastLook>> = {};
   private hitAge = Number.POSITIVE_INFINITY;
   private ghostHp = -1;
 
@@ -105,6 +115,15 @@ export class PlayerView {
   }
 
   // ------------------------------------------------------------ state feeds
+
+  /** The champion's cast looks, once per run. */
+  setCastLooks(looks: Partial<Record<Slot, CastLook>>): void {
+    this.castLooks = looks;
+  }
+
+  private lookOf(slot: Slot): CastLook {
+    return this.castLooks[slot] ?? NO_LOOK;
+  }
 
   applyAttackVisual(v: AttackVisual, x: number, y: number): void {
     const A = THEME.player.attack;
@@ -150,7 +169,7 @@ export class PlayerView {
   playCastRelease(ability: CastKind): void {
     this.castReleaseAge = 0;
     this.castReleaseKind = ability;
-    Fx.of(this.scene).castRelease(this.sprite.x, this.sprite.y, ability);
+    Fx.of(this.scene).castRelease(this.sprite.x, this.sprite.y, this.lookOf(ability).fx);
   }
 
   playPassivePulse(radius: number, maxed: boolean): void {
@@ -286,7 +305,7 @@ export class PlayerView {
 
     if (this.castReleaseAge < THEME.cast.releaseFlashMs) {
       const t = this.castReleaseAge / THEME.cast.releaseFlashMs;
-      pixelDisc(g, hand.x, hand.y, 9 * (1 - t) + 3, THEME.fx[this.castReleaseKind].core, 1 - t, 3);
+      pixelDisc(g, hand.x, hand.y, 9 * (1 - t) + 3, THEME.fx[this.lookOf(this.castReleaseKind).fx].core, 1 - t, 3);
     }
   }
 
@@ -298,8 +317,11 @@ export class PlayerView {
     const tipX = hand.x + Math.cos(a) * 16;
     const tipY = hand.y + Math.sin(a) * 16;
 
-    if (this.castKind === 'q') {
-      const f = THEME.fx.q;
+    const look = this.lookOf(this.castKind as Slot);
+    if (look.style === 'none') return;
+    const f = THEME.fx[look.fx];
+
+    if (look.style === 'bolt') {
       for (let i = 1; i <= 3; i++) {
         const d = 6 * i * t;
         pixelDisc(g, hand.x + Math.cos(a) * d, hand.y + Math.sin(a) * d, 2, f.color, 0.4 + 0.2 * i * t, 3);
@@ -309,8 +331,7 @@ export class PlayerView {
       return;
     }
 
-    if (this.castKind === 'w') {
-      const f = THEME.fx.w;
+    if (look.style === 'orb') {
       const r = Phaser.Math.Linear(C.wOrbStartRadius, C.wOrbEndRadius, t);
       for (let i = -1; i <= 1; i++) {
         const spread = a + Math.PI + i * 0.9;
@@ -323,10 +344,10 @@ export class PlayerView {
       return;
     }
 
-    const f = THEME.fx.e;
     const pad = Phaser.Math.Linear(C.eRingStartPad, C.eRingEndPad, t);
+    const second = 'blue' in f ? f.blue : f.color;
     dottedRing(g, bx, by, s.radius + pad, f.color, 0.4 + 0.6 * t, 3);
-    dottedRing(g, bx, by, s.radius + pad + 6, f.blue, 0.25 + 0.4 * t, 3);
+    dottedRing(g, bx, by, s.radius + pad + 6, second, 0.25 + 0.4 * t, 3);
     pixelDisc(g, tipX, tipY, 3 + 3 * t, f.core, 0.8, 3);
   }
 

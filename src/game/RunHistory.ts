@@ -14,6 +14,7 @@ import { Profile, type RunRecord } from '../profile/Profile';
  *   killedBy        source of the hit that took the last HP ('pursuer', 'basic', 'magus', 'edgeFire'), or null
  *   damageTaken     HP actually lost over the run, per source
  *   stageDamage     the same for the stage that ended the run (HP is restored at every stage clear)
+ *   champion        who was played (absent on runs from before champions: Ezreal)
  */
 
 export type { RunRecord } from '../profile/Profile';
@@ -21,6 +22,7 @@ export type { RunRecord } from '../profile/Profile';
 export interface RunSummary {
   growth: number;
   balanceVersion: number;
+  champion: string;
   runs: number;
   /** Median stage reached; null with no runs. */
   median: number | null;
@@ -55,9 +57,11 @@ export const RunHistory = {
     });
   },
 
-  /** Stats over the runs played on one growth setting and balance version. */
-  summary(growth: number, balanceVersion: number, recentCount = 10): RunSummary {
-    const runs = read().filter((r) => r.growth === growth && (r.balanceVersion ?? 0) === balanceVersion);
+  /** Stats over the runs played as one champion on one growth setting and balance version. */
+  summary(growth: number, balanceVersion: number, champion = 'ezreal', recentCount = 10): RunSummary {
+    const runs = read().filter(
+      (r) => r.growth === growth && (r.balanceVersion ?? 0) === balanceVersion && (r.champion ?? 'ezreal') === champion,
+    );
     const stages = runs.map((r) => r.stage).sort((a, b) => a - b);
     const mid = Math.floor(stages.length / 2);
     const median = stages.length === 0 ? null
@@ -68,6 +72,7 @@ export const RunHistory = {
     return {
       growth,
       balanceVersion,
+      champion,
       runs: runs.length,
       median,
       best: stages.length ? stages[stages.length - 1] : null,

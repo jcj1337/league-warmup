@@ -2,7 +2,6 @@ import Phaser from 'phaser';
 import { ARENA } from '../../config/balance';
 import { THEME } from '../../config/theme';
 import { pixelText, setPixelScale } from '../art/font';
-import { TEX } from '../art/textures';
 import { pixelPanel } from '../view/pixelDraw';
 
 /** Everything one slot needs to draw itself for a frame. */
@@ -15,12 +14,12 @@ export interface AbilitySlotState {
   castProgress?: number;
 }
 
-/** Which pixel icon a slot draws. */
-export type AbilityIcon = 'q' | 'w' | 'e' | 'flash';
-
 export interface AbilitySlotSpec {
   key: string;
-  icon: AbilityIcon;
+  /** Texture key of the slot's pixel icon. */
+  icon: string;
+  /** Frame colour. */
+  accent: number;
   /** Summoner slots are drawn smaller and set apart from the ability row. */
   summoner?: boolean;
 }
@@ -75,6 +74,11 @@ export class AbilityBar {
       if (state) slot.update(state);
     });
   }
+
+  destroy(): void {
+    for (const slot of this.slots) slot.destroy();
+    this.slots.length = 0;
+  }
 }
 
 /**
@@ -103,10 +107,10 @@ class AbilitySlot {
     private readonly size: number,
   ) {
     const large = size >= 60;
-    this.accent = THEME.ability.accents[spec.icon] ?? THEME.ui.accent;
+    this.accent = spec.accent;
 
     this.frame = scene.add.graphics().setDepth(100);
-    this.icon = scene.add.image(Math.round(cx), Math.round(cy), TEX.icons[spec.icon]).setScale(large ? 3 : 2).setDepth(101);
+    this.icon = scene.add.image(Math.round(cx), Math.round(cy), spec.icon).setScale(large ? 3 : 2).setDepth(101);
     this.sweep = scene.add.graphics().setDepth(102);
     this.castGfx = scene.add.graphics().setDepth(104);
 
@@ -124,6 +128,15 @@ class AbilitySlot {
       .setOrigin(1, 1)
       .setDepth(103);
     this.setKey(spec.key);
+  }
+
+  destroy(): void {
+    this.frame.destroy();
+    this.icon.destroy();
+    this.sweep.clearMask(true).destroy();
+    this.castGfx.destroy();
+    this.cooldownText.destroy();
+    this.keyText.destroy();
   }
 
   /** Show a new keybind. A long name ('CAPS', 'LSHIFT') drops to the small font so it stays in the corner. */

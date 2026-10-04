@@ -5,13 +5,13 @@ test('cast: Q/W/E cast windows, committed aim, buffered orders, lockout, Flash, 
   const { pass, fail, section, finish } = await startSuite(page, testInfo, 400);
 
   const cfg = await page.evaluate(() => ({
-    qCast: window.__balance.SKILLSHOT_Q.castTimeMs,
+    qCast: window.__ezreal.SKILLSHOT_Q.castTimeMs,
     autoWindup: window.__warmup.scene.getScene('GameScene').attacks.windupMs,
-    wCast: window.__balance.SKILLSHOT_W.castTimeMs,
-    eCast: window.__balance.BLINK_E.castTimeMs,
-    wCd: window.__balance.SKILLSHOT_W.cooldownMs,
-    eCd: window.__balance.BLINK_E.cooldownMs,
-    eRange: window.__balance.BLINK_E.range,
+    wCast: window.__ezreal.SKILLSHOT_W.castTimeMs,
+    eCast: window.__ezreal.BLINK_E.castTimeMs,
+    wCd: window.__ezreal.SKILLSHOT_W.cooldownMs,
+    eCd: window.__ezreal.BLINK_E.cooldownMs,
+    eRange: window.__ezreal.BLINK_E.range,
   }));
 
   const setup = (spots = [{ type: 'basic', x: 900, y: 360 }], hp = 9999) =>
@@ -24,7 +24,7 @@ test('cast: Q/W/E cast windows, committed aim, buffered orders, lockout, Flash, 
       d.enemies.length = 0;
       for (const s of spots) {
         const e = d.spawnEnemy(s.type);
-        e.x = s.x; e.y = s.y; e.hp = hp; e.clearMark();
+        e.x = s.x; e.y = s.y; e.hp = hp; e.clearStatus('ezreal.mark');
         // Basic slimes hold their spot (they now close in on the player); Pursuers still chase.
         e.goalX = e.x; e.goalY = e.y; e.nextPlanAt = Number.POSITIVE_INFINITY;
         d.enemies.push(e);
@@ -32,8 +32,8 @@ test('cast: Q/W/E cast windows, committed aim, buffered orders, lockout, Flash, 
       g.enemies = d.enemies;
       g.player.x = 640; g.player.y = 360; g.player.hp = 100; g.player.stop();
       g.attacks.cancel(); g.attacks.state = 'idle'; g.attacks.clearMissiles();
-      g.skillshot.clear(); g.blink.clear();
-      g.cast.cancel(); g.cooldowns.reset(); g.passive.reset();
+      g.projectiles.clear(); g.kit.clear();
+      g.cast.cancel(); g.cooldowns.reset(); g.kit.passive.reset();
     }, { spots, hp });
 
   /**
@@ -51,10 +51,10 @@ test('cast: Q/W/E cast windows, committed aim, buffered orders, lockout, Flash, 
           casting: g.cast.isCasting,
           ability: g.cast.castingAbility,
           progress: g.cast.progress,
-          wMissiles: g.skillshot.missiles.length,
+          wMissiles: g.projectiles.missiles.length,
           px: g.player.x, py: g.player.y,
           rooted: g.player.isRooted,
-          bolts: g.blink.boltsInFlight,
+          bolts: g.kit.boltsInFlight,
         });
         if (g.clock.now - t0 < ms) requestAnimationFrame(tick);
         else res(out);
@@ -149,9 +149,9 @@ test('cast: Q/W/E cast windows, committed aim, buffered orders, lockout, Flash, 
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'w', code: 'KeyW', bubbles: true }));
   });
   await page.mouse.move(640, 60);              // yank the mouse up mid-cast
-  await page.waitForFunction(() => window.__warmup.scene.getScene('GameScene').skillshot.missiles.length > 0, null, { timeout: 2000 });
+  await page.waitForFunction(() => window.__warmup.scene.getScene('GameScene').projectiles.missiles.length > 0, null, { timeout: 2000 });
   const committed = await page.evaluate(() => {
-    const m = window.__warmup.scene.getScene('GameScene').skillshot.missiles[0].projectile;
+    const m = window.__warmup.scene.getScene('GameScene').projectiles.missiles[0].projectile;
     return { vx: m.vx, vy: m.vy };
   });
   committed.vx > 0 && Math.abs(committed.vy) < Math.abs(committed.vx) * 0.3
@@ -219,7 +219,7 @@ test('cast: Q/W/E cast windows, committed aim, buffered orders, lockout, Flash, 
       if (issued && g.cast.isCasting && Math.abs(g.player.x - startX) > 3) out.movedDuringCast = true;
       if (!g.cast.isCasting && t > 100) {
         out.castCompleted = true;
-        out.missiles = g.skillshot.missiles.length;
+        out.missiles = g.projectiles.missiles.length;
         out.movingAfter = g.player.isMoving;
         res(out);
         return;
@@ -265,7 +265,7 @@ test('cast: Q/W/E cast windows, committed aim, buffered orders, lockout, Flash, 
           source: g.attacks.targetSource,
           moving: g.player.isMoving,
           px: g.player.x, py: g.player.y,
-          missiles: g.skillshot.missiles.length,
+          missiles: g.projectiles.missiles.length,
         });
         if (t < 700) requestAnimationFrame(tick); else probe.done = true;
       };
@@ -371,7 +371,7 @@ test('cast: Q/W/E cast windows, committed aim, buffered orders, lockout, Flash, 
         res({
           during,
           stillE: g.cast.castingAbility,
-          qMissiles: g.skillshot.missiles.length,
+          qMissiles: g.projectiles.missiles.length,
           qCd: g.cooldowns.remainingMs('q'),
           flashCd: g.cooldowns.remainingMs('flash'),
         });

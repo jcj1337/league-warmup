@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { CONTACT, DIFFICULTY, ENEMIES, SKILLSHOT_W, type EnemyId } from '../../config/balance';
+import { CONTACT, DIFFICULTY, ENEMIES, type EnemyId } from '../../config/balance';
 import { THEME } from '../../config/theme';
 import { Fx } from '../view/Fx';
 import { scaled } from '../systems/Difficulty';
@@ -136,10 +136,11 @@ export abstract class Enemy {
   protected readonly clock: GameClock;
 
   /**
-   * W mark: clock time at which it lapses, or 0 for unmarked. Marks live on the
-   * enemy itself so every archetype gets them for free and they die with it.
+   * Statuses a champion applied (a mark, a poison): id → clock time it lapses.
+   * They live on the enemy itself so every archetype gets them for free and
+   * they die with it. Ids are namespaced by champion ('ezreal.mark').
    */
-  private markUntil = 0;
+  private readonly statusUntil = new Map<string, number>();
   /** Clock time this enemy may next bump the player (see checkContact). */
   private nextContactAt = 0;
 
@@ -201,30 +202,35 @@ export abstract class Enemy {
     return span > 0 ? Phaser.Math.Clamp((nowMs - this.arrivalStartedAt) / span, 0, 1) : 1;
   }
 
-  // ------------------------------------------------------------------ W mark
+  // ---------------------------------------------------------------- statuses
 
-  /** Apply (or refresh) the W mark. */
-  applyMark(nowMs: number): void {
-    this.markUntil = nowMs + SKILLSHOT_W.markDurationMs;
+  /** Apply (or refresh to `ms` from now) the status `id`. */
+  applyStatus(id: string, nowMs: number, ms: number): void {
+    this.statusUntil.set(id, nowMs + ms);
   }
 
-  isMarked(nowMs: number): boolean {
-    return this.active && nowMs < this.markUntil;
+  hasStatus(id: string, nowMs: number): boolean {
+    return this.active && nowMs < (this.statusUntil.get(id) ?? 0);
   }
 
-  /** Consume the mark — on detonation, or when the enemy dies. */
-  clearMark(): void {
-    this.markUntil = 0;
+  /** Time left on the status, 0 when absent. Read by the view. */
+  statusRemainingMs(id: string, nowMs: number): number {
+    return this.hasStatus(id, nowMs) ? (this.statusUntil.get(id) ?? 0) - nowMs : 0;
   }
 
-  /** Time left on the mark, 0 when unmarked. Read by the view. */
-  markRemainingMs(nowMs: number): number {
-    return this.isMarked(nowMs) ? this.markUntil - nowMs : 0;
+  /** Consume a status (a mark detonating). */
+  clearStatus(id: string): void {
+    this.statusUntil.delete(id);
+  }
+
+  /** Every status goes with the enemy. */
+  clearStatuses(): void {
+    this.statusUntil.clear();
   }
 
   /**
-   * One hit: removes exactly one pip. Autos, Q, the E bolt and a W detonation
-   * each call this once. Spawning and dead enemies cannot be hit.
+   * One hit: removes exactly one pip. Autos and every ability pip call this
+   * once. Spawning and dead enemies cannot be hit.
    * @returns true if this hit killed the enemy.
    */
   takeHit(): boolean {
@@ -236,7 +242,7 @@ export abstract class Enemy {
     if (this.hp === 0) {
       // State flips NOW; the death pop is only decoration.
       this.lifecycle = 'dead';
-      this.clearMark();
+      this.clearStatuses();
       this.view.onDeath();
       this.onDeath();
       return true;

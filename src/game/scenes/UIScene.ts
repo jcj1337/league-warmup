@@ -4,10 +4,12 @@ import { Keybinds } from '../Keybinds';
 import { MouseSpeed } from '../MouseSpeed';
 import { RunHistory, type RunSummary } from '../RunHistory';
 import { Settings } from '../Settings';
+import { CHAMPIONS, DEFAULT_CHAMPION, isChampionId, SLOTS, type Champion } from '../../champions';
+import type { BindableAction } from '../Keybinds';
 import { ARENA, DEBUG, BALANCE_VERSION, MOUSE } from '../../config/balance';
 import { THEME } from '../../config/theme';
 import { pixelText, setPixelScale } from '../art/font';
-import { ensureArt } from '../art/textures';
+import { TEX, ensureArt } from '../art/textures';
 import { AbilityBar } from '../ui/AbilityBar';
 import { ChatBox } from '../ui/ChatBox';
 import { missionBriefing, missionComplete, stageThreats, welcomeMessage } from '../ui/missionMessages';
@@ -38,8 +40,11 @@ export class UIScene extends Phaser.Scene {
   /** Top-right "APM  180" readout. */
   private apmText!: Phaser.GameObjects.BitmapText;
 
-  private abilityBar!: AbilityBar;
-  private passiveDisplay!: PassiveDisplay;
+  /** Built per champion (see buildKitHud): the slots and the passive readout. */
+  private abilityBar: AbilityBar | null = null;
+  private passiveDisplay: PassiveDisplay | null = null;
+  private hudChampion: Champion | null = null;
+  private unsubscribeKeys: (() => void) | null = null;
   private pauseMenu!: PauseMenu;
   private cursorLock!: CursorLock;
   private stageText!: Phaser.GameObjects.BitmapText;
@@ -129,20 +134,8 @@ export class UIScene extends Phaser.Scene {
       .setOrigin(1, 1)
       .setDepth(101);
 
-    // ---- bottom-centre: ability bar + summoner slot ----------------------
-    const slotKeys = () => [Keybinds.label('skillshotQ'), Keybinds.label('skillshotW'), Keybinds.label('blinkE'), Keybinds.label('flash')];
-    const [qKey, wKey, eKey, fKey] = slotKeys();
-    this.abilityBar = new AbilityBar(this, [
-      { key: qKey, icon: 'q' },
-      { key: wKey, icon: 'w' },
-      { key: eKey, icon: 'e' },
-      { key: fKey, icon: 'flash', summoner: true },
-    ]);
-    Keybinds.onChange(() => this.abilityBar.setKeys(slotKeys()));
-
-    // Passive gems sit just above the bar.
-    const slotTop = ARENA.height - THEME.ability.bottomMargin - THEME.ability.slotSize;
-    this.passiveDisplay = new PassiveDisplay(this, 5, slotTop - 26);
+    // ---- bottom-centre: ability bar + summoner slot, per champion ---------
+    this.buildKitHud(championOf(this.game_.getHudState().champion));
 
     // Stage / wave transition banner, centred above the play area.
     this.stageText = pixelText(this, ARENA.width / 2, 92, '', 4, THEME.ui.accent)
@@ -169,6 +162,44 @@ export class UIScene extends Phaser.Scene {
     window.addEventListener('blur', pauseIfUnfocused);
     document.addEventListener('visibilitychange', () => {
       if (document.hidden) pauseIfUnfocused();
+    });
+  }
+
+  /**
+   * The champion-specific HUD: a slot per ability (plus Flash) with the keys
+   * bound to them, and the passive readout above the bar for a champion with
+   * stacks. Rebuilt when a round starts as someone else.
+   */
+  private buildKitHud(champion: Champion): void {
+    if (this.hudChampion === champion) return;
+    this.hudChampion = champion;
+    this.unsubscribeKeys?.();
+    this.abilityBar?.destroy();
+    this.passiveDisplay?.destroy();
+
+    const slots = SLOTS.filter((slot) => champion.slots[slot] !== undefined);
+    const actionOf = (slot: (typeof SLOTS)[number]): BindableAction => `ability${slot.toUpperCase()}` as BindableAction;
+    const slotKeys = () => [...slots.map((slot) => Keybinds.label(actionOf(slot))), Keybinds.label('flash')];
+    const keys = slotKeys();
+    this.abilityBar = new AbilityBar(this, [
+      ...slots.map((slot, i) => {
+        const def = champion.slots[slot]!;
+        return { key: keys[i], icon: def.icon, accent: def.accent };
+      }),
+      { key: keys[slots.length], icon: TEX.icons.flash, accent: THEME.ability.accents.flash, summoner: true },
+    ]);
+    this.unsubscribeKeys = Keybinds.onChange(() => this.abilityBar?.setKeys(slotKeys()));
+
+    // Passive gems sit just above the bar.
+    const passive = this.game_.getHudState();
+    const slotTop = ARENA.height - THEME.ability.bottomMargin - THEME.ability.slotSize;
+    this.passiveDisplay = passive.passiveMaxStacks > 0 ? new PassiveDisplay(this, passive.passiveMaxStacks, slotTop - 26) : null;
+
+    this.pauseMenu?.setLabels((action) => {
+      const slot = SLOTS.find((s) => actionOf(s) === action);
+      if (!slot) return null;
+      const def = champion.slots[slot];
+      return `${slot.toUpperCase()}: ${def ? def.label : 'no ultimate'}`;
     });
   }
 
@@ -232,6 +263,10 @@ export class UIScene extends Phaser.Scene {
         'RMB enemy | Attack that enemy',
       ],
     );
+    // Name the slot rows after the champion now that the menu exists.
+    const labelled = this.hudChampion;
+    this.hudChampion = null;
+    if (labelled) this.buildKitHud(labelled);
   }
 
   private buildOverlay(): void {
@@ -337,6 +372,7 @@ export class UIScene extends Phaser.Scene {
    */
   private beginRound(hud: Hud): void {
     this.observedRound = hud.round;
+    this.buildKitHud(championOf(hud.champion));
     this.lastStage = hud.stage;
     this.lastWave = hud.wave;
     this.bannerText = '';
@@ -390,10 +426,11 @@ export class UIScene extends Phaser.Scene {
     // nothing — which is why a Q hit refunding W/E shows up instantly on all three.
     const cd = hud.abilityCooldowns;
     const castOf = (id: string) => (hud.castingAbility === id ? hud.castProgress : 0);
-    this.abilityBar.update([
-      { cooldownMs: cd.q.remaining, cooldownTotalMs: cd.q.total, castProgress: castOf('q') },
-      { cooldownMs: cd.w.remaining, cooldownTotalMs: cd.w.total, castProgress: castOf('w') },
-      { cooldownMs: cd.e.remaining, cooldownTotalMs: cd.e.total, castProgress: castOf('e') },
+    const champion = this.hudChampion ?? CHAMPIONS[DEFAULT_CHAMPION];
+    this.abilityBar?.update([
+      ...SLOTS.filter((slot) => champion.slots[slot] !== undefined).map((slot) => ({
+        cooldownMs: cd[slot].remaining, cooldownTotalMs: cd[slot].total, castProgress: castOf(slot),
+      })),
       { cooldownMs: cd.flash.remaining, cooldownTotalMs: cd.flash.total, castProgress: 0 },
     ]);
 
@@ -403,7 +440,7 @@ export class UIScene extends Phaser.Scene {
 
     this.apmText.setText(`${hud.apm}`);
 
-    this.passiveDisplay.update(hud.passiveStacks, hud.passiveFraction);
+    this.passiveDisplay?.update(hud.passiveStacks, hud.passiveFraction);
     this.updateStageBanner(hud);
     this.updateChat(hud);
     this.chat.update();
@@ -489,7 +526,6 @@ export class UIScene extends Phaser.Scene {
     this.overlay.setVisible(shouldShow);
     if (!result) return;
 
-    const accuracy = result.qFired > 0 ? Math.round((result.qHit / result.qFired) * 100) : 0;
     const title = this.overlay.getByName('title') as Phaser.GameObjects.BitmapText;
     title.setText('DEFEATED').setTint(THEME.ui.danger);
 
@@ -507,12 +543,17 @@ export class UIScene extends Phaser.Scene {
         row('SCORE', `${result.score}`),
         row('KILLS', `${result.targetsKilled}`),
         row('KILLS BY TYPE', killsLine(result.killsByType)),
-        row('Q ACCURACY', `${result.qHit}/${result.qFired}  (${accuracy}%)`),
+        ...result.kitRows.map((stat) => row(stat.label, stat.value)),
         row('KILLED BY', result.killedBy ? sourceName(result.killedBy) : '-'),
-        row('YOUR BEST', bestLine(RunHistory.summary(result.growth, BALANCE_VERSION))),
+        row('YOUR BEST', bestLine(RunHistory.summary(result.growth, BALANCE_VERSION, result.champion))),
       ].join('\n\n'),
     );
   }
+}
+
+/** The registered champion with this id, or the default for an unknown one. */
+function championOf(id: string): Champion {
+  return isChampionId(id) ? CHAMPIONS[id] : CHAMPIONS[DEFAULT_CHAMPION];
 }
 
 const SOURCE_NAMES: Record<string, string> = {

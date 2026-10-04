@@ -5,7 +5,6 @@ import { AutoAttackMissile } from '../entities/AutoAttackMissile';
 import type { Player } from '../entities/Player';
 import type { Enemy } from '../entities/Enemy';
 import type { KitingMetrics } from './KitingMetrics';
-import type { PassiveSystem } from './PassiveSystem';
 
 /**
  * Where the base auto cycle comes from. The player's Progression supplies it
@@ -99,7 +98,8 @@ export class AttackSystem {
     private readonly player: Player,
     private readonly metrics: KitingMetrics,
     private readonly pacing: AttackPacing,
-    private readonly passive: PassiveSystem,
+    /** The champion's kit: its passive (if any) multiplies attack speed. */
+    private readonly haste: { readonly attackSpeedMultiplier: number },
     private readonly callbacks: AttackCallbacks,
   ) {
     this.targetMarker = scene.add.graphics().setDepth(THEME.depth.reticle).setVisible(false);
@@ -139,7 +139,7 @@ export class AttackSystem {
    *                    = rampCooldown / passiveMultiplier
    */
   get cooldownMs(): number {
-    return this.baseCooldownMs / this.passive.attackSpeedMultiplier;
+    return this.baseCooldownMs / this.haste.attackSpeedMultiplier;
   }
 
   /** Attacks per second, for the HUD readout. */

@@ -186,11 +186,11 @@ test('start screen, saved pause-menu settings, pause on focus loss', async ({ pa
       legacyLeft: ['warmup.keybinds.v1', 'warmup.mouseSpeed.v1', 'warmup.settings.v1', 'warmup.runHistory.v1'].filter((k) => localStorage.getItem(k) !== null),
       saved: localStorage.getItem('warmup.profile.v1') !== null,
     }));
-    m.binds.skillshotQ === 'KeyY' && m.binds.flash === 'CapsLock' && m.speed === 2.5 && m.settings.attackRangeDisplay === 'off' &&
+    m.binds.abilityQ === 'KeyY' && m.binds.flash === 'CapsLock' && m.speed === 2.5 && m.settings.attackRangeDisplay === 'off' &&
       m.settings.pauseOnFocusLoss === false && m.runs.length === 1 && m.runs[0].stage === 4
       ? pass('old bindings, Mouse Speed, settings and run log all carry into the profile (a broken run is dropped)')
       : fail(`migrated: ${JSON.stringify(m)}`);
-    m.legacyLeft.length === 0 && m.saved && m.profile.version === 1 && m.profile.champion === 'ezreal' && m.profile.currency === 0
+    m.legacyLeft.length === 0 && m.saved && m.profile.version === 2 && m.profile.champion === 'ezreal' && m.profile.currency === 0
       ? pass('the profile is saved and the old keys are removed')
       : fail(`cleanup: ${JSON.stringify({ legacyLeft: m.legacyLeft, saved: m.saved, profile: m.profile })}`);
   }

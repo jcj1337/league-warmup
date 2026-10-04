@@ -8,7 +8,7 @@ test('magus: roster + pips, spacing, Lance / Eye / Orb / Rite, stun rules, zones
     magus: window.__balance.MAGUS,
     // The first ten stages as played: hand-written ones, then generated ones.
     stages: Array.from({ length: 10 }, (_, s) => window.__warmup.scene.getScene('GameScene').director.describeStage(s)),
-    playerSpeed: window.__balance.PLAYER.moveSpeed,
+    playerSpeed: window.__ezreal.STATS.moveSpeed,
   }));
   // Most checks below need exact aim: switch the random spread off, and back on in 4c.
   const spread = { ...cfg.magus.aimSpreadPx };
@@ -25,7 +25,7 @@ test('magus: roster + pips, spacing, Lance / Eye / Orb / Rite, stun rules, zones
     g.player.stunnedUntil = 0; g.player.slowUntil = 0; g.player.slowFraction = 0;
     g.stunBuffered = null;
     g.player.x = px; g.player.y = py; g.player.stop();
-    g.attacks.cancel(); g.attacks.state = 'idle'; g.attacks.clearMissiles(); g.skillshot.clear();
+    g.attacks.cancel(); g.attacks.state = 'idle'; g.attacks.clearMissiles(); g.projectiles.clear();
     g.cast.cancel(); g.cooldowns.reset();
   }, { px, py, hp });
 
@@ -425,7 +425,7 @@ test('magus: roster + pips, spacing, Lance / Eye / Orb / Rite, stun rules, zones
   await calm();
   await place([{ type: 'basic', x: 100, y: 100, hp: 9999 }]);
   await page.mouse.move(900, 360);
-  const qFired0 = await page.evaluate(() => window.__warmup.scene.getScene('GameScene').skillshot.shotsFired);
+  const qFired0 = await page.evaluate(() => window.__warmup.scene.getScene('GameScene').kit.qFired);
   await page.keyboard.press('q');
   const interrupted = await page.evaluate(() => {
     const g = window.__warmup.scene.getScene('GameScene');
@@ -434,7 +434,7 @@ test('magus: roster + pips, spacing, Lance / Eye / Orb / Rite, stun rules, zones
     return { wasCasting, casting: g.cast.isCasting, q: g.cooldowns.remainingMs('q') };
   });
   await watch(500);
-  const qFired1 = await page.evaluate(() => window.__warmup.scene.getScene('GameScene').skillshot.shotsFired);
+  const qFired1 = await page.evaluate(() => window.__warmup.scene.getScene('GameScene').kit.qFired);
   interrupted.wasCasting && !interrupted.casting && interrupted.q === 0 && qFired1 === qFired0
     ? pass('a stun mid-cast cancels the Q (never fires) and refunds its cooldown')
     : fail(`cast interrupt: ${JSON.stringify({ ...interrupted, qFired0, qFired1 })}`);

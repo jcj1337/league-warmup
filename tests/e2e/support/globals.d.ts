@@ -16,6 +16,10 @@ declare global {
     __settings: any;
     /** The player's profile store (data / update / reset): everything saved, exposed by src/main.ts. */
     __profile: any;
+    /** Ezreal's live balance (SKILLSHOT_Q, SKILLSHOT_W, BLINK_E, PASSIVE, LEVELS, STATS), exposed by src/main.ts. */
+    __ezreal: any;
+    /** Every playable champion by id, exposed by src/main.ts. */
+    __champions: any;
     /** Not exposed by the game; the hud suite falls back when it is absent. */
     __theme?: any;
   }

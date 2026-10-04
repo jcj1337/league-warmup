@@ -1,6 +1,8 @@
 # Playable Champions Proposal
 
-Status: **for discussion**. Written 2026-10-04. Nothing here is implemented yet.
+Status: **Phase 0b implemented** 2026-10-04 (contract, registry, slot keys, enemy statuses, Ezreal in
+`src/champions/ezreal/`, per-champion bests). Player ground zones wait for the first champion that
+needs them (Cassiopeia). Phases 1 and 2 follow. Written 2026-10-04.
 
 ## Summary
 

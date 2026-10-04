@@ -27,20 +27,13 @@ export class Combat {
 
   /**
    * A pip-removing hit landed, AFTER the enemy has already lost its pip:
-   * autos, Q and the E bolt. A W mark detonates from this one place, which is
-   * why W itself does not call it — the mark removes no pip, so it cannot
-   * detonate itself.
+   * autos and ability pips. Emitted so a kit can react (Ezreal's W mark
+   * detonates on the next counted hit) without this knowing any kit.
    */
   hit(target: Enemy, killed: boolean): void {
     this.scoring.addHit();
     this.events.emit('hit', { target, killed });
-
-    if (killed) {
-      this.kill(target);
-      return;
-    }
-
-    if (target.isMarked(this.clock.now)) this.detonateMark(target);
+    if (killed) this.kill(target);
   }
 
   /**
@@ -54,20 +47,6 @@ export class Combat {
     if (this.progression.addXp(ENEMIES[target.archetype].xp, this.clock.now) > 0) {
       this.events.emit('levelUp', { level: this.progression.level });
     }
-  }
-
-  /**
-   * Cash in a W mark: one extra pip on top of the triggering hit's own.
-   * Deliberately does NOT route back through hit() — that would recurse, and
-   * a detonation must never grant a second passive stack (the stack was
-   * already given when the mark landed).
-   */
-  private detonateMark(target: Enemy): void {
-    target.clearMark();
-    const killed = target.takeHit();
-    this.scoring.addMarkProc();
-    this.events.emit('markDetonated', { target });
-    if (killed) this.kill(target);
   }
 
   /**

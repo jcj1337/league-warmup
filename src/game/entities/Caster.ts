@@ -5,7 +5,7 @@ import type { GameClock } from '../systems/GameClock';
 
 /** What a caster's spacing and aim read from its config block (MAGUS, SOVEREIGN). */
 export interface CasterTuning {
-  /** Fraction of PLAYER.moveSpeed. Below 1, so you can always run it down. */
+  /** Fraction of PLAYER.referenceMoveSpeed. Below 1, so you can always run it down. */
   moveSpeedFraction: number;
   /** Centre-to-centre band it holds from the player. */
   spacing: { min: number; max: number };
@@ -66,7 +66,7 @@ export abstract class Caster extends Enemy {
     const dy = this.goalY - this.y;
     const toGoal = Math.hypot(dx, dy);
     if (toGoal > 2) {
-      const step = Math.min(PLAYER.moveSpeed * this.tuning.moveSpeedFraction * this.moveScale * deltaSeconds, toGoal);
+      const step = Math.min(PLAYER.referenceMoveSpeed * this.tuning.moveSpeedFraction * this.moveScale * deltaSeconds, toGoal);
       this.x += (dx / toGoal) * step;
       this.y += (dy / toGoal) * step;
       this.pose.moving = true;

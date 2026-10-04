@@ -52,4 +52,10 @@ export class PassiveDisplay {
     this.bar.setVisible(active);
     if (active) this.bar.setSize(Math.max(1, Math.round(p.barWidth * remainingFraction)), p.barHeight);
   }
+
+  destroy(): void {
+    for (const pip of this.pips) pip.destroy();
+    this.barBg.destroy();
+    this.bar.destroy();
+  }
 }

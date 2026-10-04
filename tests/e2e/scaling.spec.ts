@@ -38,11 +38,11 @@ test('scaling: level-based attack speed, measured cycle, passive on top, cancel 
   const cfg = await page.evaluate(() => ({
     // The first ten stages as played: hand-written ones, then generated ones.
     stages: Array.from({ length: 10 }, (_, s) => window.__warmup.scene.getScene('GameScene').director.describeStage(s)),
-    levels: window.__balance.LEVELS,
+    levels: { ...window.__balance.LEVELS, ...window.__ezreal.LEVELS },
     windupPct: window.__balance.ATTACK.windupPercent,
     minWindup: window.__balance.ATTACK.minWindupMs,
     spawn: window.__balance.ENEMY_PROJECTILES.spawnIntervalMs,
-    passive: window.__balance.PASSIVE,
+    passive: window.__ezreal.PASSIVE,
   }));
   /** The level's base auto cycle: LEVELS.baseAttackCooldownMs sped up by attackSpeedPerLevel per level. */
   const baseOf = (level) => cfg.levels.baseAttackCooldownMs / (1 + cfg.levels.attackSpeedPerLevel * (level - 1));
@@ -103,12 +103,12 @@ test('scaling: level-based attack speed, measured cycle, passive on top, cancel 
     const out = [];
     for (const level of [1, last]) {
       p.level = level;
-      g.passive.reset();
+      g.kit.passive.reset();
       const bare = g.attacks.cooldownMs;
-      for (let i = 0; i < 5; i++) g.passive.addStack();
-      out.push({ level, base: g.attacks.baseCooldownMs, bare, stacked: g.attacks.cooldownMs, mult: g.passive.attackSpeedMultiplier });
+      for (let i = 0; i < 5; i++) g.kit.passive.addStack();
+      out.push({ level, base: g.attacks.baseCooldownMs, bare, stacked: g.attacks.cooldownMs, mult: g.kit.passive.attackSpeedMultiplier });
     }
-    g.passive.reset();
+    g.kit.passive.reset();
     p.level = 1;
     return out;
   }, last);

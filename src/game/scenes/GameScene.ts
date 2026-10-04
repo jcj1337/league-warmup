@@ -1,12 +1,14 @@
 import Phaser from 'phaser';
-import { ARENA, ATTACK, BLINK_E, DEBUG, PLAYER, SKILLSHOT_Q, SKILLSHOT_W } from '../../config/balance';
+import { ARENA, ATTACK, DEBUG, FLASH } from '../../config/balance';
+import { activeChampion, type Champion, type Kit, type Slot } from '../../champions';
+import type { AbilityDef, Aim } from '../../champions/types';
 import { THEME } from '../../config/theme';
 import { ensureArt } from '../art/textures';
 import { Player } from '../entities/Player';
 import type { DamageKind, Enemy, EnemyArchetype } from '../entities/Enemy';
 import { Run, type RoundResult } from '../Run';
 import { AttackSystem } from '../systems/AttackSystem';
-import { SkillshotSystem } from '../systems/SkillshotSystem';
+import { PlayerProjectileSystem } from '../systems/PlayerProjectileSystem';
 import { EnemyProjectileSystem } from '../systems/EnemyProjectileSystem';
 import { HostileSpellSystem } from '../systems/HostileSpellSystem';
 import { AttackTokens } from '../systems/AttackTokens';
@@ -16,9 +18,8 @@ import { KitingMetrics } from '../systems/KitingMetrics';
 import { ApmTracker } from '../systems/ApmTracker';
 import type { GameClock } from '../systems/GameClock';
 import { Combat } from '../systems/Combat';
-import { PassiveSystem } from '../systems/PassiveSystem';
 import { WaveDirector, type WavePhase } from '../systems/WaveDirector';
-import { AbilityCooldowns } from '../systems/AbilityCooldowns';
+import { AbilityCooldowns, type AbilityId } from '../systems/AbilityCooldowns';
 import { BlinkSystem } from '../systems/BlinkSystem';
 import { CastSystem, type CastAbility, type CastPayload } from '../systems/CastSystem';
 import { InputController, type CommandHandler } from '../systems/InputController';
@@ -30,6 +31,8 @@ export type { RoundResult, RoundState } from '../Run';
 
 /** Snapshot the HUD polls every frame. */
 export interface HudState {
+  /** Who is being played: the HUD builds its slots and passive readout from the champion. */
+  champion: string;
   /**
    * Which round this snapshot belongs to. Bumps each time create() starts a
    * round, so the persistent UIScene can tell a restart from a continuing round.
@@ -56,7 +59,7 @@ export interface HudState {
   wavePhase: WavePhase;
   /** During a breather, what comes next; null while fighting. */
   nextTransition: 'wave' | 'stage' | null;
-  /** Q passive. */
+  /** The champion's passive stacks, if it has any (max 0 otherwise). */
   passiveStacks: number;
   passiveMaxStacks: number;
   passiveFraction: number;
@@ -67,10 +70,12 @@ export interface HudState {
 
 export class GameScene extends Phaser.Scene {
   private player!: Player;
+  /** Who is being played this round, and their abilities. Public for the suites. */
+  champion!: Champion;
+  kit!: Kit;
   /** The current wave's roster. Owned by the WaveDirector; cached each frame. */
   private enemies: Enemy[] = [];
   private director!: WaveDirector;
-  private passive!: PassiveSystem;
   /** The player's level and XP: drives ability haste, attack speed and the Q rank-up. */
   private progression!: Progression;
   private cooldowns!: AbilityCooldowns;
@@ -80,7 +85,8 @@ export class GameScene extends Phaser.Scene {
   private lastCastShownAt = -Infinity;
 
   private attacks!: AttackSystem;
-  private skillshot!: SkillshotSystem;
+  /** Shared linear player projectiles. Public for the suites. */
+  projectiles!: PlayerProjectileSystem;
   private enemyProjectiles!: EnemyProjectileSystem;
   private hostileSpells!: HostileSpellSystem;
   /** The crowd's turn-taking pool for token-gated enemy attacks (basic spit). */
@@ -134,15 +140,21 @@ export class GameScene extends Phaser.Scene {
     this.battlefield = new Battlefield(this);
     this.fx = new Fx(this);
 
-    this.player = new Player(this, ARENA.width / 2, ARENA.height / 2);
+    this.champion = activeChampion();
+    this.player = new Player(
+      this, ARENA.width / 2, ARENA.height / 2, this.champion.stats,
+      () => this.progression.moveSpeedMultiplier,
+    );
 
     this.scoring = new ScoreSystem();
 
     this.metrics = new KitingMetrics();
     this.apm = new ApmTracker(this.clock.now);
-    this.passive = new PassiveSystem();
-    this.progression = new Progression();
-    this.cooldowns = new AbilityCooldowns(() => this.progression.cooldownMultiplier);
+    this.progression = new Progression(this.champion.levels, this.champion.attack);
+    this.cooldowns = new AbilityCooldowns(
+      (id) => (id === 'flash' ? FLASH.cooldownMs : this.champion.slots[id]?.cooldownMs() ?? 0),
+      () => this.progression.cooldownMultiplier,
+    );
     this.lastCastShownAt = -Infinity;
 
     // The run itself: stage/wave progression and the current wave's enemies.
@@ -162,35 +174,35 @@ export class GameScene extends Phaser.Scene {
     // Presentation that listens to the run's events (kill gold, level-up ring, hit shake).
     new RunFeedback(this, this.fx, this.player, this.run.events);
 
-    this.attacks = new AttackSystem(this, this.player, this.metrics, this.progression, this.passive, {
-      onHit: (target, killed) => this.combat.hit(target, killed),
-    });
-
-    this.skillshot = new SkillshotSystem(this, this.player, this.cooldowns, {
-      onQHit: (target, killed) => {
-        this.combat.hit(target, killed);
-        // Ranked-up Q (LEVELS.qRankUp): its extra pips land on whatever survived the first.
-        for (let extra = this.progression.qPips - 1; extra > 0 && target.active; extra--) {
-          if (target.takeHit()) this.combat.kill(target);
-        }
-        this.grantPassiveStack();
-        // A landed Q refunds the basic ability cooldowns — never Flash.
-        this.cooldowns.reduce(SKILLSHOT_Q.hitCooldownReductionMs, ['q', 'w', 'e']);
-      },
-      onWHit: (target) => {
-        // W removes no pips: it marks, and the mark grants the stack.
-        target.applyMark(this.clock.now);
-        this.grantPassiveStack();
-      },
-    });
-
+    // The champion's kit gets the engine's shared pieces: blink geometry,
+    // projectiles, the hit funnel. It decides what each slot does; the engine
+    // decides when (cooldowns, cast windows, aim).
     this.blink = new BlinkSystem(this, this.player, this.cooldowns, {
-      onBoltHit: (target, killed) => {
-        this.combat.hit(target, killed);
-        this.grantPassiveStack();
-      },
       // A blink cancels an uncommitted auto, exactly like a move order.
       onBeforeBlink: () => this.attacks.onMoveOrder(),
+    });
+    this.projectiles = new PlayerProjectileSystem(this, this.player);
+    this.kit = this.champion.createKit({
+      scene: this,
+      clock: this.clock,
+      events: this.run.events,
+      player: this.player,
+      enemies: () => this.enemies,
+      cooldowns: this.cooldowns,
+      progression: this.progression,
+      blink: this.blink,
+      projectiles: this.projectiles,
+      combat: this.combat,
+    });
+    const looks: Partial<Record<Slot, { style: AbilityDef['castStyle']; fx: AbilityDef['fx'] }>> = {};
+    for (const slot of ['q', 'w', 'e', 'r'] as const) {
+      const def = this.champion.slots[slot];
+      if (def) looks[slot] = { style: def.castStyle, fx: def.fx };
+    }
+    this.player.view.setCastLooks(looks);
+
+    this.attacks = new AttackSystem(this, this.player, this.metrics, this.progression, this.kit, {
+      onHit: (target, killed) => this.combat.hit(target, killed),
     });
 
     this.enemyProjectiles = new EnemyProjectileSystem(this, this.player, this.director, {
@@ -258,35 +270,12 @@ export class GameScene extends Phaser.Scene {
         this.attacks.onStop();
       },
 
-      // All three kit abilities commit for a short window anchored to the auto
-      // windup, so weaving them between attacks keeps one rhythm.
-      castSkillshot: (x, y) => {
-        if (!this.canAct || !this.skillshot.canCast('q')) return;
-        this.attacks.onMoveOrder();
-        this.cooldowns.start('q');
-        this.beginCastOrResolve('q', { x, y }, SKILLSHOT_Q.castTimeMs);
-      },
+      // Every slot commits for a short window (its castTimeMs) anchored to the
+      // auto windup, so weaving abilities between attacks keeps one rhythm.
+      castSlot: (slot, x, y) => this.castSlot(slot, x, y),
 
-      // W and E commit: the cooldown starts NOW (so the window never extends
-      // it), the aim/destination is frozen NOW, and the effect happens when the
-      // cast timer elapses.
-      castMark: (x, y) => {
-        if (!this.canAct || !this.skillshot.canCast('w')) return;
-        this.attacks.onMoveOrder();
-        this.cooldowns.start('w');
-        this.beginCastOrResolve('w', { x, y }, SKILLSHOT_W.castTimeMs);
-      },
-      castBlink: (x, y) => {
-        if (!this.canAct || !this.blink.canBlink()) return;
-        this.attacks.onMoveOrder();
-        // Destination is committed here, not when the cast lands.
-        const dest = this.blink.blinkDestination(x, y);
-        this.cooldowns.start('e');
-        this.beginCastOrResolve('e', dest, BLINK_E.castTimeMs);
-      },
-
-      // Flash stays instant, deliberately: it should feel more immediate than E.
-      // It cannot break a stun — dodging the orb is the counterplay.
+      // Flash stays instant, deliberately: it should feel more immediate than a
+      // blink slot. It cannot break a stun — dodging the orb is the counterplay.
       castFlash: (x, y) => {
         if (!this.canAct) return;
         this.blink.castFlash(x, y);
@@ -305,6 +294,57 @@ export class GameScene extends Phaser.Scene {
   /** Free to start an ability: not mid-cast and not stunned. */
   private get canAct(): boolean {
     return !this.cast.isCasting && !this.player.isStunned;
+  }
+
+  /**
+   * A slot key went down. The engine checks what every slot shares (free to
+   * act, off cooldown, something to aim at), cancels an uncommitted auto as a
+   * move order would, starts the cooldown and the cast window; the kit decides
+   * what happens when the window elapses.
+   */
+  private castSlot(slot: Slot, x: number, y: number): void {
+    const def = this.champion.slots[slot];
+    if (!def || !this.canAct || !this.cooldowns.isReady(slot)) return;
+    const aim = this.resolveAim(def, x, y);
+    if (!aim || !this.kit.canCast(slot, aim)) return;
+    this.attacks.onMoveOrder();
+    const payload = this.kit.commit(slot, aim);
+    this.cooldowns.start(slot);
+    this.beginCastOrResolve(slot, payload, def.castTimeMs());
+  }
+
+  /** Where a cast goes, from the cursor and the slot's targeting. Null: nothing to cast at. */
+  private resolveAim(def: AbilityDef, x: number, y: number): Aim | null {
+    const { player } = this;
+    switch (def.targeting) {
+      case 'direction':
+        return { x, y };
+      case 'self':
+        return { x: player.x, y: player.y };
+      case 'point': {
+        const range = def.range ?? Number.POSITIVE_INFINITY;
+        const dx = x - player.x;
+        const dy = y - player.y;
+        const dist = Math.hypot(dx, dy);
+        if (dist <= range || dist === 0) return { x, y };
+        return { x: player.x + (dx / dist) * range, y: player.y + (dy / dist) * range };
+      }
+      case 'unit': {
+        // The enemy nearest the cursor whose body is within range, like a quick-cast point-and-click.
+        const range = def.range ?? Number.POSITIVE_INFINITY;
+        let best: Enemy | null = null;
+        let bestDist = Number.POSITIVE_INFINITY;
+        for (const e of this.enemies) {
+          if (!e.active || Math.hypot(e.x - player.x, e.y - player.y) > range + e.radius) continue;
+          const d = Math.hypot(e.x - x, e.y - y);
+          if (d < bestDist) {
+            bestDist = d;
+            best = e;
+          }
+        }
+        return best ? { x: best.x, y: best.y, target: best } : null;
+      }
+    }
   }
 
   /**
@@ -349,13 +389,9 @@ export class GameScene extends Phaser.Scene {
     this.cast.begin(ability, payload, castTimeMs, this.clock.now);
   }
 
-  /** What each ability actually does once its commitment window elapses. */
+  /** What a slot actually does once its commitment window elapses is the kit's. */
   private resolveCast(ability: CastAbility, payload: CastPayload): void {
-    if (ability === 'e') {
-      this.blink.executeBlink(payload, this.enemies, this.clock.now);
-    } else {
-      this.skillshot.fire(ability, payload.x, payload.y);
-    }
+    this.kit.cast(ability, payload);
   }
 
   /** Click hit test, with a little grace so clicks feel forgiving. */
@@ -461,8 +497,8 @@ export class GameScene extends Phaser.Scene {
 
   restartRound(): void {
     this.attacks.clearMissiles();
-    this.skillshot.clear();
-    this.blink.clear();
+    this.projectiles.clear();
+    this.kit.clear();
     this.enemyProjectiles.clear();
     this.hostileSpells.clear();
     this.scene.restart();
@@ -488,7 +524,7 @@ export class GameScene extends Phaser.Scene {
       this.stunBuffered = null;
       run();
     }
-    this.passive.update(now);
+    this.kit.update(dt, now);
     this.cooldowns.update(now);
     this.cast.update(now);
 
@@ -514,7 +550,8 @@ export class GameScene extends Phaser.Scene {
     );
 
     // Persistent emphasis while the passive is fully stacked.
-    this.player.setPassiveMaxed(this.passive.isMaxStacked);
+    const passive = this.kit.passiveHud();
+    this.player.setPassiveMaxed(passive !== null && passive.max > 0 && passive.stacks >= passive.max);
 
     // Cast animation is a pure read of the cast timer.
     const aim = this.cast.aim;
@@ -570,8 +607,7 @@ export class GameScene extends Phaser.Scene {
     });
     this.enemies = this.director.enemies;
 
-    this.skillshot.update(dt, now, this.enemies);
-    this.blink.update(dt);
+    this.projectiles.update(dt, now, this.enemies);
     this.enemyProjectiles.update(dt, now);
     this.hostileSpells.update(dt, now);
 
@@ -600,16 +636,6 @@ export class GameScene extends Phaser.Scene {
     this.combat.enemyHit(damage, source, kind);
   }
 
-  /**
-   * One place that grants a passive stack, so every ability that should stack
-   * it (Q hit, W mark landing, E bolt hit) behaves identically — and so the
-   * player feedback can never fire without a real stack.
-   */
-  private grantPassiveStack(): void {
-    this.passive.addStack();
-    this.player.playPassivePulse(this.passive.isMaxStacked);
-  }
-
   /** The player died: freeze the field, build the result, log the run. */
   private endRound(): void {
     this.attacks.cancel();
@@ -625,11 +651,11 @@ export class GameScene extends Phaser.Scene {
       wavesCleared: this.director.wavesCleared,
       score: Math.round(this.scoring.score),
       hitsLanded: this.scoring.hitsLanded,
-      markProcs: this.scoring.markProcs,
       targetsKilled: this.scoring.targetsKilled,
       projectileHitsTaken: this.scoring.projectileHitsTaken,
-      qFired: this.skillshot.shotsFired,
-      qHit: this.skillshot.shotsHit,
+      champion: this.champion.id,
+      kit: this.kit.stats(),
+      kitRows: this.kit.statRows(),
       attacksStarted: this.metrics.attacksStarted,
       attacksFired: this.metrics.attacksFired,
       attacksCancelled: this.metrics.attacksCancelled,
@@ -649,18 +675,21 @@ export class GameScene extends Phaser.Scene {
 
   /** Polled by UIScene each frame; safe to call before create() finishes. */
   getHudState(): HudState {
+    const passive = this.kit ? this.kit.passiveHud() : null;
     return {
       round: this.roundId,
       runTime: this.run ? this.run.clock.now / 1000 : 0,
       score: this.scoring ? Math.round(this.scoring.score) : 0,
-      hp: this.player ? this.player.hp : PLAYER.maxHp,
-      maxHp: PLAYER.maxHp,
+      champion: this.champion ? this.champion.id : 'ezreal',
+      hp: this.player ? this.player.hp : 0,
+      maxHp: this.player ? this.player.maxHp : 1,
       castingAbility: this.cast ? this.cast.castingAbility : null,
       castProgress: this.cast ? this.cast.progress : 0,
       abilityCooldowns: {
         q: this.abilityCooldown('q'),
         w: this.abilityCooldown('w'),
         e: this.abilityCooldown('e'),
+        r: this.abilityCooldown('r'),
         flash: this.abilityCooldown('flash'),
       },
       attackMovePending: this.inputs ? this.inputs.attackMovePending : false,
@@ -671,15 +700,15 @@ export class GameScene extends Phaser.Scene {
       enemiesRemaining: this.director ? this.director.enemiesRemaining : 0,
       wavePhase: this.director ? this.director.phase : 'wave',
       nextTransition: this.director ? this.director.nextTransition : null,
-      passiveStacks: this.passive ? this.passive.stackCount : 0,
-      passiveMaxStacks: this.passive ? this.passive.maxStacks : 0,
-      passiveFraction: this.passive ? this.passive.remainingFraction : 0,
+      passiveStacks: passive ? passive.stacks : 0,
+      passiveMaxStacks: passive ? passive.max : 0,
+      passiveFraction: passive ? passive.fraction : 0,
       level: this.progression ? this.progression.level : 1,
       levelProgress: this.progression ? this.progression.progress : 0,
     };
   }
 
-  private abilityCooldown(id: 'q' | 'w' | 'e' | 'flash'): { remaining: number; total: number } {
+  private abilityCooldown(id: AbilityId): { remaining: number; total: number } {
     if (!this.cooldowns) return { remaining: 0, total: 0 };
     return { remaining: this.cooldowns.remainingMs(id), total: this.cooldowns.totalMs(id) };
   }

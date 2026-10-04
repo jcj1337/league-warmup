@@ -16,7 +16,7 @@ test('pressure: wave sizes, staggered arrival + activation window, no premature 
     fire: window.__balance.ENEMY_PROJECTILES,
     pursuer: window.__balance.PURSUER,
     targets: window.__balance.TARGETS,
-    playerRadius: window.__balance.PLAYER.radius,
+    playerRadius: window.__ezreal.STATS.radius,
   }));
   // Every mob type counts, so a new mob never silently drops out of these totals.
   const sizeOf = (w): number => Object.values(w).reduce((n: number, c) => n + ((c as number) ?? 0), 0) as number;
@@ -32,7 +32,7 @@ test('pressure: wave sizes, staggered arrival + activation window, no premature 
     g.enemyProjectiles.nextSpawnAt = Number.POSITIVE_INFINITY;
     g.player.hp = hp; g.player.lastHitAt = Number.NEGATIVE_INFINITY;
     g.player.x = px; g.player.y = py; g.player.stop();
-    g.attacks.cancel(); g.attacks.state = 'idle'; g.attacks.clearMissiles(); g.skillshot.clear();
+    g.attacks.cancel(); g.attacks.state = 'idle'; g.attacks.clearMissiles(); g.projectiles.clear();
   }, { px, py, hp });
   /**
    * Replace the wave with exactly these (already active) enemies, nothing
@@ -262,9 +262,9 @@ test('pressure: wave sizes, staggered arrival + activation window, no premature 
     g.player.x = e.x - 40; g.player.y = e.y; g.player.stop();   // inside its melee reach
     const hpBefore = e.hp;
     const hit = e.takeHit();
-    e.applyMark(g.clock.now);
-    const marked = e.isMarked(g.clock.now);
-    e.clearMark();
+    g.kit.mark(e);
+    const marked = e.hasStatus('ezreal.mark', g.clock.now);
+    e.clearStatus('ezreal.mark');
     g.attacks.commandAttack(e);
     return {
       type: e.archetype, life: e.lifecycle, hit, hpBefore, hpAfter: e.hp, marked,
@@ -320,18 +320,18 @@ test('pressure: wave sizes, staggered arrival + activation window, no premature 
     const e = g.director.enemies.find((x) => x.__probe);
     g.cooldowns.reduce(999999, ['q']);
     g.player.x = e.x + (e.x > 640 ? -200 : 200); g.player.y = e.y; g.player.stop();
-    return { shots: g.skillshot.shotsHit };
+    return { shots: g.kit.qHit };
   });
   await page.mouse.move(probe.x, probe.y);
   await page.keyboard.press('q');
   await waitFor(() => {
-    const sk = window.__warmup.scene.getScene('GameScene').skillshot;
-    return sk.shotsFired >= 1 && sk.missilesInFlight === 0;
+    const sk = window.__warmup.scene.getScene('GameScene');
+    return sk.kit.qFired >= 1 && sk.projectiles.missilesInFlight === 0;
   }, null, 3000);
   const afterQ = await page.evaluate(() => {
     const g = window.__warmup.scene.getScene('GameScene');
     const e = g.director.enemies.find((x) => x.__probe);
-    return { fired: g.skillshot.shotsFired, hits: g.skillshot.shotsHit, hp: e.hp, life: e.lifecycle };
+    return { fired: g.kit.qFired, hits: g.kit.qHit, hp: e.hp, life: e.lifecycle };
   });
   afterQ.fired >= 1 && afterQ.hits === qFrom.shots && afterQ.hp === probe.hpBefore && afterQ.life === 'spawning'
     ? pass('a Q aimed straight at it flies through without a hit')
