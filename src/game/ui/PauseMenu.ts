@@ -56,14 +56,18 @@ interface BindRow {
 /** Pixel height of a controls row. */
 const KEY_ROW_H = 22;
 
+/** First settings row, from the panel's top edge, and the pitch between rows. */
+const SETTINGS_TOP = 220;
+const SETTING_ROW_H = 30;
+
 /**
  * The Escape menu: a scrim plus a centred pixel panel with actions, settings
  * and the key bindings.
  *
  * It lives in UIScene, which is never paused, so its buttons keep working while
  * the simulation is frozen. It owns no gameplay state — buttons call into
- * `actions`, settings rows read/write the DEBUG config directly, which the
- * game already re-reads every frame, and key rows read/write `Keybinds`.
+ * `actions`, settings rows read/write through the stores they're given
+ * (`Settings`, `MouseSpeed`), and key rows read/write `Keybinds`.
  *
  * Rebinding: click a key row, then press the new key (Escape backs out). A key
  * already in use swaps with the row being changed, and the line under the list
@@ -92,7 +96,7 @@ export class PauseMenu {
   ) {
     const w = 480;
     // Offsets from the panel's top edge.
-    const controlsTop = 238 + Math.max(0, settings.length - 1) * 34 + 30;
+    const controlsTop = SETTINGS_TOP + Math.max(0, settings.length - 1) * SETTING_ROW_H + 30;
     const rowsTop = controlsTop + 44;
     const lastRowY = rowsTop + (controls.length + BINDABLE.length - 1) * KEY_ROW_H;
     const resetY = lastRowY + 36;
@@ -123,14 +127,14 @@ export class PauseMenu {
     parts.push(pixelText(scene, x, top + 36, 'PAUSED', 4).setOrigin(0.5));
 
     // ---- actions ---------------------------------------------------------
-    parts.push(...this.button(x, top + 104, 260, 40, 'RESUME', actions.resume));
-    parts.push(...this.button(x, top + 154, 260, 40, 'RESTART ROUND', actions.restart));
+    parts.push(...this.button(x, top + 100, 260, 40, 'RESUME', actions.resume));
+    parts.push(...this.button(x, top + 146, 260, 40, 'RESTART ROUND', actions.restart));
 
     // ---- settings --------------------------------------------------------
-    parts.push(pixelText(scene, x, top + 204, '- SETTINGS -', 2, THEME.ui.faint).setOrigin(0.5));
+    parts.push(pixelText(scene, x, top + 190, '- SETTINGS -', 2, THEME.ui.faint).setOrigin(0.5));
 
     settings.forEach((row, i) => {
-      const rowY = top + 238 + i * 34;
+      const rowY = top + SETTINGS_TOP + i * SETTING_ROW_H;
       parts.push(pixelText(scene, left + 30, rowY, row.label, 2, THEME.ui.dim).setOrigin(0, 0.5));
 
       if ('slider' in row) {

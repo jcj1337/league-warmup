@@ -1,7 +1,13 @@
 import { test } from '@playwright/test';
-import { startSuite } from './support/harness';
+import { startSuite, waitForGame } from './support/harness';
 
-test('mouse speed: pause-menu slider, League-style cursor multiplier under pointer lock, Escape, session persistence', async ({ page }, testInfo) => {
+// Off unless PW_POINTER_LOCK=1. This suite takes a real pointer lock, and even
+// in headless Edge, Windows applies it to the OS cursor: it yanks your mouse
+// to the browser's centre while it runs, and your own mouse movement leaks
+// into the locked page and fails the checks. Run it on a machine you aren't using.
+test.skip(!process.env.PW_POINTER_LOCK, 'takes the real OS cursor; set PW_POINTER_LOCK=1 to run');
+
+test('mouse speed: pause-menu slider, League-style cursor multiplier under pointer lock, Escape, saved across reloads', async ({ page }, testInfo) => {
   const { pass, fail, section, finish } = await startSuite(page, testInfo, 400);
 
   const state = () => page.evaluate(() => {
@@ -167,10 +173,10 @@ test('mouse speed: pause-menu slider, League-style cursor multiplier under point
   await page.waitForTimeout(150);
   await page.evaluate(() => window.__mouseSpeed.set(3.7));
   await page.reload({ waitUntil: 'load' });
-  await page.waitForFunction(() => window.__warmup?.scene?.getScene('UIScene')?.pauseMenu);
+  await waitForGame(page, 0);
   {
     const v = await page.evaluate(() => window.__mouseSpeed.value);
-    v === 3.7 ? pass('Mouse Speed survives a reload (tab session)') : fail(`after reload: ${v}`);
+    v === 3.7 ? pass('Mouse Speed survives a reload (localStorage)') : fail(`after reload: ${v}`);
   }
   await page.evaluate(() => window.__mouseSpeed.set(1));
   await page.mouse.click(640, 300, { button: 'right' });

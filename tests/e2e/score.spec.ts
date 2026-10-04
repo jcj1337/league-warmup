@@ -73,6 +73,52 @@ test('score: no points for time alive, kills × stage, wave speed bonus vs par, 
     ? pass(`kills: ${kills.map((k) => `S${k.stage} ${k.type} ${k.points}`).join(', ')} (×${mult(5)} on Stage 5)`)
     : fail(`kill points: ${JSON.stringify(kills)}`);
 
+  // Kill gold: League-style "+N" with a coin over the slime, exactly what the kill scored.
+  await page.waitForTimeout(1000);                // let the popups above expire
+  const killOne = () => page.evaluate(() => {
+    const g = window.__warmup.scene.getScene('GameScene');
+    const d = g.director;
+    d.stageIndex = 4; d.currentPhase = 'intermission';
+    const e = d.spawnEnemy('basic');
+    e.x = 1100; e.y = 600;
+    d.enemies.push(e);
+    const before = g.scoring.scoreFrom.kills;
+    while (e.active) g.onTargetHit(e, e.takeHit());
+    return { points: g.scoring.scoreFrom.kills - before, gold: g.fx.activeGold, player: { x: g.player.x, y: g.player.y, r: g.player.radius } };
+  });
+  const one = await killOne();
+  const g1 = one.gold.at(-1);
+  one.gold.length === 1 && g1.amount === one.points && g1.text === `+${one.points}` && g1.x === one.player.x && g1.y < one.player.y - one.player.r - 18
+    ? pass(`a kill shows "+${one.points}" over the slime`)
+    : fail(`kill gold: ${JSON.stringify(one)}`);
+  const two = await killOne();
+  two.gold.length === 1 && two.gold[0].amount === one.points + two.points
+    ? pass(`a kill right after adds into the same popup (+${two.gold[0].amount})`)
+    : fail(`merge: ${JSON.stringify(two.gold)}`);
+  await page.waitForTimeout(400);
+  const three = await killOne();
+  three.gold.length === 2 && three.gold.at(-1).amount === three.points
+    ? pass('a later kill gets a popup of its own')
+    : fail(`separate: ${JSON.stringify(three.gold)}`);
+
+  // It rides on the slime's head: move the slime and the popup comes along.
+  await page.waitForTimeout(1000);
+  const before = await killOne();
+  await page.evaluate(() => {
+    const g = window.__warmup.scene.getScene('GameScene');
+    g.player.x -= 200; g.player.y -= 120;
+  });
+  await page.waitForTimeout(200);
+  const after = await page.evaluate(() => {
+    const g = window.__warmup.scene.getScene('GameScene');
+    return { gold: g.fx.activeGold.at(-1), player: { x: g.player.x, y: g.player.y } };
+  });
+  const followed = after.gold && after.gold.x === after.player.x &&
+    after.gold.y < after.player.y - before.player.r - 18 && after.gold.y > after.player.y - 120;
+  followed
+    ? pass('the gold follows the slime: it stays over its head as it moves')
+    : fail(`follow: ${JSON.stringify({ before: before.gold, after })}`);
+
   // === 3. Wave speed bonus =====================================================
   section('3. Wave speed bonus');
   const fast = await jumpTo(4, 1);              // Stage 4 Wave 1: not the stage's last wave

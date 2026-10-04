@@ -187,6 +187,15 @@ export const MOUSE = {
 };
 
 /**
+ * Pause-menu preferences that aren't DEBUG overlays. Defaults only; the
+ * player's values live in `Settings` (src/game/Settings.ts).
+ */
+export const PREFERENCES = {
+  /** Open the pause menu when the window loses focus (alt-tab, another window, tab switch). */
+  pauseOnFocusLoss: true,
+};
+
+/**
  * Development readouts. All of these are pure overlay — turning any of them off
  * changes nothing about how the game plays.
  */

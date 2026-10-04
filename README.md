@@ -24,6 +24,10 @@ and runs the suites one at a time in headless Microsoft Edge. Variants: `npm run
 (watch it play), `npm run test:debug` (Playwright inspector), `npm run test:report` (last HTML
 report). Without Edge, run `npx playwright install chromium` and set `PW_CHANNEL=chromium`.
 
+The Mouse Speed suite is **skipped by default**: it takes a real pointer lock, which on
+Windows grabs your actual mouse cursor even in headless mode (and your own mouse movement
+makes it fail). Run it with `PW_POINTER_LOCK=1` when you're not using the machine.
+
 ## Controls
 
 | Input | Action |
@@ -47,8 +51,8 @@ pause menu: click a row, press the new key (`Esc` backs out). Picking a key that
 already in use **swaps** the two, so nothing is left unbound; **Reset keys** restores the
 defaults. Keys are physical keys, so Shift and Caps Lock don't change them, and Caps
 Lock, Tab, Shift, digits and so on are all bindable. The ability bar shows your keys.
-Bindings are kept for **this browser tab's session** (they survive a reload, not closing
-the tab) until profiles exist. On macOS, the browser only reports Caps Lock when it
+Bindings are **saved in this browser** (localStorage): they survive closing the tab
+and restarting the browser, on this device, until profiles exist. On macOS, the browser only reports Caps Lock when it
 switches on, so a Caps Lock bind fires every other press there; it's fine on Windows.
 
 Defaults live in `KEYBINDS` in [balance.ts](src/config/balance.ts); the player's
@@ -111,7 +115,11 @@ nothing. Every award is × a stage multiplier (×1 at Stage 1, ×2 at Stage 5, �
 - **HP:** clearing a stage pays 10 per HP you have left (before the full heal), +50% if
   the stage cost you no damage at all (**flawless**).
 
-Bonuses pop up over your slime (`+300 SPEED`, `+870 HP`, `+1500 FLAWLESS`); the round
+Every kill pops its points over your slime in gold with a coin, like League's last-hit
+gold (`+100`), and the popup rides along on your slime's head as you move until it fades;
+kills within 250ms of each other add into one popup, so a multi-kill
+reads as one number. Bonuses stack above it (`+300 SPEED`, `+870 HP`, `+1500
+FLAWLESS`). Presentation in `killGold` in [theme.ts](src/config/theme.ts). The round
 result keeps the breakdown into kills, speed and HP. Tuned in `SCORE` in
 [balance.ts](src/config/balance.ts).
 
@@ -356,16 +364,33 @@ cooldowns refunded. Move / attack / attack-move orders issued while stunned are
 held (latest wins) and replay the instant it ends; `S` discards a held order. Your
 current move or attack order resumes afterwards.
 
+## Start screen
+
+A page load opens on a title card (**QWER'S BACKYARD**, *designed by qwer*) over the
+first round, held at time 0: nothing moves. A click anywhere or any key starts the run.
+It starts on the release, so the click or key is never also a move order or a cast, and
+the press counts as the gesture a non-1.0 Mouse Speed needs for its pointer lock (except
+`Esc`, which browsers don't count: the lock then waits for your next click). Restarts
+(`R`, Restart Round) skip it and go straight into play.
+
 ## Pause & settings
 
 `Esc` opens a centred pause menu. The whole simulation freezes: movement, attack
 timers, cast windows, cooldowns, mark durations, projectiles, wave breathers and the run
 clock. Nothing fast-forwards on resume.
 
-The menu has Resume, Restart Round, a **Mouse Speed** slider, and two settings that write
-straight into the `DEBUG` config: **Attack Range Indicator** (contextual / always / off)
-and **Damage Numbers** (the "-1" pip-loss pops). Below them are the controls, with every
-key rebindable (see [Controls](#controls)).
+The menu has Resume, Restart Round, a **Mouse Speed** slider, **Range Indicator**
+(contextual / always / off), **Damage Numbers** (the "-1" pip-loss pops) and **Pause on
+Focus Loss** (on by default: alt-tabbing, clicking another window or switching tabs
+opens this menu, so the run never plays on without you). Below them are the controls,
+with every key rebindable (see [Controls](#controls)).
+
+Every setting and key binding is **saved in this browser** (localStorage), so it's
+still there next visit, on this device. Range Indicator and Damage Numbers write into
+the `DEBUG` config that gameplay reads; [Settings.ts](src/game/Settings.ts) loads and
+saves them, and `PREFERENCES` in [balance.ts](src/config/balance.ts) holds the
+focus-loss default. From the console: `__settings.all()`,
+`__settings.pauseOnFocusLoss = false`.
 
 **Mouse Speed** (0.0–10.0, default 1.0; click or drag the track, scroll over it for ±0.1)
 works like League's: a multiplier on how far the cursor moves, on top of your OS pointer
@@ -373,8 +398,9 @@ speed. At 1.0 the game uses your normal cursor, untouched. At any other value th
 takes a pointer lock while you play: it draws its own cursor, moves it by speed × your
 mouse movement, and keeps it inside the game. The lock is released whenever play stops
 (pause menu, end screen) and comes back on Resume or your next click. `Esc` still backs
-out of A-targeting or opens the menu. At 0.0 the cursor doesn't move. Kept for this tab's
-session, like key bindings. From the console: `__mouseSpeed.set(2.5)`, `.reset()`.
+out of A-targeting or opens the menu. At 0.0 the cursor doesn't move. Saved in this browser,
+like key bindings. While the lock is held, losing focus always pauses (the browser drops
+the lock, which counts as `Esc`), whatever Pause on Focus Loss says. From the console: `__mouseSpeed.set(2.5)`, `.reset()`.
 Defaults in `MOUSE` in [balance.ts](src/config/balance.ts); the lock is
 [CursorLock.ts](src/game/CursorLock.ts).
 
@@ -392,7 +418,7 @@ stay out of the HUD strips and always draw beneath combatants.
 
 | Thing | Look |
 | --- | --- |
-| You | friendly blue slime with a smile; its face turns toward where you move or aim |
+| You | friendly blue slime with a smile and a little gold crown; its face turns toward where you move or aim |
 | Basic target | red slime, same family: angry brows, glowing yellow eyes, fangs |
 | Basic spit | hunkers down with a glowing mouth and a short dotted red aim tick; the glob is a small dark-red blob, smaller and darker than the orange fireballs |
 | Pursuer | bigger horned purple slime; rears up with white-hot eyes, flashes `!` and warms the ground red across its reach during the telegraph, then slams flat |

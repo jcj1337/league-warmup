@@ -8,8 +8,9 @@ import { KEYBINDS } from '../config/balance';
  * Shift, Caps Lock and keyboard layouts. Defaults come from KEYBINDS in
  * balance.ts; the player's changes are layered on top.
  *
- * Saved in this tab's sessionStorage: they survive a reload but not closing the
- * tab. When profiles arrive, swap `load` / `save` for the profile's store.
+ * Saved in this browser's localStorage: they survive closing the tab and
+ * restarting the browser, on this device only. When profiles arrive, swap
+ * `load` / `save` for the profile's store.
  * Storage can be unavailable (private windows, blocked site data), so every
  * read and write is guarded: the defaults always work.
  *
@@ -149,7 +150,7 @@ function defaults(): Record<BindableAction, string> {
 /** Saved bindings, or nothing if they're missing, unreadable or inconsistent (two actions on one key). */
 function load(): Partial<Record<BindableAction, string>> {
   try {
-    const raw = window.sessionStorage.getItem(STORAGE_KEY);
+    const raw = window.localStorage.getItem(STORAGE_KEY);
     if (!raw) return {};
     const parsed = JSON.parse(raw) as Record<string, unknown>;
     const merged = defaults();
@@ -166,7 +167,7 @@ function load(): Partial<Record<BindableAction, string>> {
 
 function save(binds: Record<BindableAction, string>): void {
   try {
-    window.sessionStorage.setItem(STORAGE_KEY, JSON.stringify(binds));
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(binds));
   } catch {
     // Storage blocked: the bindings still hold for this page.
   }

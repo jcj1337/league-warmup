@@ -46,6 +46,7 @@ export const PALETTE = {
 
   // ---- slime family (shared) ------------------------------------------------
   gold: 0xf2c14e,
+  goldDark: 0xb07a1e,
   fang: 0xfff4e0,
   horn: 0xf0dcb0,
   eyeGlow: 0xffe066,
@@ -221,8 +222,13 @@ export const THEME = {
 
   // --------------------------------------------------------------- player
   player: {
-    /** Sprite origin (fraction of height) — puts the body centre on the gameplay position. */
-    originY: 0.57,
+    /**
+     * Sprite origin (fraction of height) — puts the body centre on the gameplay
+     * position. The 18px frame is the 14px body frame plus the 4px crown on top.
+     */
+    originY: 0.6656,
+    /** Screen pixels the crown adds above the head: popups over the slime start this much higher. */
+    crownPx: 12,
     shadowOffsetY: 17,
     /** Distance from the body centre to where shots / casts visibly leave the slime. */
     muzzleDistance: 20,
@@ -254,7 +260,7 @@ export const THEME = {
     },
     moveMarker: P.cream,
     /** Stunned: little arcane stars circling over the head. Slowed: a dotted ring at the feet. */
-    stun: { color: P.arcane, core: P.arcaneCore, stars: 3, orbitPx: 12, liftPx: 30, spinMs: 650 },
+    stun: { color: P.arcane, core: P.arcaneCore, stars: 3, orbitPx: 12, liftPx: 40, spinMs: 650 },
     slow: { color: P.arcane, alpha: 0.6 },
   },
 
@@ -505,6 +511,21 @@ export const THEME = {
     colors: { welcome: P.gold, mission: P.cream, complete: P.good, threat: P.danger } as Record<string, number>,
   },
 
+  /**
+   * Kill gold: the score a kill earned, floating up over the slime with a coin,
+   * like League's last-hit gold. Kills this close together add into the
+   * popup still on screen instead of stacking a new one on top of it.
+   */
+  killGold: {
+    color: P.gold,
+    lifeMs: 900,
+    risePx: 30,
+    mergeMs: 250,
+    /** Coin drawn at this pixel scale, left of the number. */
+    coinScale: 2,
+    coinGapPx: 4,
+  },
+
   /** Stage / wave transition banners. Presentation only. */
   banners: {
     stageMs: 1500,
@@ -536,6 +557,14 @@ export const THEME = {
     sweepAlpha: 0.7,
     /** Per-slot accent: the ability's own colour. */
     accents: { q: P.q, w: P.w, e: P.e, flash: P.flash } as Record<string, number>,
+  },
+
+  /** Title card before the first run of a page load. Presentation only. */
+  startScreen: {
+    scrimAlpha: 0.85,
+    /** The start prompt fades to this alpha and back, once per pulse each way. */
+    promptMinAlpha: 0.35,
+    promptPulseMs: 700,
   },
 
   /** Pause / settings menu. */

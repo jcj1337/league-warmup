@@ -288,7 +288,7 @@ the player's changes on top.
   `window` that stops the event before Phaser (or the raw APM listener) sees it,
   so the key you're binding never also casts, and `Escape` cancels the rebind
   instead of closing the menu. Closing the menu cancels a pending capture.
-- Persistence: `sessionStorage['warmup.keybinds.v1']`, guarded like `RunHistory`.
+- Persistence: `localStorage['warmup.keybinds.v1']`, guarded like `RunHistory`.
   Saved bindings that put two actions on one key are discarded in favour of the
   defaults. Swapping `load` / `save` for a profile store is the planned upgrade.
 - Console: `__keybinds`.

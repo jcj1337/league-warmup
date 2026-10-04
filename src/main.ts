@@ -7,6 +7,7 @@ import { UIScene } from './game/scenes/UIScene';
 import { Keybinds } from './game/Keybinds';
 import { MouseSpeed } from './game/MouseSpeed';
 import { RunHistory } from './game/RunHistory';
+import { Settings } from './game/Settings';
 
 const game = new Phaser.Game({
   type: Phaser.AUTO,
@@ -36,8 +37,9 @@ const game = new Phaser.Game({
 //   __theme.player.attack.windupLeanPx // presentation values
 //   __runs.summary()                   // your logged runs on the current growth + balance version
 //   __runs.list() / __runs.clear()     // every logged run / delete the log
-//   __keybinds.all() / .set('flash', 'CapsLock') / .reset()  // key bindings (this tab's session)
-//   __mouseSpeed.value / .set(2.5) / .reset()                // Mouse Speed (this tab's session)
+//   __keybinds.all() / .set('flash', 'CapsLock') / .reset()  // key bindings (saved in this browser)
+//   __mouseSpeed.value / .set(2.5) / .reset()                // Mouse Speed (saved in this browser)
+//   __settings.all() / .pauseOnFocusLoss = false             // pause-menu settings (saved in this browser)
 const runs = {
   list: () => RunHistory.list(),
   summary: (growth: number = balance.DIFFICULTY.growth, version: number = balance.BALANCE_VERSION) =>
@@ -46,4 +48,5 @@ const runs = {
 };
 Object.assign(window as unknown as Record<string, unknown>, {
   __warmup: game, __balance: balance, __theme: THEME, __runs: runs, __keybinds: Keybinds, __mouseSpeed: MouseSpeed,
+  __settings: Settings,
 });

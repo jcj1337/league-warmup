@@ -47,6 +47,7 @@ export const TEX = {
     sphere: 'proj_sphere',
   },
   fx: {
+    coin: 'fx_coin',
     flashStar: 'fx_flash_star',
     pingMove: 'fx_ping_move',
     pingAttack: 'fx_ping_attack',

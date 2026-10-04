@@ -4,8 +4,8 @@ import { MOUSE } from '../config/balance';
  * The player's Mouse Speed: a multiplier on cursor movement, MOUSE.minSpeed to
  * MOUSE.maxSpeed in MOUSE.step increments. `CursorLock` applies it.
  *
- * Saved in this tab's sessionStorage like the key bindings: it survives a
- * reload but not closing the tab. Storage can be unavailable, so every read and
+ * Saved in this browser's localStorage like the key bindings: it survives
+ * closing the tab. Storage can be unavailable, so every read and
  * write is guarded: the default always works.
  */
 
@@ -62,7 +62,7 @@ function snap(value: number): number {
 
 function load(): number | null {
   try {
-    const raw = window.sessionStorage.getItem(STORAGE_KEY);
+    const raw = window.localStorage.getItem(STORAGE_KEY);
     if (raw === null) return null;
     const parsed = Number(raw);
     return Number.isFinite(parsed) ? snap(parsed) : null;
@@ -73,7 +73,7 @@ function load(): number | null {
 
 function save(speed: number): void {
   try {
-    window.sessionStorage.setItem(STORAGE_KEY, String(speed));
+    window.localStorage.setItem(STORAGE_KEY, String(speed));
   } catch {
     // Storage blocked: the speed still holds for this page.
   }

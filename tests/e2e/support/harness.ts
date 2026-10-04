@@ -22,11 +22,18 @@ export interface Suite {
 }
 
 /**
- * Wait until both scenes have run create() and the simulation has advanced
- * `settleMs` of GAME time. (The original scripts slept a fixed few hundred
- * wall-clock milliseconds here instead.)
+ * Wait until both scenes have run create(), leave the start screen (a page
+ * load holds the first round at time 0 until a click; start.spec.ts covers
+ * that click), and wait until the simulation has advanced `settleMs` of GAME
+ * time. (The original scripts slept a fixed few hundred wall-clock
+ * milliseconds here instead.)
  */
 export async function waitForGame(page: Page, settleMs: number): Promise<void> {
+  await page.waitForFunction(() => {
+    const scenes = window.__warmup?.scene;
+    return Boolean(scenes?.getScene('GameScene')?.clock && scenes?.getScene('UIScene')?.pauseMenu);
+  });
+  await page.evaluate(() => window.__warmup.scene.getScene('GameScene').startRun());
   await page.waitForFunction((settle) => {
     const scenes = window.__warmup?.scene;
     const g = scenes?.getScene('GameScene');

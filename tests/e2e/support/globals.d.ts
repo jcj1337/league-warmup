@@ -12,6 +12,8 @@ declare global {
     __keybinds: any;
     /** The live Mouse Speed setting (value / set / reset / label), exposed by src/main.ts. */
     __mouseSpeed: any;
+    /** The saved pause-menu settings (all / pauseOnFocusLoss / cycle…), exposed by src/main.ts. */
+    __settings: any;
     /** Not exposed by the game; the hud suite falls back when it is absent. */
     __theme?: any;
   }

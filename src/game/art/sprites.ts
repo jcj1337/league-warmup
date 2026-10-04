@@ -48,7 +48,20 @@ const BLUE_BODY = [
   '.kddddddddddk.',
   '..kkkkkkkkkk..',
 ];
-const PLAYER_H = 14;
+
+// A small gold crown riding on top of the dome, one pixel toward the face like
+// the rest of it. It is added to every player frame, so it squashes and
+// stretches with the hop.   W glint · g gold · o dark gold · r ruby
+const CROWN = [
+  '....W..W..W...',
+  '....g.ggg.g...',
+  '....ggrgrgg...',
+  '....ooooooo...',
+];
+const CROWN_PAL = { W: P.eyeHot, g: P.gold, o: P.goldDark, r: P.red };
+const crowned = (body: readonly string[]) => [...CROWN, ...body];
+const PLAYER_PAL = { ...BLUE_PAL, ...CROWN_PAL };
+const PLAYER_H = 18;
 
 // ---- basic: red slime ------------------------------------------------------------
 
@@ -172,15 +185,20 @@ export const SPRITES: Record<string, PixelSprite> = {
   },
 
   // ---- player ----------------------------------------------------------------
-  player_idle: { rows: frame(BLUE_BODY, PLAYER_H), pal: BLUE_PAL },
+  player_idle: { rows: frame(crowned(BLUE_BODY), PLAYER_H), pal: PLAYER_PAL },
   /** Breath out / landing half of the hop. */
-  player_squash: { rows: frame(without(BLUE_BODY, 4), PLAYER_H), pal: BLUE_PAL },
+  player_squash: { rows: frame(crowned(without(BLUE_BODY, 4)), PLAYER_H), pal: PLAYER_PAL },
   /** Airborne half of the hop, and the release pop. */
-  player_stretch: { rows: frame(doubled(BLUE_BODY, 4), PLAYER_H), pal: BLUE_PAL },
+  player_stretch: { rows: frame(crowned(doubled(BLUE_BODY, 4)), PLAYER_H), pal: PLAYER_PAL },
   /** Attack windup: hunkered down, eyes narrowed. */
-  player_charge: { rows: frame(without(withRow(BLUE_BODY, 5, 'kmmmmmmmmmmmmk'), 4), PLAYER_H), pal: BLUE_PAL },
+  player_charge: { rows: frame(crowned(without(withRow(BLUE_BODY, 5, 'kmmmmmmmmmmmmk'), 4)), PLAYER_H), pal: PLAYER_PAL },
   /** Casting: little "o" mouth. */
-  player_cast: { rows: frame(withRow(BLUE_BODY, 8, 'kdmmmmmkkmmmdk'), PLAYER_H), pal: BLUE_PAL },
+  player_cast: { rows: frame(crowned(withRow(BLUE_BODY, 8, 'kdmmmmmkkmmmdk')), PLAYER_H), pal: PLAYER_PAL },
+  /** Kill gold coin: lit top-left, shaded bottom-right. */
+  fx_coin: {
+    rows: ['..kkk..', '.kWWgk.', 'kWWggok', 'kWgggok', 'kggggok', '.kgook.', '..kkk..'],
+    pal: { k: P.ink, W: P.eyeHot, g: P.gold, o: P.goldDark },
+  },
   fx_muzzle: {
     rows: ['..w..', '.wWw.', 'wWWWw', '.wWw.', '..w..'],
     pal: { w: P.auto, W: P.autoCore },

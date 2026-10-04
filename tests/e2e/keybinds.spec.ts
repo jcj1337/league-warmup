@@ -1,7 +1,7 @@
 import { test } from '@playwright/test';
 import { startSuite, waitForGame } from './support/harness';
 
-test('keybinds: rebind from the pause menu, swaps, Escape cancels, ability bar labels, session persistence, reset', async ({ page }, testInfo) => {
+test('keybinds: rebind from the pause menu, swaps, Escape cancels, ability bar labels, saved across tabs, reset', async ({ page }, testInfo) => {
   const { pass, fail, section, finish } = await startSuite(page, testInfo, 400);
 
   const binds = () => page.evaluate(() => window.__keybinds.all());
@@ -145,14 +145,26 @@ test('keybinds: rebind from the pause menu, swaps, Escape cancels, ability bar l
     ? pass('chat light / dark moves to its new key (X), Z does nothing')
     : fail(`chat: ${JSON.stringify({ dark0, darkZ, darkX })}`);
 
-  // === 4. Saved for the session ==============================================
-  section('4. Session');
+  // === 4. Saved in the browser ==============================================
+  section('4. Saved');
+  {
+    // A brand-new tab shares localStorage but not sessionStorage: this is "closed the tab, came back later".
+    const other = await page.context().newPage();
+    await other.goto('/', { waitUntil: 'load' });
+    await waitForGame(other, 100);
+    const b = await other.evaluate(() => window.__keybinds.all());
+    await other.close();
+    b.skillshotQ === 'KeyY' && b.flash === 'CapsLock' && b.chatMode === 'KeyX'
+      ? pass('bindings carry over to a new tab (localStorage)')
+      : fail(`new tab: ${JSON.stringify(b)}`);
+  }
+  await page.bringToFront();
   await page.reload({ waitUntil: 'load' });
   await waitForGame(page, 300);
   {
     const [b, slots] = [await binds(), await slotKeys()];
     b.skillshotQ === 'KeyY' && b.flash === 'CapsLock' && b.chatMode === 'KeyX' && slots[0].text === 'Y' && slots[3].text === 'CAPS'
-      ? pass('bindings survive a reload in the same tab (sessionStorage)')
+      ? pass('bindings survive a reload, ability bar included')
       : fail(`after reload: ${JSON.stringify({ b, slots })}`);
   }
 
@@ -175,7 +187,7 @@ test('keybinds: rebind from the pause menu, swaps, Escape cancels, ability bar l
   await page.keyboard.press('Escape');
 
   // Broken saved bindings (two actions on one key) fall back to the defaults.
-  await page.evaluate(() => sessionStorage.setItem('warmup.keybinds.v1', JSON.stringify({ skillshotQ: 'KeyW' })));
+  await page.evaluate(() => localStorage.setItem('warmup.keybinds.v1', JSON.stringify({ skillshotQ: 'KeyW' })));
   await page.reload({ waitUntil: 'load' });
   await waitForGame(page, 300);
   {

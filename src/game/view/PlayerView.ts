@@ -158,7 +158,7 @@ export class PlayerView {
   }
 
   showCancelTag(radius: number): void {
-    Fx.of(this.scene).popup(this.sprite.x, this.sprite.y - radius - 16, 'CANCEL', THEME.fx.cancel, 420, 18);
+    Fx.of(this.scene).popup(this.sprite.x, this.sprite.y - radius - 16 - THEME.player.crownPx, 'CANCEL', THEME.fx.cancel, 420, 18);
   }
 
   flashHit(): void {

@@ -146,6 +146,12 @@ export class GameScene extends Phaser.Scene {
   /** True while the pause menu is up. Freezes the entire simulation. */
   private paused = false;
 
+  /**
+   * True while the start screen is up: the first round after a page load holds
+   * at time 0 until the player clicks. Restarts go straight in.
+   */
+  private awaitingStart = false;
+
   /** Clock time until which the range ring is held up after a T press. */
   private rangeHintUntil = -Infinity;
 
@@ -169,6 +175,7 @@ export class GameScene extends Phaser.Scene {
 
   create(): void {
     this.roundId++;
+    this.awaitingStart = this.roundId === 1;
     this.state = 'running';
     this.result = null;
     this.enemies = [];
@@ -259,6 +266,7 @@ export class GameScene extends Phaser.Scene {
     });
 
     this.inputs = new InputController(this, this.commandHandler());
+    if (this.awaitingStart) this.tweens.pauseAll();
   }
 
   // ---------------------------------------------------------------- input
@@ -340,7 +348,7 @@ export class GameScene extends Phaser.Scene {
       targetAt: (x, y) => this.targetAt(x, y),
       recordAction: () => this.apm.record(this.clock.now),
       isRoundRunning: () => this.state === 'running',
-      acceptsGameplayInput: () => this.state === 'running' && !this.paused,
+      acceptsGameplayInput: () => this.ownsMouse,
       isPaused: () => this.paused,
       togglePause: () => this.setPaused(!this.paused),
       restartRound: () => this.restartRound(),
@@ -441,7 +449,7 @@ export class GameScene extends Phaser.Scene {
    * run on wall time and are paused alongside.
    */
   setPaused(paused: boolean): void {
-    if (this.state !== 'running' || this.paused === paused) return;
+    if (this.state !== 'running' || this.awaitingStart || this.paused === paused) return;
     this.paused = paused;
 
     if (paused) {
@@ -457,7 +465,19 @@ export class GameScene extends Phaser.Scene {
 
   /** True while gameplay owns the mouse (CursorLock holds the pointer lock only then). */
   get ownsMouse(): boolean {
-    return this.state === 'running' && !this.paused;
+    return this.state === 'running' && !this.paused && !this.awaitingStart;
+  }
+
+  /** True while the start screen is holding the first round at time 0. */
+  get isAwaitingStart(): boolean {
+    return this.awaitingStart;
+  }
+
+  /** Leave the start screen: the run's clock starts on the next frame. */
+  startRun(): void {
+    if (!this.awaitingStart) return;
+    this.awaitingStart = false;
+    this.tweens.resumeAll();
   }
 
   /**
@@ -502,7 +522,7 @@ export class GameScene extends Phaser.Scene {
   // ---------------------------------------------------------------- loop
 
   override update(_time: number, delta: number): void {
-    if (this.state !== 'running' || this.paused) return;
+    if (this.state !== 'running' || this.paused || this.awaitingStart) return;
 
     // Clamp dt so an alt-tab / long frame cannot teleport everything.
     const dt = Math.min(delta, 50) / 1000;
@@ -638,7 +658,9 @@ export class GameScene extends Phaser.Scene {
    * Pursuer is worth more), the wave's bookkeeping, and the kill's XP.
    */
   private onKill(target: Enemy): void {
-    this.scoring.addKill(target.archetype, target.scoreMultiplier, this.director.stage);
+    const points = this.scoring.addKill(target.archetype, target.scoreMultiplier, this.director.stage);
+    // League's last-hit gold: what this kill was worth, riding on the slime's head until it fades.
+    this.fx.goldPopup(() => ({ x: this.player.x, y: this.overHead(0) }), points);
     this.director.onEnemyKilled(target, this.clock.now);
     if (this.progression.addXp(ENEMIES[target.archetype].xp, this.clock.now) > 0) this.onLevelUp();
   }
@@ -647,7 +669,16 @@ export class GameScene extends Phaser.Scene {
   private onLevelUp(): void {
     const { x, y, radius } = this.player;
     this.fx.ring(x, y, radius + 4, radius + 46, 420, THEME.ui.accent, 1, 6);
-    this.fx.popup(x, y - radius - 24, `LEVEL ${this.progression.level}`, THEME.ui.accent, 900, 30);
+    this.fx.popup(x, this.overHead(0) - 6, `LEVEL ${this.progression.level}`, THEME.ui.accent, 900, 30);
+  }
+
+  /**
+   * Where text over the slime starts: just above the crown, `row` popup rows up.
+   * Row 0 is kill gold; the stage-clear heal, the HP bonus and the speed bonus
+   * stack on rows 1–3 above it, so the kill that clears a stage never hides them.
+   */
+  private overHead(row: number): number {
+    return this.player.y - this.player.radius - 18 - THEME.player.crownPx - row * 24;
   }
 
   /**
@@ -691,7 +722,7 @@ export class GameScene extends Phaser.Scene {
   /** A wave was cleared: its speed bonus (SCORE.waveClear), shown over the slime when earned. */
   private onWaveCleared(wave: ClearedWave): void {
     const points = this.scoring.addWaveClear(wave.enemies, wave.elapsedMs, wave.parMs, wave.stage);
-    if (points > 0) this.scorePopup(`+${points} SPEED`, 2);
+    if (points > 0) this.scorePopup(`+${points} SPEED`, 3);
   }
 
   /**
@@ -700,18 +731,17 @@ export class GameScene extends Phaser.Scene {
    */
   private onStageCleared(): void {
     const { points, flawless } = this.scoring.addStageClear(this.player.hp, this.director.stage);
-    if (points > 0) this.scorePopup(`+${points} ${flawless ? 'FLAWLESS' : 'HP'}`, 1);
+    if (points > 0) this.scorePopup(`+${points} ${flawless ? 'FLAWLESS' : 'HP'}`, 2);
     this.scoring.startStage();
     const healed = this.player.heal(Math.round(this.player.maxHp * DIFFICULTY.stageClearHeal));
     if (healed > 0) {
-      this.fx.popup(this.player.x, this.player.y - this.player.radius - 18, `+${healed}`, THEME.ui.good, 800, 26);
+      this.fx.popup(this.player.x, this.overHead(1), `+${healed}`, THEME.ui.good, 800, 26);
     }
   }
 
   /** A score bonus over the slime; `row` stacks it above the heal popup. */
   private scorePopup(text: string, row: number): void {
-    const { x, y, radius } = this.player;
-    this.fx.popup(x, y - radius - 18 - row * 24, text, THEME.ui.accent, 1100, 26);
+    this.fx.popup(this.player.x, this.overHead(row), text, THEME.ui.accent, 1100, 26);
   }
 
   /** Every hit on the player lands here, tagged with its source for the run log. */

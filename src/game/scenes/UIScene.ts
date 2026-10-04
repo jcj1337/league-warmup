@@ -3,6 +3,7 @@ import { CursorLock } from '../CursorLock';
 import { Keybinds } from '../Keybinds';
 import { MouseSpeed } from '../MouseSpeed';
 import { RunHistory, type RunSummary } from '../RunHistory';
+import { Settings } from '../Settings';
 import { ARENA, DEBUG, BALANCE_VERSION, MOUSE } from '../../config/balance';
 import { THEME } from '../../config/theme';
 import { pixelText, setPixelScale } from '../art/font';
@@ -68,6 +69,9 @@ export class UIScene extends Phaser.Scene {
   private overlay!: Phaser.GameObjects.Container;
   private resultText!: Phaser.GameObjects.BitmapText;
   private overlayVisible = false;
+
+  /** Title card over the first round after a page load; a click starts the run. */
+  private startScreen!: Phaser.GameObjects.Container;
 
   constructor() {
     // active: true so the HUD boots alongside GameScene — Phaser only
@@ -148,11 +152,23 @@ export class UIScene extends Phaser.Scene {
 
     this.buildOverlay();
     this.buildPauseMenu();
+    this.buildStartScreen();
 
     // Mouse Speed: UIScene outlives every round, so the lock is built once, here.
     this.cursorLock = new CursorLock(this.game.canvas, {
       wantsLock: () => this.game_.ownsMouse,
       onLockLost: () => this.game_.onCursorLockLost(),
+    });
+
+    // Pause on Focus Loss: alt-tab, clicking another window, or switching tabs
+    // opens the pause menu instead of letting the run play on unattended.
+    // UIScene is never restarted, so these are added once.
+    const pauseIfUnfocused = (): void => {
+      if (Settings.pauseOnFocusLoss && this.game_.ownsMouse) this.game_.setPaused(true);
+    };
+    window.addEventListener('blur', pauseIfUnfocused);
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) pauseIfUnfocused();
     });
   }
 
@@ -169,9 +185,9 @@ export class UIScene extends Phaser.Scene {
   }
 
   /**
-   * The Escape menu. Settings write straight into the DEBUG config block, which
-   * gameplay and HUD code already re-read every frame — so there is no second
-   * copy of the settings state to keep in sync.
+   * The Escape menu. Range Indicator and Damage Numbers go through `Settings`,
+   * which writes the DEBUG config block that gameplay and HUD code already
+   * re-read every frame and saves it for the next visit.
    */
   private buildPauseMenu(): void {
     this.pauseMenu = new PauseMenu(
@@ -197,18 +213,17 @@ export class UIScene extends Phaser.Scene {
         {
           label: 'Range Indicator',
           read: () => DEBUG.attackRangeDisplay.toUpperCase(),
-          cycle: () => {
-            const order = ['contextual', 'always', 'off'] as const;
-            const next = (order.indexOf(DEBUG.attackRangeDisplay) + 1) % order.length;
-            DEBUG.attackRangeDisplay = order[next];
-          },
+          cycle: () => Settings.cycleRangeIndicator(),
         },
         {
           label: 'Damage Numbers',
           read: () => (DEBUG.showDamageNumbers ? 'ON' : 'OFF'),
-          cycle: () => {
-            DEBUG.showDamageNumbers = !DEBUG.showDamageNumbers;
-          },
+          cycle: () => Settings.toggleDamageNumbers(),
+        },
+        {
+          label: 'Pause on Focus Loss',
+          read: () => (Settings.pauseOnFocusLoss ? 'ON' : 'OFF'),
+          cycle: () => Settings.togglePauseOnFocusLoss(),
         },
       ],
       // Mouse controls are fixed; every key below them is rebindable in the menu.
@@ -254,6 +269,64 @@ export class UIScene extends Phaser.Scene {
     this.overlay = this.add
       .container(0, 0, [bg, plate, title, this.resultText, button, buttonText])
       .setDepth(200)
+      .setVisible(false);
+  }
+
+  /**
+   * The title card shown over the first round after a page load, while
+   * GameScene holds it at time 0. A click anywhere or any key starts the run.
+   * It starts on the release, not the press: the press reaches GameScene while
+   * the run is still held, so it is never also a move order or a cast, and it
+   * already counts as the user gesture CursorLock needs for a non-1.0 Mouse
+   * Speed (Escape is the one key the browser doesn't count; the lock then
+   * waits for the next click).
+   */
+  private buildStartScreen(): void {
+    const cx = ARENA.width / 2;
+    const cy = ARENA.height / 2;
+
+    const scrim = this.add
+      .rectangle(0, 0, ARENA.width, ARENA.height, THEME.ui.scrim, THEME.startScreen.scrimAlpha)
+      .setOrigin(0, 0)
+      .setInteractive({ useHandCursor: true });
+    scrim.on('pointerup', () => this.game_.startRun());
+
+    // Any key, on its release. Only a key pressed while the card is up counts,
+    // so the release of the F5 / Ctrl+R that reloaded the page can't start the run.
+    const pressed = new Set<string>();
+    this.input.keyboard?.on('keydown', (event: KeyboardEvent) => {
+      if (this.game_.isAwaitingStart) pressed.add(event.code);
+    });
+    this.input.keyboard?.on('keyup', (event: KeyboardEvent) => {
+      if (pressed.delete(event.code) && this.game_.isAwaitingStart) this.game_.startRun();
+    });
+
+    const panelW = 620;
+    const panelH = 260;
+    const plate = this.add.graphics();
+    pixelPanel(plate, cx - panelW / 2, cy - panelH / 2, panelW, panelH, {
+      fill: THEME.ui.panel, fillAlpha: 0.97, edge: THEME.ui.panelEdge, highlight: THEME.ui.panelHighlight, border: 3,
+    });
+    plate.fillStyle(THEME.ui.accent, 0.9);
+    plate.fillRect(cx - panelW / 2 + 28, cy - 34, panelW - 56, 3);
+
+    const title = pixelText(this, cx, cy - 74, "QWER'S BACKYARD", 6, THEME.ui.accent).setOrigin(0.5);
+    const prompt = pixelText(this, cx, cy + 20, 'CLICK OR PRESS ANY KEY', 3, THEME.ui.text).setOrigin(0.5);
+    const credit = pixelText(this, cx, cy + 86, 'DESIGNED BY QWER', 2, THEME.ui.faint).setOrigin(0.5);
+
+    // UIScene's tweens never pause, so the prompt keeps breathing while the run is held.
+    this.tweens.add({
+      targets: prompt,
+      alpha: { from: 1, to: THEME.startScreen.promptMinAlpha },
+      duration: THEME.startScreen.promptPulseMs,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Sine.InOut',
+    });
+
+    this.startScreen = this.add
+      .container(0, 0, [scrim, plate, title, prompt, credit])
+      .setDepth(300)
       .setVisible(false);
   }
 
@@ -336,6 +409,7 @@ export class UIScene extends Phaser.Scene {
     this.chat.update();
 
     this.pauseMenu.setVisible(this.game_.isPaused);
+    this.startScreen.setVisible(this.game_.isAwaitingStart);
     this.cursorLock.update();
 
     this.syncOverlay();

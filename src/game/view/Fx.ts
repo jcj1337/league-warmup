@@ -47,6 +47,16 @@ interface Popup {
   rise: number;
 }
 
+/** Where a popup that follows something sits right now (its base, before the rise). */
+export type Anchor = () => { x: number; y: number };
+
+/** A kill-gold popup: a running total and a coin beside the number, riding on its anchor. */
+interface GoldPopup extends Popup {
+  coin: Phaser.GameObjects.Image;
+  amount: number;
+  anchor: Anchor;
+}
+
 export interface ParticleOptions {
   vx?: number;
   vy?: number;
@@ -82,6 +92,9 @@ export class Fx {
   private readonly freeParticles: Particle[] = [];
   private readonly rings: Ring[] = [];
   private readonly popups: Popup[] = [];
+  private readonly golds: GoldPopup[] = [];
+  /** The newest kill-gold popup, which kills inside THEME.killGold.mergeMs add into. */
+  private lastGold: GoldPopup | null = null;
   private readonly ringGfx: Phaser.GameObjects.Graphics;
   /** Decorative RNG, never shared with gameplay. */
   private readonly rand = mulberry32(0xf00d);
@@ -190,6 +203,58 @@ export class Fx {
     }
     Object.assign(p, { active: true, x, y, age: 0, life, rise });
     p.text.setText(message).setTint(color).setAlpha(1).setVisible(true).setPosition(Math.round(x), Math.round(y));
+  }
+
+  /**
+   * League-style last-hit gold: "+N" with a coin, rising from `anchor`. The
+   * anchor is re-read every frame, so the popup rides along with whatever it
+   * is over (the slime's head) until it fades. A kill within
+   * THEME.killGold.mergeMs of the last one adds into that popup and restarts
+   * it, so a multi-kill reads as one number, not a pile.
+   */
+  goldPopup(anchor: Anchor, amount: number): void {
+    const K = THEME.killGold;
+    let p = this.lastGold?.active && this.lastGold.age < K.mergeMs ? this.lastGold : null;
+    if (p) {
+      p.amount += amount;
+    } else {
+      p = this.golds.find((q) => !q.active) ?? null;
+      if (!p) {
+        p = {
+          text: pixelText(this.scene, 0, 0, '', 2).setOrigin(0.5, 1).setDepth(THEME.depth.text),
+          coin: this.scene.add.image(0, 0, TEX.fx.coin).setOrigin(0.5, 1).setScale(K.coinScale).setDepth(THEME.depth.text),
+          active: false, x: 0, y: 0, age: 0, life: 1, rise: 0, amount: 0, anchor,
+        };
+        this.golds.push(p);
+      }
+      p.amount = amount;
+    }
+    Object.assign(p, { active: true, anchor, age: 0, life: K.lifeMs, rise: K.risePx });
+    p.text.setText(`+${p.amount}`).setTint(K.color).setVisible(true);
+    p.coin.setVisible(true);
+    this.lastGold = p;
+    this.placeGold(p);
+  }
+
+  /**
+   * Follow the anchor, risen by how far into its life the popup is: number
+   * centred over the anchor, coin just left of it, both bottom-aligned.
+   */
+  private placeGold(p: GoldPopup): void {
+    const K = THEME.killGold;
+    const t = p.age / p.life;
+    const at = p.anchor();
+    p.x = at.x;
+    p.y = at.y - p.rise * (1 - (1 - t) * (1 - t));
+    const y = p.y;
+    const textX = Math.round(p.x + (p.coin.displayWidth + K.coinGapPx) / 2);
+    p.text.setPosition(textX, Math.round(y));
+    p.coin.setPosition(Math.round(textX - p.text.width / 2 - K.coinGapPx - p.coin.displayWidth / 2), Math.round(y));
+  }
+
+  /** Kill-gold popups on screen, newest last, where they are drawn right now. */
+  get activeGold(): Array<{ amount: number; x: number; y: number; text: string }> {
+    return this.golds.filter((p) => p.active).map((p) => ({ amount: p.amount, x: p.x, y: p.y, text: p.text.text }));
   }
 
   // ------------------------------------------------------------ vocabulary
@@ -379,6 +444,22 @@ export class Fx {
       const t = p.age / p.life;
       p.text.setPosition(Math.round(p.x), Math.round(p.y - p.rise * (1 - (1 - t) * (1 - t)))).setAlpha(t < 0.5 ? 1 : 2 - t * 2);
     }
+
+    for (const p of this.golds) {
+      if (!p.active) continue;
+      p.age += ms;
+      if (p.age >= p.life) {
+        p.active = false;
+        p.text.setVisible(false);
+        p.coin.setVisible(false);
+        continue;
+      }
+      const t = p.age / p.life;
+      const alpha = t < 0.5 ? 1 : 2 - t * 2;
+      this.placeGold(p);
+      p.text.setAlpha(alpha);
+      p.coin.setAlpha(alpha);
+    }
   }
 
   /** Drop every live effect (restart). */
@@ -395,6 +476,12 @@ export class Fx {
       p.active = false;
       p.text.setVisible(false);
     }
+    for (const p of this.golds) {
+      p.active = false;
+      p.text.setVisible(false);
+      p.coin.setVisible(false);
+    }
+    this.lastGold = null;
     this.ringGfx.clear();
   }
 }
