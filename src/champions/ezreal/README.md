@@ -29,6 +29,16 @@ instant the cast resolves, so no auto starts mid-cast. `S` discards a buffered o
 Cooldowns start at cast *start*, so the window never extends them. Flash stays instant,
 deliberately.
 
+**His body says what's coming** ([motions.ts](motions.ts)). He wears his gauntlet, a gold
+cuff on his facing side, and its gem lights up in the slot's colour before anything
+leaves it. His auto hunkers, leans in and kicks back. Q is a quick-draw: a flinch back, a
+stretch at the aim, a sharp kick. W gathers low and round, then shoves forward and holds
+there a beat, so it never reads as Q. E squashes, pulls tall and thin and vanishes, then
+pops in squashed where he lands. R plants wide with teeth gritted, trembles harder as the
+charge builds, pulls back, and the wave knocks him back. Every windup is keyed to the real
+window, so the R charge plays its full brace, tremble and recoil whether it takes 1000ms or
+330ms.
+
 **Passive.** Any landed ability hit — Q, the W mark landing, or the E bolt — grants a
 stack (max 5, +10% attack speed each) and refreshes a shared 6s timer. All stacks
 expire together. A W *detonation* grants none (the stack came when the mark landed),

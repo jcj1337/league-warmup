@@ -407,9 +407,13 @@ test('kit: W mark + detonation, E blink + bolt priority, Flash, Q cooldown refun
   await page.waitForTimeout(cfg.r.castTimeMs / 2);
   const rMid = await page.evaluate(() => {
     const g = window.__warmup.scene.getScene('GameScene');
-    return { casting: g.cast.castingAbility, px: g.player.x, py: g.player.y };
+    const v = g.player.view;
+    return { casting: g.cast.castingAbility, px: g.player.x, py: g.player.y, frame: v.motionFrame, gem: v.glowSprite?.visible ?? false, sx: v.sprite.scaleX / window.__theme.art.scale };
   });
   const hpMid = await hps();
+  rMid.frame === 'grit' && rMid.gem && rMid.sx > 1.1
+    ? pass(`mid-charge he braces wide (×${rMid.sx.toFixed(2)}), teeth gritted, the gauntlet's gem lit`)
+    : fail(`R body mid-charge: ${JSON.stringify(rMid)}`);
   rMid.casting === 'r' && Math.abs(rMid.px - 640) < 1 && hpMid.every((h) => h === 3)
     ? pass(`R charges for ${cfg.r.castTimeMs}ms, rooted, before the wave leaves`)
     : fail(`R mid-cast: ${JSON.stringify({ rMid, hpMid })}`);

@@ -91,6 +91,9 @@ test('visuals: pixel-art setup, no tether line, command markers, sprite units + 
   section('3. Units are pixel sprites, drawn over the gameplay position');
   await setup();
   await page.waitForTimeout(80);
+  // At rest: the last section's auto may still be in its follow-through (a squash and stretch).
+  const atRest = () => page.waitForFunction(() => ['idle', 'walk'].includes(window.__warmup.scene.getScene('GameScene').player.view.pose));
+  await atRest();
   const units = await page.evaluate(() => {
     const g = window.__warmup.scene.getScene('GameScene');
     const p = g.player;
@@ -234,6 +237,7 @@ test('visuals: pixel-art setup, no tether line, command markers, sprite units + 
     const img = g.player.view.sprite;
     return { key: img.texture.key as string, rows: img.height as number, originY: img.originY as number, headPx: g.player.headPx as number };
   });
+  await atRest();
   const crowned = await lookOf();
   /** Equip `equipped` and start a new round wearing it. */
   const restartAs = async (equipped: Record<string, string>) => {
