@@ -587,8 +587,10 @@ export class GameScene extends Phaser.Scene {
       aim ? aim.y : null,
     );
     const casting = this.cast.castingAbility;
-    const telegraph = casting ? this.champion.slots[casting]?.telegraph ?? null : null;
-    this.castTelegraph.draw(telegraph, this.player.x, this.player.y, aim ? aim.x : 0, aim ? aim.y : 0, this.cast.progress);
+    const castDef = casting ? this.champion.slots[casting] : undefined;
+    this.castTelegraph.draw(
+      castDef?.telegraph ?? null, castDef?.fx ?? 'q', this.player.x, this.player.y, aim ? aim.x : 0, aim ? aim.y : 0, this.cast.progress,
+    );
 
     // 3. ...and only now does the player move and redraw.
     this.player.update(dt);

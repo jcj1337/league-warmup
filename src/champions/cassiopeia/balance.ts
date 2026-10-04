@@ -7,8 +7,8 @@
  *
  * She's a battle mage (League's Cassiopeia, Ryze, Vladimir, Swain): sustained
  * damage from short range, in the thick of the fight, where Ezreal pokes from
- * far off. Her auto reaches ~0.77x his, and each spell keeps League's ratio to
- * her auto (Q 850, E and W 700, auto 550), so her whole kit is shorter than his.
+ * far off. Her auto reaches ~0.77x his; E and W keep League's ratio to her auto
+ * (700 / 550), and Q sits just past it, so her whole kit is shorter than his.
  */
 
 export const STATS = {
@@ -38,8 +38,8 @@ export const LEVELS = {
  * ~65-unit champion, about three radii, so a small blast you aim at one enemy.
  */
 export const Q = {
-  /** 1.55x her auto range, League's 850 / 550: you walk up to cast it. */
-  range: 310,
+  /** Just past her auto range: you walk up to cast it. */
+  range: 275,
   radius: 45,
   /** The telegraph: enemies can walk out of it. */
   delayMs: 400,
@@ -126,8 +126,12 @@ export const R = {
   stunMs: 1500,
   slowFraction: 0.5,
   slowMs: 1500,
-  /** It also comes back at every stage clear, like your HP. */
-  refreshOnStageClear: true,
+  /**
+   * Every Twin Fang that lands on a poisoned enemy takes this off R's
+   * remaining cooldown. This trainer's own rule, not League's: it replaces the
+   * old once-a-stage refresh, so R comes round faster the better you play.
+   */
+  poisonedFangCooldownReductionMs: 500,
 };
 
 /** Status ids she applies. */

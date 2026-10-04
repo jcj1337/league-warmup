@@ -53,8 +53,9 @@ export const SKILLSHOT_Q = {
   maxRange: 450,
   cooldownMs: 3000,
   /**
-   * A landed Q takes this much off the REMAINING cooldown of Q, W AND E — never
-   * Flash, and it never restarts a cooldown. Missing gives nothing.
+   * A landed Q takes this much off the REMAINING cooldown of Q, W, E AND R (as
+   * in League, where it lowers every cooldown) — never Flash, and it never
+   * restarts a cooldown. Missing gives nothing.
    */
   hitCooldownReductionMs: 750,
   /**
@@ -119,6 +120,31 @@ export const BLINK_E = {
   boltAcquisitionRange: 380,
   boltSpeed: 1050,
   boltRadius: 7,
+};
+
+/**
+ * R: Trueshot Barrage, as in League. A long charge, then one global wave
+ * that crosses the whole arena and passes through everything in its path.
+ * The first enemy it touches takes the brunt; everyone after, less. Each
+ * enemy hit is a passive stack. No stage refresh: a landed Q lowers its
+ * cooldown like the others (SKILLSHOT_Q.hitCooldownReductionMs).
+ */
+export const ULT_R = {
+  /** League's 1s: rooted while he charges it, the path drawn on the ground. */
+  castTimeMs: 1000,
+  cooldownMs: 60000,
+  /** League's 2000 is ~950 here: about a second and a half to cross the arena. */
+  speed: 950,
+  /**
+   * Collision half-width. League's wave is 320 wide, ~2.5 champion radii
+   * either side of its line; this is two slime radii, a wide band to aim.
+   */
+  radius: 40,
+  /** Global: far enough to leave the arena from anywhere in it. */
+  maxRange: 1500,
+  /** The first enemy it touches loses `firstPips`; every one after, `pips`. */
+  firstPips: 2,
+  pips: 1,
 };
 
 /**

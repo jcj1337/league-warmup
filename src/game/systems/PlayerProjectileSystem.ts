@@ -18,17 +18,20 @@ export interface ShotSpec {
   fx: FxKey;
   /** The missile touched an active enemy. The spec decides what that means (a pip, a mark, ...). */
   onHit: (target: Enemy) => void;
+  /** Passes through every enemy it touches, each once, instead of stopping on the first. */
+  pierce?: boolean;
 }
 
 /**
  * The player's linear projectiles, whichever champion fired them.
  *
  * Aim is a direction from the player toward a world point. The missile stops
- * on the first enemy it touches: no pierce. Cast windows and cooldowns are
- * the engine's; a kit calls `fire` when its cast resolves.
+ * on the first enemy it touches, unless its spec pierces: then it hits each
+ * enemy it passes through once. Cast windows and cooldowns are the engine's;
+ * a kit calls `fire` when its cast resolves.
  */
 export class PlayerProjectileSystem {
-  readonly missiles: Array<{ projectile: Projectile; kind: FxKey; spec: ShotSpec }> = [];
+  readonly missiles: Array<{ projectile: Projectile; kind: FxKey; spec: ShotSpec; struck: Set<Enemy> }> = [];
 
   constructor(
     private readonly scene: Phaser.Scene,
@@ -46,6 +49,7 @@ export class PlayerProjectileSystem {
     this.missiles.push({
       kind: spec.fx,
       spec,
+      struck: new Set(),
       projectile: new Projectile(this.scene, {
         x: this.player.x,
         y: this.player.y,
@@ -73,9 +77,16 @@ export class PlayerProjectileSystem {
       if (!missile.alive) continue;
 
       for (const target of targets) {
-        if (!target.active) continue;
+        if (!target.active || entry.struck.has(target)) continue;
         if (!missile.hits(target.x, target.y, target.radius)) continue;
 
+        entry.struck.add(target);
+        if (entry.spec.pierce) {
+          // A piercing shot bursts on each enemy it passes through, and flies on.
+          Fx.of(this.scene).impact(entry.kind, target.x, target.y);
+          entry.spec.onHit(target);
+          continue;
+        }
         Fx.of(this.scene).impact(entry.kind, missile.x, missile.y);
         entry.spec.onHit(target);
         // No pierce: the missile is spent on the first enemy it touches.

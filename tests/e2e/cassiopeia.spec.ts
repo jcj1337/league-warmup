@@ -1,7 +1,7 @@
 import { test } from '@playwright/test';
 import { startSuite } from './support/harness';
 
-test('cassiopeia: picked from the profile, slow autos, Q blast + poison ticks, W cloud wall, E twin fang, R gaze by facing, per-stage R, speed per level', async ({ page }, testInfo) => {
+test('cassiopeia: picked from the profile, slow autos, Q blast + poison ticks, W cloud wall, E twin fang, R gaze by facing, R cooldown from poisoned fangs, speed per level', async ({ page }, testInfo) => {
   const { pass, fail, section, finish } = await startSuite(page, testInfo, 400, { champion: 'cassiopeia' });
 
   const cfg = await page.evaluate(() => ({
@@ -286,9 +286,29 @@ test('cassiopeia: picked from the profile, slow autos, Q blast + poison ticks, W
     : fail(`R: ${JSON.stringify({ facing, away, stats: gaze.stats })}`);
   gaze.cd.r > cfg.R.cooldownMs * 0.9 ? pass(`R on its ${cfg.R.cooldownMs}ms cooldown`) : fail(`R cd: ${gaze.cd.r}`);
   await page.evaluate(() => window.__warmup.scene.getScene('GameScene').combat.stageCleared());
-  (await G()).cd.r === 0 ? pass('a stage clear gives R back') : fail('R not refreshed by the stage clear');
+  (await G()).cd.r > cfg.R.cooldownMs * 0.8 ? pass('a stage clear no longer gives R back') : fail('R refreshed by the stage clear');
   await page.waitForTimeout(cfg.R.stunMs + 100);
   (await G()).enemies[0].dazed === false ? pass(`the petrify wears off after ${cfg.R.stunMs}ms`) : fail('still petrified');
+
+  // Instead, every Twin Fang on a poisoned enemy takes time off R.
+  await stage(800, 360, 4);
+  const rFang0 = await page.evaluate(() => {
+    const g = window.__warmup.scene.getScene('GameScene');
+    g.cooldowns.start('r');
+    g.kit.poison(g.director.enemies[0]);
+    return { r: g.cooldowns.remainingMs('r'), now: g.clock.now };
+  });
+  await page.mouse.move(800, 360);
+  await page.keyboard.press('e');
+  await page.waitForFunction(() => window.__warmup.scene.getScene('GameScene').director.enemies[0]?.hp < 4, null, { timeout: 2000 });
+  const rFang1 = await page.evaluate(() => {
+    const g = window.__warmup.scene.getScene('GameScene');
+    return { r: g.cooldowns.remainingMs('r'), now: g.clock.now };
+  });
+  const rFangShaved = rFang0.r - rFang1.r - (rFang1.now - rFang0.now);
+  Math.abs(rFangShaved - cfg.R.poisonedFangCooldownReductionMs) < 30
+    ? pass(`a poisoned Twin Fang takes ${Math.round(rFangShaved)}ms off R's cooldown`)
+    : fail(`fang on R: ${JSON.stringify({ rFang0, rFang1, rFangShaved })}`);
 
   // === 6. Heading comes from movement ========================================
   section('6. Heading');

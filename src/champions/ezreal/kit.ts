@@ -2,7 +2,7 @@ import { AutoAttackMissile } from '../../game/entities/AutoAttackMissile';
 import { PROJECTILE_ART } from '../../game/view/projectileArt';
 import type { Enemy } from '../../game/entities/Enemy';
 import type { Aim, Kit, KitContext, KitStat, PassiveHud, Slot } from '../types';
-import { BLINK_E, LEVELS, MARK_STATUS, SKILLSHOT_Q, SKILLSHOT_W } from './balance';
+import { BLINK_E, LEVELS, MARK_STATUS, SKILLSHOT_Q, SKILLSHOT_W, ULT_R } from './balance';
 import { PassiveSystem } from './PassiveSystem';
 
 /**
@@ -14,6 +14,8 @@ import { PassiveSystem } from './PassiveSystem';
  *                    the mark for one extra pip
  *   E  Arcane Shift  a blink committed at keypress, then a homing bolt from where he
  *                    lands, preferring a marked enemy
+ *   R  Trueshot      a long charge, then a global wave through everything in its path:
+ *      Barrage       two pips to the first enemy, one to each after, a passive stack each
  *
  * The engine owns the cast windows, cooldowns and projectiles; this decides
  * what each slot does when it resolves, and keeps his counters.
@@ -25,6 +27,9 @@ export class EzrealKit implements Kit {
   qHit = 0;
   /** W marks cashed in for their extra pip. */
   markProcs = 0;
+  /** R waves fired, and the enemies they hit. */
+  rFired = 0;
+  rHits = 0;
 
   /** E bolts in flight. */
   readonly bolts: AutoAttackMissile[] = [];
@@ -76,7 +81,25 @@ export class EzrealKit implements Kit {
       // Relocate first, THEN acquire, so the bolt is chosen from the new position.
       this.ctx.blink.blinkTo(aim);
       this.fireBolt();
+    } else if (slot === 'r') {
+      this.rFired++;
+      let struck = 0;
+      projectiles.fire({
+        speed: ULT_R.speed, radius: ULT_R.radius, maxRange: ULT_R.maxRange, pierce: true,
+        art: PROJECTILE_ART.r, fx: 'r', onHit: (target) => this.onRHit(target, struck++ === 0),
+      }, aim.x, aim.y);
     }
+  }
+
+  /** One enemy in the wave's path: the first takes the brunt, the rest less. Each is a stack. */
+  private onRHit(target: Enemy, first: boolean): void {
+    const { combat } = this.ctx;
+    this.rHits++;
+    combat.hit(target, target.takeHit());
+    for (let extra = (first ? ULT_R.firstPips : ULT_R.pips) - 1; extra > 0 && target.active; extra--) {
+      if (target.takeHit()) combat.kill(target);
+    }
+    this.grantPassiveStack();
   }
 
   private onQHit(target: Enemy): void {
@@ -88,8 +111,8 @@ export class EzrealKit implements Kit {
       if (target.takeHit()) combat.kill(target);
     }
     this.grantPassiveStack();
-    // A landed Q refunds the basic ability cooldowns — never Flash.
-    cooldowns.reduce(SKILLSHOT_Q.hitCooldownReductionMs, ['q', 'w', 'e']);
+    // A landed Q lowers every ability cooldown, R included — never Flash.
+    cooldowns.reduce(SKILLSHOT_Q.hitCooldownReductionMs, ['q', 'w', 'e', 'r']);
   }
 
   /** W removes no pips: it marks, and the mark grants the stack. */
@@ -181,7 +204,7 @@ export class EzrealKit implements Kit {
   }
 
   stats(): Record<string, number> {
-    return { qFired: this.qFired, qHit: this.qHit, markProcs: this.markProcs };
+    return { qFired: this.qFired, qHit: this.qHit, markProcs: this.markProcs, rFired: this.rFired, rHits: this.rHits };
   }
 
   statRows(): KitStat[] {

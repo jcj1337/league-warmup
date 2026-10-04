@@ -14,7 +14,7 @@ import { TwinFang, playBite } from './TwinFang';
  *   E  Twin Fang         point-and-click on the enemy under the cursor: twin fangs that bite
  *                        for one pip, two on a poisoned target
  *   R  Petrifying Gaze   a cone, striking as its cast ends: enemies facing her are stunned, the
- *                        rest slowed; one pip to all; back at every stage clear
+ *                        rest slowed; one pip to all; every poisoned Twin Fang lowers its cooldown
  *
  * Every slot resolves from where she stands when its cast ends, so a mid-cast
  * Flash carries W and R with her (the engine shifts the aim; see CastSystem).
@@ -43,8 +43,6 @@ export class CassiopeiaKit implements Kit {
 
   constructor(private readonly ctx: KitContext) {
     this.zones = new PlayerZoneSystem(ctx.scene);
-    // Her ultimate comes back with every stage, like your HP.
-    if (R.refreshOnStageClear) ctx.events.on('stageCleared', () => ctx.cooldowns.refund('r'));
   }
 
   get attackSpeedMultiplier(): number {
@@ -153,6 +151,8 @@ export class CassiopeiaKit implements Kit {
     if (poisoned) this.fangsOnPoisoned++;
     const pips = poisoned ? E.pipsOnPoisoned : E.pips;
     for (let i = 0; i < pips && target.active; i++) this.pip(target);
+    // A poisoned bite brings her ultimate closer.
+    if (poisoned) this.ctx.cooldowns.reduce(R.poisonedFangCooldownReductionMs, ['r']);
   }
 
   /**

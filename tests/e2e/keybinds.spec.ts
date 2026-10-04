@@ -47,7 +47,7 @@ test('keybinds: rebind from the pause menu, swaps, Escape cancels, ability bar l
       ? pass('defaults: Q W E F, T / A attack-move, S stop, Z chat')
       : fail(`defaults: ${JSON.stringify(b)}`);
     const slots = await slotKeys();
-    slots.map((s) => s.text).join('') === 'QWEF' ? pass('ability bar shows Q W E F') : fail(`slots: ${JSON.stringify(slots)}`);
+    slots.map((s) => s.text).join('') === 'QWERF' ? pass('ability bar shows Q W E R F') : fail(`slots: ${JSON.stringify(slots)}`);
   }
   await page.keyboard.press('Escape');
   await page.waitForTimeout(100);                // the HUD shows the menu a frame after the game pauses
@@ -100,7 +100,7 @@ test('keybinds: rebind from the pause menu, swaps, Escape cancels, ability bar l
   await page.keyboard.press('CapsLock');
   {
     const [b, slots] = [await binds(), await slotKeys()];
-    b.flash === 'CapsLock' && slots[3].text === 'CAPS' && slots[3].size < slots[0].size
+    b.flash === 'CapsLock' && slots[slots.length - 1].text === 'CAPS' && slots[slots.length - 1].size < slots[0].size
       ? pass('Flash on Caps Lock: the slot reads CAPS in the small font')
       : fail(`caps: ${JSON.stringify({ b, slots })}`);
   }
@@ -165,7 +165,7 @@ test('keybinds: rebind from the pause menu, swaps, Escape cancels, ability bar l
   await waitForGame(page, 300);
   {
     const [b, slots] = [await binds(), await slotKeys()];
-    b.abilityQ === 'KeyY' && b.flash === 'CapsLock' && b.chatMode === 'KeyX' && slots[0].text === 'Y' && slots[3].text === 'CAPS'
+    b.abilityQ === 'KeyY' && b.flash === 'CapsLock' && b.chatMode === 'KeyX' && slots[0].text === 'Y' && slots[slots.length - 1].text === 'CAPS'
       ? pass('bindings survive a reload, ability bar included')
       : fail(`after reload: ${JSON.stringify({ b, slots })}`);
   }
@@ -181,7 +181,7 @@ test('keybinds: rebind from the pause menu, swaps, Escape cancels, ability bar l
   if (resetAt) await page.mouse.click(resetAt.x, resetAt.y);
   {
     const [b, m, slots] = [await binds(), await menu(), await slotKeys()];
-    b.abilityQ === 'KeyQ' && b.flash === 'KeyF' && b.chatMode === 'KeyZ' && slots.map((s) => s.text).join('') === 'QWEF' &&
+    b.abilityQ === 'KeyQ' && b.flash === 'KeyF' && b.chatMode === 'KeyZ' && slots.map((s) => s.text).join('') === 'QWERF' &&
       m.status === 'KEYS RESET TO DEFAULTS'
       ? pass('RESET KEYS restores the defaults, menu and ability bar')
       : fail(`reset: ${JSON.stringify({ resetAt, b, m, slots })}`);

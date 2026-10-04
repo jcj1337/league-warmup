@@ -115,6 +115,11 @@ export const PALETTE = {
   e: 0xff5fae,
   eBlue: 0x7ab8ff,
   eCore: 0xfff0fa,
+  // Ezreal's R, Trueshot Barrage: League's golden wave.
+  rDeep: 0xb7791f,
+  rGold: 0xf5b83d,
+  r: 0xffdf5c,
+  rCore: 0xfffbe0,
   flash: 0xffe98a,
   flashCore: 0xfffbe6,
   passive: 0x7cf3c0,
@@ -418,6 +423,7 @@ export const THEME = {
     q: { color: P.q, core: P.qCore, deep: P.qDeep, castFlashRadius: 24, castFlashMs: 120, impactRadius: 30, impactMs: 200, sparks: 9 },
     w: { color: P.w, core: P.wCore, deep: P.wDeep, castFlashRadius: 28, castFlashMs: 130, impactRadius: 34, impactMs: 220, sparks: 8 },
     e: { color: P.e, core: P.eCore, deep: P.eDeep, blue: P.eBlue, blinkMs: 180, impactRadius: 24, impactMs: 200, sparks: 7 },
+    r: { color: P.r, core: P.rCore, deep: P.rDeep, castFlashRadius: 44, castFlashMs: 220, impactRadius: 34, impactMs: 240, sparks: 10 },
     // Cassiopeia: violet for Q and the poison, plum for W, lilac fangs for E, stone for R.
     poison: { color: P.toxin, core: P.toxinCore, deep: P.toxinDeep, castFlashRadius: 22, castFlashMs: 120, impactRadius: 28, impactMs: 220, sparks: 8 },
     miasma: { color: P.miasma, core: P.toxinCore, deep: P.miasmaDeep, castFlashRadius: 26, castFlashMs: 130, impactRadius: 30, impactMs: 220, sparks: 6 },
@@ -436,12 +442,22 @@ export const THEME = {
       q: { color: P.q, spacing: 10, life: 150, size: 3 },
       w: { color: P.wHot, spacing: 12, life: 240, size: 6 },
       e: { color: P.e, spacing: 10, life: 160, size: 3 },
+      r: { color: P.rGold, spacing: 8, life: 260, size: 6 },
       hostile: { color: P.fireOrange, spacing: 16, life: 220, size: 6 },
       orb: { color: P.arcane, spacing: 10, life: 200, size: 4 },
       sphere: { color: P.voidGlow, spacing: 10, life: 220, size: 5 },
       glob: { color: P.redDeep, spacing: 10, life: 160, size: 3 },
       fang: { color: P.toxinLight, spacing: 10, life: 140, size: 3 },
     },
+  },
+
+  /** A slot's cast telegraph (CastTelegraphView), in the slot's fx colours: deep fill, colour sweep and edge. */
+  castTelegraph: {
+    fillAlphaStart: 0.12,
+    fillAlphaEnd: 0.4,
+    coreAlpha: 0.35,
+    edgeAlphaStart: 0.5,
+    edgeAlphaEnd: 1,
   },
 
   /**
@@ -607,7 +623,7 @@ export const THEME = {
     sweepColor: P.ink,
     sweepAlpha: 0.7,
     /** Per-slot accent: the ability's own colour. */
-    accents: { q: P.q, w: P.w, e: P.e, flash: P.flash, venom: P.toxin, miasma: P.miasma, fang: P.toxinLight, stone: P.stone } as Record<string, number>,
+    accents: { q: P.q, w: P.w, e: P.e, r: P.r, flash: P.flash, venom: P.toxin, miasma: P.miasma, fang: P.toxinLight, stone: P.stone } as Record<string, number>,
   },
 
   /** Title card before the first run of a page load. Presentation only. */
@@ -622,8 +638,7 @@ export const THEME = {
    * The player's ground spells (PlayerZoneView): Cassiopeia's purple, never
    * the red that means "this hurts you". A telegraph fills from its centre
    * over its delay and splashes when it lands; a cloud is overlapping plum
-   * puffs with dark blotches and motes drifting up. A slot's cast telegraph
-   * (CastTelegraphView, Cassiopeia's R) uses the same fill, core and edge.
+   * puffs with dark blotches and motes drifting up.
    */
   playerZone: {
     fill: P.toxinDeep,

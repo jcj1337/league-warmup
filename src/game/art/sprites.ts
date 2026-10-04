@@ -311,6 +311,15 @@ export const SPRITES: Record<string, PixelSprite> = {
     rows: ['..vvv..', '.vVVVv.', 'vVMWMVv', 'vVWWWVv', 'vVMWMVv', '.vVVVv.', '..vvv..'],
     pal: { v: P.wDeep, V: P.w, M: P.wHot, W: P.wCore },
   },
+  /** Trueshot Barrage: a tall crescent of light, bowed forward, as wide as its hitbox. */
+  proj_r: {
+    rows: [
+      '...YW.....', '....YW....', '....GYW...', '....GYW...', '....DGYW..', '....DGYW..', '.....DGYW.', '.....DGYW.', '....DDGYW.',
+      '.....DDGYW', '.....DDGYW', '.....DDGYW', '.....DDGYW', '.....DDGYW', '.....DDGYW', '.....DDGYW', '....DDGYW.',
+      '.....DGYW.', '.....DGYW.', '....DGYW..', '....DGYW..', '....GYW...', '....GYW...', '....YW....', '...YW.....',
+    ],
+    pal: { D: P.rDeep, G: P.rGold, Y: P.r, W: P.rCore },
+  },
   proj_e: {
     rows: ['....bP..', '..bPPPp.', 'bbPWWWWP', '..bPPPp.', '....bP..'],
     pal: { b: P.eBlue, P: P.e, p: P.eDeep, W: P.eCore },
@@ -458,6 +467,14 @@ export const SPRITES: Record<string, PixelSprite> = {
       '..............',
     ],
     pal: { p: P.e, P: P.eCore, W: P.white, b: P.eBlue, B: P.eCore },
+  },
+  /** Ezreal's R: a golden wave with its streaks behind it. */
+  icon_r: {
+    rows: [
+      '.....YW.......', '......GYW.....', '.......GYW....', '........GYW...', 'g.g.g...DGYW..', '.........DGYW.', 'g.g.g.g..DGYW.',
+      'g.g.g.g..DGYW.', '.........DGYW.', 'g.g.g...DGYW..', '........GYW...', '.......GYW....', '......GYW.....', '.....YW.......',
+    ],
+    pal: { g: P.rGold, D: P.rDeep, G: P.rGold, Y: P.r, W: P.rCore },
   },
   icon_flash: {
     rows: [

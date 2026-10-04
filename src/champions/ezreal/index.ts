@@ -3,7 +3,7 @@ import { THEME } from '../../config/theme';
 import { TEX } from '../../game/art/textures';
 import { registerStatusLook } from '../../game/view/statusLooks';
 import type { Champion } from '../types';
-import { BLINK_E, LEVELS, MARK_STATUS, SKILLSHOT_Q, SKILLSHOT_W, STATS } from './balance';
+import { BLINK_E, LEVELS, MARK_STATUS, SKILLSHOT_Q, SKILLSHOT_W, STATS, ULT_R } from './balance';
 import { EZREAL_ART } from './art';
 import { EzrealKit } from './kit';
 
@@ -17,7 +17,7 @@ registerStatusLook(MARK_STATUS, {
 
 /**
  * Ezreal: the ADC the trainer was built around. Autos, a linear poke (Q), a
- * mark to cash in (W) and a committed blink (E). See README.md here for the
+ * mark to cash in (W), a committed blink (E) and a global wave (R). See README.md here for the
  * kit as a player reads it; balance.ts for every number.
  */
 export const EZREAL: Champion = {
@@ -46,6 +46,12 @@ export const EZREAL: Champion = {
       label: 'Arcane Shift', targeting: 'direction',
       castTimeMs: () => BLINK_E.castTimeMs, cooldownMs: () => BLINK_E.cooldownMs,
       icon: TEX.icons.e, accent: THEME.ability.accents.e, castStyle: 'blink', fx: 'e',
+    },
+    r: {
+      label: 'Trueshot Barrage', targeting: 'direction',
+      castTimeMs: () => ULT_R.castTimeMs, cooldownMs: () => ULT_R.cooldownMs,
+      telegraph: { kind: 'line', length: () => ULT_R.maxRange, halfWidth: () => ULT_R.radius },
+      icon: TEX.icons.r, accent: THEME.ability.accents.r, castStyle: 'orb', fx: 'r',
     },
   },
   createKit: (ctx) => new EzrealKit(ctx),

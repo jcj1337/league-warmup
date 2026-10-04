@@ -1,7 +1,7 @@
 import { test } from '@playwright/test';
 import { startSuite } from './support/harness';
 
-test('kit: W mark + detonation, E blink + bolt priority, Flash, Q cooldown refund, pause, ability bar', async ({ page }, testInfo) => {
+test('kit: W mark + detonation, E blink + bolt priority, Flash, Q cooldown refund, R barrage, pause, ability bar', async ({ page }, testInfo) => {
   const { pass, fail, section, finish } = await startSuite(page, testInfo, 400);
 
   const G = () => page.evaluate(() => {
@@ -13,6 +13,7 @@ test('kit: W mark + detonation, E blink + bolt priority, Flash, Q cooldown refun
         q: g.cooldowns.remainingMs('q'),
         w: g.cooldowns.remainingMs('w'),
         e: g.cooldowns.remainingMs('e'),
+        r: g.cooldowns.remainingMs('r'),
         flash: g.cooldowns.remainingMs('flash'),
       },
       hudCd: hud.abilityCooldowns,
@@ -32,6 +33,7 @@ test('kit: W mark + detonation, E blink + bolt priority, Flash, Q cooldown refun
     w: window.__ezreal.SKILLSHOT_W,
     e: window.__ezreal.BLINK_E,
     f: window.__balance.FLASH,
+    r: window.__ezreal.ULT_R,
     atkRange: window.__balance.ATTACK.range,
     arena: window.__balance.ARENA,
     playerRadius: window.__ezreal.STATS.radius,
@@ -392,17 +394,59 @@ test('kit: W mark + detonation, E blink + bolt priority, Flash, Q cooldown refun
   await page.waitForTimeout(200);
   (await G()).clock > pz1.clock ? pass('everything resumes cleanly') : fail('clock did not resume');
 
+  // === R: Trueshot Barrage ===================================================
+  section('R: Trueshot Barrage');
+  // Three in the wave's path (left to right), one well off its line.
+  await setup([
+    { type: 'basic', x: 800, y: 360 }, { type: 'basic', x: 1000, y: 340 },
+    { type: 'basic', x: 1180, y: 385 }, { type: 'basic', x: 900, y: 600 },
+  ], 3);
+  const hps = () => page.evaluate(() => window.__warmup.scene.getScene('GameScene').director.enemies.map((e) => e.hp));
+  await page.mouse.move(1270, 360);
+  await page.keyboard.press('r');
+  await page.waitForTimeout(cfg.r.castTimeMs / 2);
+  const rMid = await page.evaluate(() => {
+    const g = window.__warmup.scene.getScene('GameScene');
+    return { casting: g.cast.castingAbility, px: g.player.x, py: g.player.y };
+  });
+  const hpMid = await hps();
+  rMid.casting === 'r' && Math.abs(rMid.px - 640) < 1 && hpMid.every((h) => h === 3)
+    ? pass(`R charges for ${cfg.r.castTimeMs}ms, rooted, before the wave leaves`)
+    : fail(`R mid-cast: ${JSON.stringify({ rMid, hpMid })}`);
+  await page.waitForTimeout(cfg.r.castTimeMs / 2 + 60);
+  await page.waitForFunction(() => window.__warmup.scene.getScene('GameScene').projectiles.missilesInFlight === 0, null, { timeout: 4000 });
+  const hpAfter = await hps();
+  const rDone = await G();
+  const rStats = await page.evaluate(() => window.__warmup.scene.getScene('GameScene').kit.stats());
+  hpAfter.join() === [3 - cfg.r.firstPips, 3 - cfg.r.pips, 3 - cfg.r.pips, 3].join()
+    ? pass(`the wave crosses the arena through all three in its path: ${cfg.r.firstPips} pips to the first, ${cfg.r.pips} to each after; the one off its line is untouched`)
+    : fail(`R hits: ${JSON.stringify(hpAfter)}`);
+  rStats.rHits === 3 && rDone.stacks === 3
+    ? pass('each enemy the wave hits is a passive stack')
+    : fail(`R stacks: ${JSON.stringify({ rStats, stacks: rDone.stacks })}`);
+  rDone.cd.r > cfg.r.cooldownMs * 0.9 ? pass(`R on its ${cfg.r.cooldownMs}ms cooldown`) : fail(`R cd: ${rDone.cd.r}`);
+  // A landed Q lowers R's cooldown too, as in League: no stage refresh needed.
+  await page.mouse.move(800, 360);
+  const beforeQ = await G();
+  await page.keyboard.press('q');
+  await page.waitForFunction((hp) => window.__warmup.scene.getScene('GameScene').director.enemies[0].hp < hp, hpAfter[0], { timeout: 2000 });
+  const afterQ = await G();
+  const shaved = beforeQ.cd.r - afterQ.cd.r - (afterQ.clock - beforeQ.clock);
+  Math.abs(shaved - cfg.q.hitCooldownReductionMs) < 30
+    ? pass(`a landed Q takes ${Math.round(shaved)}ms off R's cooldown, as off Q / W / E`)
+    : fail(`Q on R: shaved ${shaved} (${JSON.stringify({ before: beforeQ.cd.r, after: afterQ.cd.r })})`);
+
   // === HUD slots =============================================================
   section('HUD slots');
   const slots = await page.evaluate(() => {
     const ui = window.__warmup.scene.getScene('UIScene');
     return ui.abilityBar.slots.map((s) => ({ key: s.keyText.text, icon: s.spec.icon, size: s.size, cx: s.cx }));
   });
-  slots.length === 4 && slots.map((s) => s.key).join('') === 'QWEF'
+  slots.length === 5 && slots.map((s) => s.key).join('') === 'QWERF'
     ? pass(`ability bar shows ${slots.map((s) => s.key).join(' ')} with distinct icons`)
     : fail(`slots: ${JSON.stringify(slots)}`);
-  slots[3].size < slots[0].size && slots[3].cx - slots[2].cx > slots[1].cx - slots[0].cx
-    ? pass('Flash slot is smaller and set apart from the Q/W/E row')
+  slots[4].size < slots[0].size && slots[4].cx - slots[3].cx > slots[1].cx - slots[0].cx
+    ? pass('Flash slot is smaller and set apart from the Q/W/E/R row')
     : fail('Flash slot not visually separated');
 
   await finish();

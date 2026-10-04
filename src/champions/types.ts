@@ -45,16 +45,14 @@ export type CastStyle = 'bolt' | 'orb' | 'blink' | 'fang' | 'none';
  * A shape drawn on the ground during the cast window, from the player toward
  * the aim, filling with the cast's progress (CastTelegraphView). For a spell
  * that goes off the moment its cast ends, so the window itself is the warning.
+ * Coloured by `fx` (the slot's own fx when omitted).
  */
-export interface CastTelegraph {
-  kind: 'cone';
-  radius(): number;
-  /** Half the opening, in radians. */
-  halfAngle(): number;
-}
+export type CastTelegraph =
+  | { kind: 'cone'; radius(): number; /** Half the opening, in radians. */ halfAngle(): number; fx?: FxKey }
+  | { kind: 'line'; length(): number; halfWidth(): number; fx?: FxKey };
 
 /** Which THEME.fx entry colours a slot's effects. Grows with each champion. */
-export type FxKey = 'q' | 'w' | 'e' | 'poison' | 'miasma' | 'fang' | 'gaze';
+export type FxKey = 'q' | 'w' | 'e' | 'r' | 'poison' | 'miasma' | 'fang' | 'gaze';
 
 export interface AbilityDef {
   /** 'Mystic Shot': the pause menu's key row and the champion's README. */

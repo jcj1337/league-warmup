@@ -35,6 +35,7 @@ export const TEX = {
     q: 'proj_q',
     w: 'proj_w',
     e: 'proj_e',
+    r: 'proj_r',
     hostile: ['proj_hostile_0', 'proj_hostile_1'],
     orb: ['proj_orb_0', 'proj_orb_1'],
     glob: 'proj_glob',
@@ -59,7 +60,7 @@ export const TEX = {
     deadShrub: 'prop_dead_shrub',
   } as Record<string, string>,
   icons: {
-    q: 'icon_q', w: 'icon_w', e: 'icon_e', flash: 'icon_flash',
+    q: 'icon_q', w: 'icon_w', e: 'icon_e', r: 'icon_r', flash: 'icon_flash',
     cassioQ: 'icon_cassio_q', cassioW: 'icon_cassio_w', cassioE: 'icon_cassio_e', cassioR: 'icon_cassio_r',
   } as Record<string, string>,
   ground: 'battlefield_ground',
