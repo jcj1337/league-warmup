@@ -386,7 +386,7 @@ export class UIScene extends Phaser.Scene {
       (id) => this.pickChampion(id),
     );
     const prompt = pixelText(this, cx, cy + 84, 'CLICK OR PRESS ANY KEY', 3, THEME.ui.text).setOrigin(0.5);
-    const credit = pixelText(this, cx, cy + 136, 'DESIGNED BY QWER', 2, THEME.ui.faint).setOrigin(0.5);
+    const credit = pixelText(this, cx, cy + 136, 'DESIGNED BY 2.1K LP, TOP 50 MID QWER', 2, THEME.ui.faint).setOrigin(0.5);
 
     // UIScene's tweens never pause, so the prompt keeps breathing while the run is held.
     this.tweens.add({

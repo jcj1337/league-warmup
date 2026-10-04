@@ -5,9 +5,9 @@ import { ensurePlayerFrames, type PlayerLook } from '../art/look';
 import { pixelText } from '../art/font';
 import { pixelPanel } from '../view/pixelDraw';
 
-/** Portrait tile size and spacing, in screen pixels. */
+/** Portrait tile size, and the clear space between neighbours' tiles or names (whichever is wider), in screen pixels. */
 const TILE = 76;
-const GAP = 22;
+const GAP = 40;
 
 /**
  * The champion picker on the start screen: one portrait tile per champion
@@ -31,16 +31,18 @@ export class ChampionRow {
   ) {
     this.selected = selected;
     const parts: Phaser.GameObjects.GameObject[] = [];
-    const rowWidth = champions.length * TILE + (champions.length - 1) * GAP;
-    const left = cx - rowWidth / 2 + TILE / 2;
+    // Names are wider than tiles ('CASSIOPEIA'), so the row is spaced by the widest of either.
+    const names = champions.map((c) => pixelText(scene, 0, cy + TILE / 2 + 12, c.name.toUpperCase(), 2, THEME.ui.dim).setOrigin(0.5));
+    const pitch = Math.max(TILE, ...names.map((n) => n.width)) + GAP;
+    const left = cx - ((champions.length - 1) * pitch) / 2;
 
     champions.forEach((champion, i) => {
-      const x = Math.round(left + i * (TILE + GAP));
+      const x = Math.round(left + i * pitch);
       const frame = scene.add.graphics();
       const portrait = scene.add
         .image(x, cy - 4, ensurePlayerFrames(scene, champion, look).frames.idle[0])
         .setScale(THEME.art.scale);
-      const name = pixelText(scene, x, cy + TILE / 2 + 12, champion.name.toUpperCase(), 2, THEME.ui.dim).setOrigin(0.5);
+      const name = names[i].setX(x);
       const hit = scene.add.rectangle(x, cy, TILE, TILE, 0xffffff, 0).setInteractive({ useHandCursor: true });
       hit.on('pointerover', () => { if (champion.id !== this.selected) this.drawTile(champion.id, 'hover'); });
       hit.on('pointerout', () => { if (champion.id !== this.selected) this.drawTile(champion.id, 'idle'); });
