@@ -1,24 +1,44 @@
 import Phaser from 'phaser';
 import { THEME } from '../../config/theme';
-import type { PlacedCloud, PlacedZone } from '../systems/PlayerZoneSystem';
+import type { BurstStyle, PlacedCloud, PlacedZone } from '../systems/PlayerZoneSystem';
 import { dottedRing, dottedWedge, pixelDisc, wedgePoints } from './pixelDraw';
 
+type Point = { x: number; y: number };
+
+/** A burst being drawn: puffs popping open where something landed, then shrinking away. */
+interface Burst {
+  x: number;
+  y: number;
+  radius: number;
+  style: BurstStyle;
+  at: number;
+}
+
 /**
- * Draws the player's ground spells: a telegraph that fills from its centre
- * over its delay in the champion's colour (never the red of hostile ground,
- * which always means "this hurts you") and splashes when it lands, a cone
- * that flashes as it strikes, and lingering clouds as overlapping puffs with
- * dark blotches and drifting motes. A thrown cloud's bolts are lobbed from
- * the caster, each puff bursting open where its bolt lands. A read of the
- * zone and cloud lists, plus the landings it was told of.
+ * Draws the player's ground spells, all in one language: venom that leaves
+ * the caster's body, arcs through the air with its shadow on the ground, and
+ * bursts open where it lands into soft, opaque, blotchy puffs that overshoot
+ * a little, splatter droplets, and shrink away.
+ *
+ *   thrown circle  (Cassiopeia's Q) a glob lobbed onto a faint landing ring,
+ *                  bursting into a cluster of puffs as it resolves
+ *   circle         a telegraph filling from its centre, then the same burst
+ *   cone           a telegraph, then a wave of puffs sweeping out to its edge
+ *   cloud          (her W) bolts lobbed onto each puff, which pops open and
+ *                  lingers, breathing, with motes drifting up
+ *   burst          a puff cluster on its own, where a kit asks (a bite, a gaze)
+ *
+ * Never the red of hostile ground, which always means "this hurts you". A
+ * read of the zone and cloud lists, plus the landings and bursts it was told of.
  */
 export class PlayerZoneView {
-  /** Ground level: telegraphs, clouds, splashes, the bolts' shadows. */
+  /** Ground level: telegraphs, clouds, bursts, the bolts' shadows. */
   private readonly gfx: Phaser.GameObjects.Graphics;
   /** In the air: the bolts themselves, over the units they fly past. */
   private readonly air: Phaser.GameObjects.Graphics;
-  /** Zones that just landed, splashing out for THEME.playerZone.splashMs. */
-  private readonly splashes: { zone: PlacedZone; at: number }[] = [];
+  /** Cones that just struck, their wave sweeping out. */
+  private readonly sweeps: { zone: PlacedZone & { kind: 'cone' }; at: number }[] = [];
+  private readonly bursts: Burst[] = [];
 
   constructor(scene: Phaser.Scene) {
     this.gfx = scene.add.graphics().setDepth(THEME.depth.groundFx);
@@ -48,35 +68,32 @@ export class PlayerZoneView {
         continue;
       }
 
-      // The countdown is a disc swelling from the centre to the edge, then the splash.
       const cx = Math.round(zone.x);
       const cy = Math.round(zone.y);
       g.fillStyle(Z.fill, fillAlpha);
       g.fillCircle(cx, cy, zone.radius);
-      g.fillStyle(Z.core, Z.coreAlpha);
-      g.fillCircle(cx, cy, zone.radius * t);
       dottedRing(g, cx, cy, zone.radius, Z.edge, edgeAlpha, 3);
+      if (zone.thrownFrom) {
+        // The glob in flight is the countdown: it lands as the zone resolves.
+        this.drawLob(zone.thrownFrom, zone, t, Z.globRadius);
+      } else {
+        // Otherwise a disc swelling from the centre to the edge is.
+        g.fillStyle(Z.core, Z.coreAlpha);
+        g.fillCircle(cx, cy, zone.radius * t);
+      }
     }
 
-    for (let i = this.splashes.length - 1; i >= 0; i--) {
-      const { zone, at } = this.splashes[i];
-      const t = (nowMs - at) / Z.splashMs;
-      if (t >= 1 || t < 0) {
-        this.splashes.splice(i, 1);
-        continue;
-      }
-      const ease = 1 - (1 - t) ** 2;
-      if (zone.kind === 'cone') {
-        // The gaze: the whole cone flashes, and a bright edge runs out past it.
-        g.fillStyle(Z.splash, 0.55 * (1 - t));
-        g.fillPoints(wedgePoints(zone.x, zone.y, zone.angle, zone.halfAngle, zone.radius), true);
-        dottedWedge(g, zone.x, zone.y, zone.angle, zone.halfAngle, zone.radius * (1 + 0.08 * ease), Z.splash, 1 - t);
-        continue;
-      }
-      g.fillStyle(Z.core, Z.coreAlpha * 1.6 * (1 - t));
-      g.fillCircle(Math.round(zone.x), Math.round(zone.y), zone.radius);
-      dottedRing(g, zone.x, zone.y, zone.radius * (1 + 0.25 * ease), Z.splash, 1 - t, 3);
-      this.drops(zone.x, zone.y, zone.radius * (0.6 + 0.7 * ease), Z.splashDrops, 1 - t, 0.4);
+    for (let i = this.sweeps.length - 1; i >= 0; i--) {
+      const t = (nowMs - this.sweeps[i].at) / Z.sweepMs;
+      if (t >= 1 || t < 0) this.sweeps.splice(i, 1);
+      else this.drawSweep(this.sweeps[i].zone, t);
+    }
+
+    for (let i = this.bursts.length - 1; i >= 0; i--) {
+      const b = this.bursts[i];
+      const since = nowMs - b.at;
+      if (since >= Z.burstMs || since < 0) this.bursts.splice(i, 1);
+      else this.drawBurst(b, since);
     }
   }
 
@@ -97,27 +114,21 @@ export class PlayerZoneView {
       const pop = since >= Z.puffPopMs ? 1 : popEase(since / Z.puffPopMs);
       return cloud.radius * fade * pop * (1 + 0.06 * Math.sin((age / Z.cloudPulseMs + i * 0.37) * Math.PI * 2));
     });
-
-    // The rim first, under every puff, so only the field's outer edge shows it.
-    // Opaque: translucent puffs would stack where they overlap (see THEME.playerZone).
-    g.fillStyle(Z.cloudRim, 1);
-    cloud.puffs.forEach((p, i) => sizes[i] > 0 && g.fillCircle(Math.round(p.x), Math.round(p.y), sizes[i] + Z.cloudRimPx * fade));
-    g.fillStyle(Z.cloudFill, 1);
-    cloud.puffs.forEach((p, i) => sizes[i] > 0 && g.fillCircle(Math.round(p.x), Math.round(p.y), sizes[i]));
+    this.drawPuffs(cloud.puffs, sizes, 'venom', fade);
 
     cloud.puffs.forEach((p, i) => {
       const since = nowMs - cloud.puffLandsAt[i];
       if (since < 0) {
-        this.drawBolt(cloud, i, nowMs);
+        if (cloud.thrownFrom) {
+          const flight = cloud.puffLandsAt[i] - cloud.placedAt;
+          this.drawLob(cloud.thrownFrom, p, flight > 0 ? Phaser.Math.Clamp((nowMs - cloud.placedAt) / flight, 0, 1) : 1, Z.boltRadius);
+        }
         return;
       }
-      // Dark blotches, fixed per puff.
-      const a = i * 2.1 + 0.7;
-      pixelDisc(g, p.x + Math.cos(a) * sizes[i] * 0.35, p.y + Math.sin(a) * sizes[i] * 0.3, sizes[i] * 0.4, Z.blotch, Z.blotchAlpha, 3);
       // The bolt's splat: droplets thrown out as the puff opens.
       if (since < Z.puffSplatMs) {
         const s = since / Z.puffSplatMs;
-        this.drops(p.x, p.y, cloud.radius * (0.5 + 0.9 * (1 - (1 - s) ** 2)), Z.puffSplatDrops, 1 - s, i * 0.9);
+        this.drops(p.x, p.y, cloud.radius * (0.5 + 0.9 * (1 - (1 - s) ** 2)), Z.puffSplatDrops, 1 - s, i * 0.9, Z.splash);
       }
       // A few motes drifting up through the cloud.
       for (let m = 0; m < Z.cloudMotes; m++) {
@@ -131,50 +142,129 @@ export class PlayerZoneView {
   }
 
   /**
-   * One venom bolt in flight: from her mouth up into a lob and down onto its
-   * puff. Its shadow runs along the ground below it, so the landing spot reads
-   * before the bolt gets there.
+   * Opaque puffs with a rim and dark blotches: the rim first, under every
+   * puff, so only the outer edge shows it. Opaque, because translucent puffs
+   * would stack where they overlap (see THEME.playerZone).
    */
-  private drawBolt(cloud: PlacedCloud, i: number, nowMs: number): void {
-    const from = cloud.thrownFrom;
-    if (!from) return;
+  private drawPuffs(centres: readonly Point[], sizes: readonly number[], style: BurstStyle, rimScale = 1): void {
+    const g = this.gfx;
     const Z = THEME.playerZone;
-    const p = cloud.puffs[i];
-    const flight = cloud.puffLandsAt[i] - cloud.placedAt;
-    const dist = Math.hypot(p.x - from.x, p.y - from.y);
-    const peak = Z.boltArcPx + dist * Z.boltArcPerPx;
-    const at = (s: number) => ({
-      x: from.x + (p.x - from.x) * s,
-      y: from.y + (p.y - from.y) * s,
-      h: Z.boltMouthPx * (1 - s) + 4 * peak * s * (1 - s),
+    const S = Z.styles[style];
+    g.fillStyle(S.rim, 1);
+    centres.forEach((p, i) => sizes[i] > 0 && g.fillCircle(Math.round(p.x), Math.round(p.y), sizes[i] + Z.cloudRimPx * rimScale));
+    g.fillStyle(S.fill, 1);
+    centres.forEach((p, i) => sizes[i] > 0 && g.fillCircle(Math.round(p.x), Math.round(p.y), sizes[i]));
+    centres.forEach((p, i) => {
+      if (sizes[i] <= 0) return;
+      const a = i * 2.1 + 0.7;
+      pixelDisc(g, p.x + Math.cos(a) * sizes[i] * 0.35, p.y + Math.sin(a) * sizes[i] * 0.3, sizes[i] * 0.4, S.blotch, Z.blotchAlpha, 3);
     });
-    const s = flight > 0 ? Phaser.Math.Clamp((nowMs - cloud.placedAt) / flight, 0, 1) : 1;
+  }
+
+  /**
+   * A cluster of puffs bursting open where something landed: a big one in the
+   * middle and a ring around it, each popping a beat after the last and
+   * overshooting, droplets splattering out, then the lot shrinking away.
+   */
+  private drawBurst(b: Burst, since: number): void {
+    const Z = THEME.playerZone;
+    const S = Z.styles[b.style];
+    const t = since / Z.burstMs;
+    const shrink = t > Z.burstHoldFraction ? (1 - t) / (1 - Z.burstHoldFraction) : 1;
+    const centres: Point[] = [{ x: b.x, y: b.y }];
+    const sizes: number[] = [];
+    const pop = (delay: number) => {
+      const s = (since - delay) / Z.puffPopMs;
+      return s <= 0 ? 0 : s >= 1 ? 1 : popEase(s);
+    };
+    sizes.push(b.radius * Z.burstCore * pop(0) * shrink);
+    for (let k = 0; k < Z.burstPuffs; k++) {
+      const a = (k / Z.burstPuffs) * Math.PI * 2 + 0.3;
+      centres.push({ x: b.x + Math.cos(a) * b.radius * Z.burstSpread, y: b.y + Math.sin(a) * b.radius * Z.burstSpread * 0.8 });
+      sizes.push(b.radius * Z.burstSide * pop(Z.burstStaggerMs * (k + 1)) * shrink);
+    }
+    this.drawPuffs(centres, sizes, b.style, shrink);
+    // The splat: droplets thrown out past the edge, and a ring running ahead of them.
+    const s = Math.min(1, since / Z.burstSplatMs);
+    if (s < 1) {
+      const ease = 1 - (1 - s) ** 2;
+      this.drops(b.x, b.y, b.radius * (0.7 + 0.8 * ease), Z.splashDrops, 1 - s, 0.4, S.drop);
+      dottedRing(this.gfx, b.x, b.y, b.radius * (1 + 0.35 * ease), S.drop, (1 - s) * 0.8, 3);
+    }
+  }
+
+  /**
+   * The gaze: a wave of puffs sweeping out from her to the cone's edge, a
+   * pale wash behind it, the front breaking into droplets as it reaches the
+   * rim, then shrinking away.
+   */
+  private drawSweep(zone: PlacedZone & { kind: 'cone' }, t: number): void {
+    const g = this.gfx;
+    const Z = THEME.playerZone;
+    const reach = Math.min(1, t / Z.sweepTravel);
+    const front = zone.radius * (1 - (1 - reach) ** 2);
+    const shrink = t > Z.sweepTravel ? Math.max(0, (1 - t) / (1 - Z.sweepTravel)) : 1;
+    g.fillStyle(Z.splash, Z.sweepWashAlpha * (1 - t));
+    g.fillPoints(wedgePoints(zone.x, zone.y, zone.angle, zone.halfAngle, front), true);
+    const arc = 2 * zone.halfAngle * front;
+    const n = Math.max(3, Math.round(arc / Z.sweepPuffSpacing));
+    const centres: Point[] = [];
+    const sizes: number[] = [];
+    for (let i = 0; i <= n; i++) {
+      const a = zone.angle - zone.halfAngle + (2 * zone.halfAngle * i) / n;
+      centres.push({ x: zone.x + Math.cos(a) * front, y: zone.y + Math.sin(a) * front });
+      // Lumpy, not a ruled line: each puff a little bigger or smaller than its neighbours.
+      sizes.push(Z.sweepPuffRadius * shrink * (0.75 + 0.25 * Math.sin(i * 2.3)) * (0.5 + 0.5 * reach));
+    }
+    this.drawPuffs(centres, sizes, 'venom', shrink);
+    if (reach >= 1) dottedWedge(g, zone.x, zone.y, zone.angle, zone.halfAngle, zone.radius * (1 + 0.06 * (t - Z.sweepTravel)), Z.splash, shrink);
+  }
+
+  /**
+   * Something lobbed from `from` onto `to`, `s` of the way there: up from her
+   * mouth into an arc and down. Its shadow runs along the ground below it, so
+   * the landing spot reads before it gets there; a short trail follows it.
+   */
+  private drawLob(from: Point, to: Point, s: number, radius: number): void {
+    const Z = THEME.playerZone;
+    const dist = Math.hypot(to.x - from.x, to.y - from.y);
+    const peak = Z.boltArcPx + dist * Z.boltArcPerPx;
+    const at = (u: number) => ({
+      x: from.x + (to.x - from.x) * u,
+      y: from.y + (to.y - from.y) * u,
+      h: Z.boltMouthPx * (1 - u) + 4 * peak * u * (1 - u),
+    });
     const now = at(s);
-    pixelDisc(this.gfx, now.x, now.y, 3, Z.boltShadow, Z.boltShadowAlpha * (0.4 + 0.6 * s), 3);
-    // A short trail of venom behind the head of the bolt.
+    pixelDisc(this.gfx, now.x, now.y, Math.max(3, radius * 0.5), Z.boltShadow, Z.boltShadowAlpha * (0.4 + 0.6 * s), 3);
     for (let k = Z.boltTrail; k >= 1; k--) {
       const back = at(Math.max(0, s - k * Z.boltTrailStep));
-      pixelDisc(this.air, back.x, back.y - back.h, Z.boltRadius * (1 - k / (Z.boltTrail + 1)), Z.bolt, 0.9 - k * 0.2, 3);
+      pixelDisc(this.air, back.x, back.y - back.h, radius * (1 - k / (Z.boltTrail + 1)), Z.bolt, 0.9 - k * 0.2, 3);
     }
-    pixelDisc(this.air, now.x, now.y - now.h, Z.boltRadius, Z.bolt, 1, 3);
-    pixelDisc(this.air, now.x - 1, now.y - now.h - 1, Z.boltRadius / 2, Z.boltCore, 1, 3);
+    pixelDisc(this.air, now.x, now.y - now.h, radius, Z.bolt, 1, 3);
+    pixelDisc(this.air, now.x - 1, now.y - now.h - 1, radius / 2, Z.boltCore, 1, 3);
   }
 
-  private drops(x: number, y: number, r: number, n: number, alpha: number, turn: number): void {
-    const Z = THEME.playerZone;
+  private drops(x: number, y: number, r: number, n: number, alpha: number, turn: number, color: number): void {
     for (let d = 0; d < n; d++) {
       const a = (d / n) * Math.PI * 2 + turn;
-      pixelDisc(this.gfx, x + Math.cos(a) * r, y + Math.sin(a) * r, 2, Z.splash, alpha, 3);
+      pixelDisc(this.gfx, x + Math.cos(a) * r, y + Math.sin(a) * r, 2, color, alpha, 3);
     }
   }
 
-  /** A zone landed: a circle splashes out, a cone flashes. */
+  /** A zone resolved: a circle bursts open, a cone sends its wave out. */
   landed(zone: PlacedZone, nowMs: number): void {
-    this.splashes.push({ zone, at: nowMs });
+    if (zone.kind === 'cone') this.sweeps.push({ zone, at: nowMs });
+    else this.bursts.push({ x: zone.x, y: zone.y, radius: zone.radius, style: 'venom', at: nowMs });
+  }
+
+  /** A puff cluster on its own (a kit's bite, a gaze landing on an enemy). */
+  burst(x: number, y: number, radius: number, style: BurstStyle, nowMs: number): void {
+    this.bursts.push({ x, y, radius, style, at: nowMs });
   }
 
   clearSplashes(): void {
-    this.splashes.length = 0;
+    this.sweeps.length = 0;
+    this.bursts.length = 0;
   }
 
   destroy(): void {

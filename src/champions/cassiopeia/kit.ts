@@ -63,6 +63,8 @@ export class CassiopeiaKit implements Kit {
     if (slot === 'q') {
       this.zones.place({
         kind: 'circle', x: aim.x, y: aim.y, radius: Q.radius, delayMs: Q.delayMs,
+        // A glob lobbed from her body, landing as the blast goes off.
+        thrownFrom: { x: this.ctx.player.x, y: this.ctx.player.y },
         onLand: (inside) => {
           for (const e of inside) {
             this.pip(e);
@@ -148,6 +150,7 @@ export class CassiopeiaKit implements Kit {
     if (!target.active) return;
     const poisoned = target.hasStatus(POISON_STATUS, this.ctx.clock.now);
     playBite(this.ctx.scene, target, angle, poisoned);
+    this.zones.burst(target.x, target.y, target.radius * (poisoned ? 1.7 : 1.35), 'venom');
     if (poisoned) this.fangsOnPoisoned++;
     const pips = poisoned ? E.pipsOnPoisoned : E.pips;
     for (let i = 0; i < pips && target.active; i++) this.pip(target);
@@ -166,6 +169,8 @@ export class CassiopeiaKit implements Kit {
     for (const e of inside) {
       const toPlayer = Math.atan2(player.y - e.y, player.x - e.x);
       const facing = Math.cos(e.heading - toPlayer) > 0;
+      // A puff where the gaze catches each one: stone for the petrified, venom for the rest.
+      this.zones.burst(e.x, e.y, e.radius * 1.5, facing ? 'stone' : 'venom');
       this.pip(e);
       if (!e.active) continue;
       if (facing) {

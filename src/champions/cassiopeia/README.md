@@ -35,8 +35,14 @@ the slow and for setting up E, not for damage on its own. **Spellcasters** (the 
 Sovereign) can't be poisoned to death: poisoned above one pip, it wears them down to one and
 stops, so tagging one with Q and running doesn't kill it. Poisoned at one pip, it can.
 
-**Q and W are telegraphed.** Q lands 400ms after you place it; the purple disc swelling
-to the edge is the countdown, and anything that walks out before it lands is missed. Q is
+**One feel for the whole kit.** Everything she casts is venom that leaves her body, arcs
+through the air with its shadow on the ground, and bursts open where it lands into soft,
+blotchy puffs that pop a little past their size, splatter droplets and shrink away. W set
+the tone; Q, E and R now share it. It's all look: no timing changed.
+
+**Q and W are telegraphed.** Q lands 400ms after you place it: a glob of venom is lobbed
+from her onto a faint ring marking the spot, and the blast goes off as it lands, bursting
+into a cluster of puffs. Anything that walks out of the ring before then is missed. Q is
 small on purpose: in League it's about three champion radii wide, so you aim it at one
 enemy, from a little further out than your auto.
 
@@ -55,17 +61,18 @@ closes in around you to show the reach. Either way the cooldown doesn't start. I
 is its own: autos never reset it and it never resets autos.
 
 **E bites.** She rears back with her jaws opening, then lunges as two fangs leave her. They
-weave apart in flight and meet again in the target, snapping shut across it. A poisoned
-target takes a second, wider bite that closes a beat later, a bigger burst, and a short
-screen shake: that's the two pips.
+weave apart in a shallow arc and meet again in the target, snapping shut across it in a
+burst of venom puffs. A poisoned target takes a second, wider bite that closes a beat
+later, a bigger burst, and a short screen shake: that's the two pips.
 
 **W-Flash and R-Flash.** Flash during either cast and the spell comes out of her where
 she lands, aimed the same way: W's bolts leave from the Flash destination and the wall lands
 as far ahead of her as you aimed it; R's cone strikes from there.
 
 **R is a half-second cast.** As in League, she's rooted for 500ms while the cone fills
-toward the cursor, and it strikes the instant the cast ends. A move order given during it
-waits, and goes as soon as the gaze lands.
+toward the cursor, and it strikes the instant the cast ends: a wave of venom puffs sweeps
+out from her to the cone's edge, and a puff bursts on every enemy it catches, stone on the
+ones it petrifies. A move order given during it waits, and goes as soon as the gaze lands.
 
 **R reads facing.** An enemy is *facing you* when its heading points toward you: walking at
 you, or standing still having last walked at you. Those are petrified (stunned, with a

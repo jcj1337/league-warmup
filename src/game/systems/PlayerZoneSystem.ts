@@ -14,12 +14,17 @@ import { PlayerZoneView } from '../view/PlayerZoneView';
  * timing, on the GameClock, so a pause freezes every deadline.
  */
 
+/** How a burst of puffs looks (THEME.playerZone.styles). */
+export type BurstStyle = 'venom' | 'stone';
+
 export interface CircleZone {
   kind: 'circle';
   x: number;
   y: number;
   radius: number;
   delayMs: number;
+  /** Thrown: drawn as a glob lobbed from here, landing as the zone resolves. Look only. */
+  thrownFrom?: { x: number; y: number };
   /** The deadline: every active enemy whose body overlaps the circle. */
   onLand: (inside: Enemy[]) => void;
 }
@@ -126,6 +131,11 @@ export class PlayerZoneSystem {
     }
 
     this.view.draw(this.zones, this.clouds, nowMs);
+  }
+
+  /** A puff cluster where a kit asks for one: a bite landing, an enemy caught by a gaze. Look only. */
+  burst(x: number, y: number, radius: number, style: BurstStyle): void {
+    this.view.burst(x, y, radius, style, this.now);
   }
 
   /** Drop everything without resolving it (round end, restart). */

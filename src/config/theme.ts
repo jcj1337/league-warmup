@@ -467,8 +467,9 @@ export const THEME = {
    * and a short shake.
    */
   twinFang: {
-    /** How far apart the two fangs weave at mid-flight. */
+    /** How far apart the two fangs weave at mid-flight, and how high they arc. */
     weavePx: 9,
+    arcPx: 14,
     /** Each fang starts this far outside the target's edge and snaps to `biteDepth` of its radius inside it. */
     biteGapPx: 14,
     biteDepth: 0.45,
@@ -640,9 +641,9 @@ export const THEME = {
 
   /**
    * The player's ground spells (PlayerZoneView): Cassiopeia's purple, never
-   * the red that means "this hurts you". A telegraph fills from its centre
-   * over its delay and splashes when it lands; a cloud is overlapping plum
-   * puffs with dark blotches and motes drifting up.
+   * the red that means "this hurts you". One language for all of them: venom
+   * lobbed from her body, landing in opaque blotchy puffs that pop open with
+   * a little overshoot, splatter droplets and shrink away.
    */
   playerZone: {
     fill: P.toxinDeep,
@@ -654,20 +655,42 @@ export const THEME = {
     edge: P.toxin,
     edgeAlphaStart: 0.5,
     edgeAlphaEnd: 1,
-    /** The landing splash: a ring and droplets thrown out past the edge. */
+    /** Droplets and rings thrown out where something lands; the gaze's wash. */
     splash: P.toxinLight,
-    splashMs: 260,
     splashDrops: 8,
     /**
      * The puffs are opaque: translucent ones would stack where they overlap and
      * read as a string of beads, not one cloud. They shrink away instead of fading.
+     * Venom for her spells; stone where the gaze petrifies.
      */
-    cloudRim: P.miasma,
+    styles: {
+      venom: { rim: P.miasma, fill: P.miasmaDeep, blotch: P.toxinDeepest, drop: P.toxinLight },
+      stone: { rim: P.stone, fill: P.stoneDeep, blotch: P.ink, drop: P.stoneCore },
+    },
     /** How far the rim shows past each puff. */
     cloudRimPx: 3,
-    cloudFill: P.miasmaDeep,
-    blotch: P.toxinDeepest,
     blotchAlpha: 0.7,
+    /** A thrown circle (her Q): the glob in flight, bigger than W's bolts. */
+    globRadius: 10,
+    /**
+     * A burst (Q landing, a bite, an enemy caught by the gaze): a big puff and
+     * a ring of smaller ones popping a beat apart, held, then shrinking away.
+     */
+    burstMs: 480,
+    burstHoldFraction: 0.5,
+    burstCore: 0.8,
+    burstSide: 0.5,
+    /** How far out the side puffs sit, as a fraction of the burst's radius. */
+    burstSpread: 0.6,
+    burstPuffs: 5,
+    burstStaggerMs: 22,
+    burstSplatMs: 240,
+    /** The gaze's wave: it reaches the cone's edge over `sweepTravel` of `sweepMs`, then shrinks away. */
+    sweepMs: 540,
+    sweepTravel: 0.42,
+    sweepWashAlpha: 0.3,
+    sweepPuffSpacing: 26,
+    sweepPuffRadius: 16,
     /** A thrown cloud's puff bursts open over this long where its bolt lands, and splats droplets for the next. */
     puffPopMs: 140,
     puffSplatMs: 220,

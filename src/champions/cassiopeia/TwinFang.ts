@@ -13,7 +13,8 @@ import { ProjectileView } from '../../game/view/ProjectileView';
  *
  * Gameplay is one point travelling at `speed`; the two fangs are drawn either
  * side of it, `weavePx * sin(pi * travelled)` apart, so they start and end
- * together.
+ * together, and lifted into a shallow arc (`arcPx` at mid-flight), like the
+ * venom she lobs with Q and W.
  */
 export class TwinFang {
   alive = true;
@@ -68,8 +69,9 @@ export class TwinFang {
     const ny = Math.cos(angle);
     // Each fang angles out, then back in, along with its weave.
     const lean = Math.cos(Math.PI * travelled) * 0.35;
-    this.fangs[0].sync(this.x + nx * spread, this.y + ny * spread, deltaSeconds, angle + lean);
-    this.fangs[1].sync(this.x - nx * spread, this.y - ny * spread, deltaSeconds, angle - lean);
+    const lift = 4 * THEME.twinFang.arcPx * Math.max(0, travelled) * (1 - Math.max(0, travelled));
+    this.fangs[0].sync(this.x + nx * spread, this.y + ny * spread - lift, deltaSeconds, angle + lean);
+    this.fangs[1].sync(this.x - nx * spread, this.y - ny * spread - lift, deltaSeconds, angle - lean);
   }
 
   kill(): void {
