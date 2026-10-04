@@ -18,6 +18,9 @@ export type CastPayload = Aim;
 interface PendingCast {
   ability: CastAbility;
   payload: CastPayload;
+  /** Where she stood when the key went down; the aim travels with her from here. */
+  fromX: number;
+  fromY: number;
   startedAt: number;
   endsAt: number;
   durationMs: number;
@@ -40,6 +43,10 @@ interface CastCallbacks {
  * ability inputs are ignored, but move, attack-move and attack orders are
  * BUFFERED and replayed the instant the cast resolves — committed, but never
  * unresponsive. Stop discards a buffered order without touching the cast.
+ *
+ * Flash is the one thing that can move her mid-cast, and the cast goes with
+ * her, as in League (W-Flash, R-Flash): it resolves from where she is at the
+ * end of the window, aimed the same relative to her as when it was committed.
  *
  * All timing is GameClock time, so a pause preserves partial cast progress
  * exactly: nothing is rescheduled, the clock simply stops advancing.
@@ -76,9 +83,16 @@ export class CastSystem {
     return Math.min(1, Math.max(0, 1 - remaining / this.pending.durationMs));
   }
 
-  /** Where the pending cast is aimed, for the directional charge visual. */
+  /** Where the pending cast is aimed right now: the committed aim, carried along by a mid-cast Flash. */
   get aim(): CastPayload | null {
-    return this.pending?.payload ?? null;
+    return this.pending ? this.carried(this.pending) : null;
+  }
+
+  private carried(cast: PendingCast): CastPayload {
+    const dx = this.player.x - cast.fromX;
+    const dy = this.player.y - cast.fromY;
+    if (dx === 0 && dy === 0) return cast.payload;
+    return { ...cast.payload, x: cast.payload.x + dx, y: cast.payload.y + dy };
   }
 
   /**
@@ -89,6 +103,8 @@ export class CastSystem {
     this.pending = {
       ability,
       payload,
+      fromX: this.player.x,
+      fromY: this.player.y,
       startedAt: nowMs,
       endsAt: nowMs + durationMs,
       durationMs,
@@ -118,7 +134,8 @@ export class CastSystem {
     this.now = nowMs;
     if (!this.pending || nowMs < this.pending.endsAt) return;
 
-    const { ability, payload } = this.pending;
+    const { ability } = this.pending;
+    const payload = this.carried(this.pending);
     this.pending = null;
     this.player.releaseRoot();
     this.lastResolveAt = nowMs;

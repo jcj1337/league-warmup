@@ -39,6 +39,18 @@ export type Targeting = 'direction' | 'point' | 'unit' | 'self';
 /** The charge-up drawn on the slime during the cast window (PlayerView). */
 export type CastStyle = 'bolt' | 'orb' | 'blink' | 'none';
 
+/**
+ * A shape drawn on the ground during the cast window, from the player toward
+ * the aim, filling with the cast's progress (CastTelegraphView). For a spell
+ * that goes off the moment its cast ends, so the window itself is the warning.
+ */
+export interface CastTelegraph {
+  kind: 'cone';
+  radius(): number;
+  /** Half the opening, in radians. */
+  halfAngle(): number;
+}
+
 /** Which THEME.fx entry colours a slot's effects. Grows with each champion. */
 export type FxKey = 'q' | 'w' | 'e' | 'poison' | 'miasma' | 'fang' | 'gaze';
 
@@ -56,6 +68,8 @@ export interface AbilityDef {
   /** Slot frame colour. */
   accent: number;
   castStyle: CastStyle;
+  /** Drawn on the ground through the cast window; none for most slots. */
+  telegraph?: CastTelegraph;
   fx: FxKey;
 }
 

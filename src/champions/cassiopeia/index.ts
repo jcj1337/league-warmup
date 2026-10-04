@@ -41,6 +41,7 @@ export const CASSIOPEIA: Champion = {
     r: {
       label: 'Petrifying Gaze', targeting: 'direction',
       castTimeMs: () => R.castTimeMs, cooldownMs: () => R.cooldownMs,
+      telegraph: { kind: 'cone', radius: () => R.radius, halfAngle: () => R.halfAngle },
       icon: TEX.icons.cassioR, accent: THEME.ability.accents.stone, castStyle: 'orb', fx: 'gaze',
     },
   },

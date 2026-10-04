@@ -12,7 +12,7 @@ shared across champions: see the main README's [Controls](../../../README.md#con
 | Q, Noxious Blast | ground point | 150ms | 3500ms† | 400, blast radius 45 | 1 on landing, then poison |
 | W, Miasma | ground point | 150ms | 12000ms† | 330; a wall of 7 clouds across your aim, ~180 × 60 | 0; slows 35% and poisons inside |
 | E, Twin Fang | the enemy nearest the cursor | 150ms | 800ms† | 400 | 1, **2 if poisoned** |
-| R, Petrifying Gaze | cone toward the cursor | 200ms | 45000ms†, **back at every stage clear** | 420, 80° wide | 1; **stuns enemies facing you** 1.5s, slows the rest 50% |
+| R, Petrifying Gaze | cone toward the cursor | 500ms, rooted; strikes as it ends | 45000ms†, **back at every stage clear** | 420, 80° wide | 1; **stuns enemies facing you** 1.5s, slows the rest 50% |
 | F | cursor | instant | 20000ms | 275 | — |
 
 \* her level-1 auto cycle is 950ms (Ezreal's is 700ms), +3% attack speed per level; the
@@ -34,13 +34,23 @@ enemy, from a little further out than your auto.
 **W is a wall, not a circle.** As in League, she spits venom in an arc: seven clouds land
 side by side *across* your aim, the middle one on the cursor, bowing slightly away from
 her. Lay it across a path to cut it off; an enemy just past the cursor along your aim line
-is not inside. It lingers 4s and re-applies its slow and poison every half second to
+is not inside. The clouds are *thrown*: seven venom bolts leave her body in a fan and lob
+onto their spots (1200px/s), each cloud bursting open where its bolt lands, and the cloud
+takes hold once they're all down. It lingers 4s and re-applies its slow and poison every half second to
 whatever touches any of the clouds.
 
 **E is point-and-click.** It takes the enemy nearest your cursor whose body is within 400px
 of you, like a quick-cast point-and-click in League; with nothing in range it doesn't cast
 and the cooldown doesn't start. Its cooldown is its own: autos never reset it and it never
 resets autos.
+
+**W-Flash and R-Flash.** Flash during either cast and the spell comes out of her where
+she lands, aimed the same way: W's bolts leave from the Flash destination and the wall lands
+as far ahead of her as you aimed it; R's cone strikes from there.
+
+**R is a half-second cast.** As in League, she's rooted for 500ms while the cone fills
+toward the cursor, and it strikes the instant the cast ends. A move order given during it
+waits, and goes as soon as the gaze lands.
 
 **R reads facing.** An enemy is *facing you* when its heading points toward you: walking at
 you, or standing still having last walked at you. Those are petrified (stunned, with a

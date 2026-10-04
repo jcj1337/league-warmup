@@ -61,6 +61,11 @@ export const W = {
    * so a W at her feet is a gentle curve, not a ring around her.
    */
   arcMinRadius: 220,
+  /**
+   * The bolts are lobbed from her body at this speed, and the cloud acts once
+   * they're all down. League's 3000 is ~1400 here; a touch slower so the lob reads.
+   */
+  boltSpeed: 1200,
   durationMs: 4000,
   /** How often the cloud re-applies its slow and poison. */
   tickMs: 500,
@@ -82,13 +87,17 @@ export const E = {
   boltRadius: 6,
 };
 
-/** R, Petrifying Gaze: a cone. Enemies facing her are stunned; the rest are slowed. One pip to all. */
+/**
+ * R, Petrifying Gaze: a cone. Enemies facing her are stunned; the rest are slowed. One pip to all.
+ * As in League it has a half-second cast and strikes the moment the cast ends: she's rooted
+ * throughout, and the cone telegraph is the cast window itself. Flash mid-cast and it strikes
+ * from where she lands (R-Flash).
+ */
 export const R = {
   radius: 420,
   /** Half the opening, in radians (40°). */
   halfAngle: 0.698,
-  delayMs: 350,
-  castTimeMs: 200,
+  castTimeMs: 500,
   cooldownMs: 45000,
   stunMs: 1500,
   slowFraction: 0.5,

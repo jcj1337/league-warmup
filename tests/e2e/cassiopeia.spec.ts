@@ -112,6 +112,42 @@ test('cassiopeia: picked from the profile, slow autos, Q blast + poison ticks, W
   await page.waitForTimeout(cfg.W.durationMs);
   (await G()).clouds === 0 ? pass(`the cloud expires after ${cfg.W.durationMs}ms`) : fail('cloud still there');
 
+  // The clouds are thrown: bolts lobbed from her body, and nothing happens until they land.
+  await stage(800, 360, 3);
+  await page.mouse.move(800, 360);
+  await page.keyboard.press('w');
+  await page.waitForFunction(() => window.__warmup.scene.getScene('GameScene').kit.zones.clouds.length === 1, null, { timeout: 2000 });
+  const thrown = await page.evaluate(() => {
+    const g = window.__warmup.scene.getScene('GameScene');
+    const c = g.kit.zones.clouds[0];
+    return {
+      from: c.thrownFrom, px: g.player.x, py: g.player.y, inFlight: c.landsAt > g.clock.now,
+      flightMs: c.landsAt - c.placedAt, poisoned: g.director.enemies[0].hasStatus('cassiopeia.poison', g.clock.now),
+    };
+  });
+  thrown.from && Math.abs(thrown.from.x - thrown.px) < 1 && Math.abs(thrown.from.y - thrown.py) < 1 && thrown.inFlight && !thrown.poisoned
+    ? pass(`W's bolts leave her body and land ${Math.round(thrown.flightMs)}ms later; nothing is poisoned while they fly`)
+    : fail(`W thrown: ${JSON.stringify(thrown)}`);
+  await page.waitForTimeout(thrown.flightMs + 80);
+  (await G()).enemies[0].poisoned ? pass('once the bolts land, the cloud takes hold') : fail('not poisoned after the bolts landed');
+
+  // W-Flash: Flash during the cast and W comes out of her where she lands, aimed the same way.
+  await stage(1100, 600, 3);
+  await page.mouse.move(800, 360);
+  await page.keyboard.press('w');
+  await page.mouse.move(640, 560);
+  await page.keyboard.press('f');
+  await page.waitForFunction(() => window.__warmup.scene.getScene('GameScene').kit.zones.clouds.length === 1, null, { timeout: 2000 });
+  const wf = await page.evaluate(() => {
+    const g = window.__warmup.scene.getScene('GameScene');
+    const c = g.kit.zones.clouds[0];
+    return { x: c.x, y: c.y, from: c.thrownFrom, px: g.player.x, py: g.player.y, flashCd: g.cooldowns.remainingMs('flash') };
+  });
+  wf.flashCd > 0 && Math.abs(wf.py - 560) < 1 && Math.abs(wf.x - (wf.px + 160)) < 1 && Math.abs(wf.y - wf.py) < 1 &&
+    wf.from && Math.abs(wf.from.y - wf.py) < 1
+    ? pass(`W-Flash: Flash mid-cast and the bolts leave from where she lands, the cloud 160px ahead of her as aimed`)
+    : fail(`W-Flash: ${JSON.stringify(wf)}`);
+
   // The field is a wall across her aim, not a disc: an enemy off to the side of
   // the aim point is inside, one the same distance straight behind it is not.
   await stage(800, 440, 3);                   // 80px to the side of the aim point
@@ -186,8 +222,21 @@ test('cassiopeia: picked from the profile, slow autos, Q blast + poison ticks, W
   });
   await page.mouse.move(900, 360);
   await page.keyboard.press('r');
-  await page.waitForTimeout(cfg.R.castTimeMs + cfg.R.delayMs + 120);
+  // She's rooted until the gaze strikes: a move order mid-cast waits for it.
+  await page.mouse.click(400, 200, { button: 'right' });        // clear of the HUD panels
+  await page.waitForTimeout(cfg.R.castTimeMs / 2);
+  const midR = await page.evaluate(() => {
+    const g = window.__warmup.scene.getScene('GameScene');
+    return { x: g.player.x, y: g.player.y, casting: g.cast.castingAbility, hp: g.director.enemies.map((e) => e.hp) };
+  });
+  midR.casting === 'r' && Math.abs(midR.x - 640) < 1 && Math.abs(midR.y - 360) < 1 && midR.hp.every((h) => h === 3)
+    ? pass(`R: ${cfg.R.castTimeMs}ms cast, rooted throughout; a move order waits and nothing is hit yet`)
+    : fail(`R mid-cast: ${JSON.stringify(midR)}`);
+  await page.waitForTimeout(cfg.R.castTimeMs / 2 + 120);
   const gaze = await G();
+  Math.hypot(gaze.player.x - 640, gaze.player.y - 360) > 1
+    ? pass('the gaze strikes and the waiting move order goes')
+    : fail(`no move after R: ${JSON.stringify(gaze.player)}`);
   const [facing, away] = gaze.enemies;
   facing.hp === 2 && facing.dazed && facing.petrified && facing.slow === 1 &&
     away.hp === 2 && !away.dazed && Math.abs(away.slow - (1 - cfg.R.slowFraction)) < 1e-6 && gaze.stats.gazeStuns === 1

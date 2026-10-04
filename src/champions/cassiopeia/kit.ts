@@ -9,10 +9,14 @@ import { E, GAZE_SLOW, MIASMA_SLOW, PETRIFY_STATUS, POISON, POISON_STATUS, Q, R,
  * Cassiopeia's kit, for one run.
  *
  *   Q  Noxious Blast     a delayed blast at a ground point: one pip, and poison
- *   W  Miasma            a wall of clouds across her aim: enemies inside are slowed and poisoned
+ *   W  Miasma            venom lobbed into a wall of clouds across her aim: enemies inside are
+ *                        slowed and poisoned
  *   E  Twin Fang         a quick point-and-click bolt: one pip, two on a poisoned target
- *   R  Petrifying Gaze   a cone: enemies facing her are stunned, the rest slowed; one pip to all;
- *                        back at every stage clear
+ *   R  Petrifying Gaze   a cone, striking as its cast ends: enemies facing her are stunned, the
+ *                        rest slowed; one pip to all; back at every stage clear
+ *
+ * Every slot resolves from where she stands when its cast ends, so a mid-cast
+ * Flash carries W and R with her (the engine shifts the aim; see CastSystem).
  *
  * Poison is a status on the enemy ('cassiopeia.poison') plus a tick schedule
  * kept here: a pip every POISON.tickMs while it lasts. Every pip goes through
@@ -63,8 +67,11 @@ export class CassiopeiaKit implements Kit {
         },
       }, now);
     } else if (slot === 'w') {
+      const { player } = this.ctx;
       this.zones.placeCloud({
-        x: aim.x, y: aim.y, puffs: this.miasmaPuffs(aim), radius: W.puffRadius, durationMs: W.durationMs, tickMs: W.tickMs,
+        x: aim.x, y: aim.y, puffs: this.miasmaPuffs(aim), radius: W.puffRadius,
+        thrownFrom: { x: player.x, y: player.y, speed: W.boltSpeed },
+        durationMs: W.durationMs, tickMs: W.tickMs,
         onTick: (inside) => {
           const t = this.ctx.clock.now;
           for (const e of inside) {
@@ -86,10 +93,10 @@ export class CassiopeiaKit implements Kit {
     } else if (slot === 'r') {
       const { player } = this.ctx;
       const angle = Math.atan2(aim.y - player.y, aim.x - player.x);
-      this.zones.place({
-        kind: 'cone', x: player.x, y: player.y, angle, radius: R.radius, halfAngle: R.halfAngle, delayMs: R.delayMs,
+      this.zones.strike({
+        kind: 'cone', x: player.x, y: player.y, angle, radius: R.radius, halfAngle: R.halfAngle, delayMs: 0,
         onLand: (inside) => this.gaze(inside),
-      }, now);
+      }, now, this.ctx.enemies());
     }
   }
 

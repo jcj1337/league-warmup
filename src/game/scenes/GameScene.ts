@@ -26,6 +26,7 @@ import { AbilityCooldowns, type AbilityId } from '../systems/AbilityCooldowns';
 import { BlinkSystem } from '../systems/BlinkSystem';
 import { CastSystem, type CastAbility, type CastPayload } from '../systems/CastSystem';
 import { InputController, type CommandHandler } from '../systems/InputController';
+import { CastTelegraphView } from '../view/CastTelegraphView';
 import { Battlefield } from '../view/Battlefield';
 import { Fx } from '../view/Fx';
 import { RunFeedback } from '../view/RunFeedback';
@@ -84,6 +85,8 @@ export class GameScene extends Phaser.Scene {
   private cooldowns!: AbilityCooldowns;
   private blink!: BlinkSystem;
   private cast!: CastSystem;
+  /** The casting slot's ground telegraph, if it has one (AbilityDef.telegraph). */
+  private castTelegraph!: CastTelegraphView;
   /** Last cast resolve we have already flashed for. */
   private lastCastShownAt = -Infinity;
 
@@ -234,6 +237,7 @@ export class GameScene extends Phaser.Scene {
     this.cast = new CastSystem(this.player, {
       onResolve: (ability, payload) => this.resolveCast(ability, payload),
     });
+    this.castTelegraph = new CastTelegraphView(this);
 
     this.inputs = new InputController(this, this.commandHandler());
     if (this.run.isAwaitingStart) this.tweens.pauseAll();
@@ -287,8 +291,10 @@ export class GameScene extends Phaser.Scene {
 
       // Flash stays instant, deliberately: it should feel more immediate than a
       // blink slot. It cannot break a stun — dodging the orb is the counterplay.
+      // It can go off mid-cast, and the cast resolves from where she lands
+      // (W-Flash, R-Flash: see CastSystem).
       castFlash: (x, y) => {
-        if (!this.canAct) return;
+        if (this.player.isStunned) return;
         this.blink.castFlash(x, y);
       },
 
@@ -580,6 +586,9 @@ export class GameScene extends Phaser.Scene {
       aim ? aim.x : null,
       aim ? aim.y : null,
     );
+    const casting = this.cast.castingAbility;
+    const telegraph = casting ? this.champion.slots[casting]?.telegraph ?? null : null;
+    this.castTelegraph.draw(telegraph, this.player.x, this.player.y, aim ? aim.x : 0, aim ? aim.y : 0, this.cast.progress);
 
     // 3. ...and only now does the player move and redraw.
     this.player.update(dt);

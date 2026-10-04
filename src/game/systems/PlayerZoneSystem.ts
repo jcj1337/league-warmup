@@ -4,8 +4,10 @@ import { PlayerZoneView } from '../view/PlayerZoneView';
 
 /**
  * Ground spells the player owns: telegraphed shapes that resolve against the
- * enemies inside them at their deadline, and clouds (one or more overlapping
- * puffs) that linger and act on whoever is inside at each tick.
+ * enemies inside them at their deadline (or at once: `strike`), and clouds
+ * (one or more overlapping puffs) that linger and act on whoever is inside at
+ * each tick. A cloud can be thrown: each puff is a bolt lobbed from the
+ * caster, and the cloud acts once they have all landed.
  *
  * The mirror of HostileSpellSystem, which resolves against the player. A kit
  * places zones and says what landing means; this does the geometry and the
@@ -46,12 +48,23 @@ export interface CloudSpec {
   puffs: readonly { x: number; y: number }[];
   /** Every puff's radius. */
   radius: number;
+  /** Thrown: each puff flies from here at `speed` px/s. Without it the cloud is there at once. */
+  thrownFrom?: { x: number; y: number; speed: number };
+  /** From the moment it lands. */
   durationMs: number;
   tickMs: number;
-  /** Every tick (the first at once): the active enemies inside right now. */
+  /** Every tick (the first on landing): the active enemies inside right now. */
   onTick: (inside: Enemy[]) => void;
 }
-export type PlacedCloud = CloudSpec & { placedAt: number; expiresAt: number; nextTickAt: number };
+export type PlacedCloud = CloudSpec & {
+  placedAt: number;
+  /** When each puff's bolt lands (placedAt when not thrown). Read by the view. */
+  puffLandsAt: number[];
+  /** The last bolt is down: the cloud acts from here. */
+  landsAt: number;
+  expiresAt: number;
+  nextTickAt: number;
+};
 
 export class PlayerZoneSystem {
   readonly zones: PlacedZone[] = [];
@@ -70,8 +83,22 @@ export class PlayerZoneSystem {
     this.zones.push({ ...spec, placedAt: nowMs, resolveAt: nowMs + spec.delayMs });
   }
 
+  /** Resolve a zone right now, against the enemies inside it this instant (its delayMs is ignored). */
+  strike(spec: ZoneSpec, nowMs: number, enemies: readonly Enemy[]): void {
+    this.resolve({ ...spec, placedAt: nowMs, resolveAt: nowMs }, nowMs, enemies);
+  }
+
   placeCloud(spec: CloudSpec, nowMs: number): void {
-    this.clouds.push({ ...spec, placedAt: nowMs, expiresAt: nowMs + spec.durationMs, nextTickAt: nowMs });
+    const from = spec.thrownFrom;
+    const puffLandsAt = spec.puffs.map((p) => (from && from.speed > 0 ? nowMs + (Math.hypot(p.x - from.x, p.y - from.y) / from.speed) * 1000 : nowMs));
+    const landsAt = Math.max(nowMs, ...puffLandsAt);
+    this.clouds.push({ ...spec, placedAt: nowMs, puffLandsAt, landsAt, expiresAt: landsAt + spec.durationMs, nextTickAt: landsAt });
+  }
+
+  private resolve(zone: PlacedZone, nowMs: number, enemies: readonly Enemy[]): void {
+    this.zonesResolved++;
+    this.view.landed(zone, nowMs);
+    zone.onLand(enemies.filter((e) => e.active && inside(zone, e)));
   }
 
   update(_deltaSeconds: number, nowMs: number, enemies: readonly Enemy[]): void {
@@ -81,9 +108,7 @@ export class PlayerZoneSystem {
       const zone = this.zones[i];
       if (nowMs < zone.resolveAt) continue;
       this.zones.splice(i, 1);
-      this.zonesResolved++;
-      this.view.landed(zone, nowMs);
-      zone.onLand(enemies.filter((e) => e.active && inside(zone, e)));
+      this.resolve(zone, nowMs, enemies);
     }
 
     for (let i = this.clouds.length - 1; i >= 0; i--) {

@@ -1,7 +1,7 @@
 import { test } from '@playwright/test';
 import { startSuite } from './support/harness';
 
-test('cast: Q/W/E cast windows, committed aim, buffered orders, lockout, Flash, pause, HUD', async ({ page }, testInfo) => {
+test('cast: Q/W/E cast windows, committed aim, buffered orders, lockout, Flash mid-cast, pause, HUD', async ({ page }, testInfo) => {
   const { pass, fail, section, finish } = await startSuite(page, testInfo, 400);
 
   const cfg = await page.evaluate(() => ({
@@ -363,11 +363,13 @@ test('cast: Q/W/E cast windows, committed aim, buffered orders, lockout, Flash, 
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'e', code: 'KeyE', bubbles: true }));
     requestAnimationFrame(() => {
       const during = { casting: g.cast.isCasting, ability: g.cast.castingAbility };
-      // Spam every other ability mid-cast.
+      // Spam every other ability mid-cast. Each with its keyCode: Phaser drops a keydown whose
+      // keyCode and timestamp match the one before, and synthetic events default to keyCode 0.
       for (const k of ['q', 'w', 'e', 'f']) {
-        window.dispatchEvent(new KeyboardEvent('keydown', { key: k, code: 'Key' + k.toUpperCase(), bubbles: true }));
+        window.dispatchEvent(new KeyboardEvent('keydown', { key: k, code: 'Key' + k.toUpperCase(), keyCode: k.toUpperCase().charCodeAt(0), bubbles: true }));
       }
-      requestAnimationFrame(() => {
+      // Two frames: Phaser handles the keys on its next step, which may run after our next callback.
+      requestAnimationFrame(() => requestAnimationFrame(() => {
         res({
           during,
           stillE: g.cast.castingAbility,
@@ -375,14 +377,15 @@ test('cast: Q/W/E cast windows, committed aim, buffered orders, lockout, Flash, 
           qCd: g.cooldowns.remainingMs('q'),
           flashCd: g.cooldowns.remainingMs('flash'),
         });
-      });
+      }));
     });
   }));
   lockout.during.casting && lockout.stillE === 'e'
     ? pass('spamming Q/W/E/F mid-cast does not overwrite the pending cast')
     : fail(`cast was disturbed: ${JSON.stringify(lockout)}`);
   lockout.qMissiles === 0 && lockout.qCd === 0 ? pass('Q is ignored during a cast') : fail('Q fired during a cast');
-  lockout.flashCd === 0 ? pass('Flash is ignored during a cast') : fail('Flash fired during a cast');
+  // Flash is the exception, as in League: it goes off mid-cast and the cast carries on from where she lands.
+  lockout.flashCd > 0 && lockout.stillE === 'e' ? pass('Flash goes off mid-cast, and the cast carries on') : fail(`Flash mid-cast: ${JSON.stringify(lockout)}`);
 
   // === Flash stays instant ===================================================
   section('Flash stays instant');

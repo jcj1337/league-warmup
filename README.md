@@ -254,7 +254,13 @@ takes it off on the next run). No cosmetic ever changes gameplay.
 
 The engine resolves the aim from the slot's `targeting` (toward the cursor, a ground
 point within range, the enemy nearest the cursor, or self), checks the cooldown, cancels
-an uncommitted auto, runs the cast window and hands the kit the committed aim.
+an uncommitted auto, runs the cast window and hands the kit the committed aim. A slot
+can also carry a `telegraph` (a cone, for now) drawn on the ground through its cast window.
+
+**Flash mid-cast.** You're rooted through a cast window, and other abilities are ignored,
+but Flash still goes off, as in League. The cast then resolves from where you land, aimed
+the same relative to you as when you pressed it: Q-Flash, W-Flash and R-Flash all carry
+the spell with you.
 
 ## Attack cycle
 

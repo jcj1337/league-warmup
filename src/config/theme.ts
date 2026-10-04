@@ -589,7 +589,8 @@ export const THEME = {
    * The player's ground spells (PlayerZoneView): Cassiopeia's purple, never
    * the red that means "this hurts you". A telegraph fills from its centre
    * over its delay and splashes when it lands; a cloud is overlapping plum
-   * puffs with dark blotches and motes drifting up.
+   * puffs with dark blotches and motes drifting up. A slot's cast telegraph
+   * (CastTelegraphView, Cassiopeia's R) uses the same fill, core and edge.
    */
   playerZone: {
     fill: P.toxinDeep,
@@ -615,6 +616,22 @@ export const THEME = {
     cloudFill: P.miasmaDeep,
     blotch: P.toxinDeepest,
     blotchAlpha: 0.7,
+    /** A thrown cloud's puff bursts open over this long where its bolt lands, and splats droplets for the next. */
+    puffPopMs: 140,
+    puffSplatMs: 220,
+    puffSplatDrops: 5,
+    /** The bolts in flight: a lob from her mouth, peaking higher the further it goes. */
+    bolt: P.toxin,
+    boltCore: P.toxinLight,
+    boltRadius: 8,
+    boltMouthPx: 10,
+    boltArcPx: 12,
+    boltArcPerPx: 0.12,
+    /** Trail blobs behind the bolt, each this much further back along its flight (0..1). */
+    boltTrail: 3,
+    boltTrailStep: 0.05,
+    boltShadow: P.ink,
+    boltShadowAlpha: 0.45,
     cloudPulseMs: 1400,
     /** Motes per puff. */
     cloudMotes: 2,

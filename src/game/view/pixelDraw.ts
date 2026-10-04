@@ -54,6 +54,34 @@ export function dottedLine(
   }
 }
 
+/** The outline of a cone from (cx, cy): its tip, then the arc. For fillPoints. */
+export function wedgePoints(cx: number, cy: number, angle: number, halfAngle: number, r: number, steps = 12): { x: number; y: number }[] {
+  const pts = [{ x: cx, y: cy }];
+  for (let i = 0; i <= steps; i++) {
+    const a = angle - halfAngle + (2 * halfAngle * i) / steps;
+    pts.push({ x: cx + Math.cos(a) * r, y: cy + Math.sin(a) * r });
+  }
+  return pts;
+}
+
+/** A cone's dotted edge: the arc and both sides. */
+export function dottedWedge(
+  g: Phaser.GameObjects.Graphics,
+  cx: number,
+  cy: number,
+  angle: number,
+  halfAngle: number,
+  r: number,
+  color: number,
+  alpha: number,
+): void {
+  dottedRing(g, cx, cy, r, color, alpha, 3, angle - halfAngle, angle + halfAngle);
+  for (const side of [-1, 1]) {
+    const a = angle + side * halfAngle;
+    dottedLine(g, cx, cy, cx + Math.cos(a) * r, cy + Math.sin(a) * r, color, alpha);
+  }
+}
+
 /** A filled disc built from `cell`-sized squares — a chunky pixel orb. */
 export function pixelDisc(
   g: Phaser.GameObjects.Graphics,
