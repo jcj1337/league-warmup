@@ -11,6 +11,7 @@ test('waves: stage/wave progression, variable waves per stage, finite rosters, b
     return {
       run: window.__balance.RUN,
       endless: window.__balance.ENDLESS,
+      enemies: window.__balance.ENEMIES,
       authored: window.__balance.STAGES,
       stages,
       // What each wave actually fields.
@@ -26,6 +27,8 @@ test('waves: stage/wave progression, variable waves per stage, finite rosters, b
   const lastStage = cfg.stages.length;
   const rosterOf = (stage, wave) => cfg.rosters[stage - 1][wave - 1];
   const sizeOf = (roster): number => Object.values(roster).reduce((a: any, b: any) => a + b, 0) as number;
+  /** What a roster cost to field: bodies × each mob's budget cost (a heavy pick is fewer, dearer bodies). */
+  const costOf = (roster): number => Object.entries(roster).reduce((sum, [type, n]) => sum + (n as number) * cfg.enemies[type].cost, 0);
   /** Where the run goes after clearing `wave` of `stage` (not the final wave), per the table. */
   const nextAfter = (stage, wave) => wave < waveCounts[stage - 1]
     ? { stage, wave: wave + 1, kind: 'wave', delay: cfg.run.interWaveDelayMs, clearText: 'WAVE CLEAR', banner: `WAVE ${wave + 1}` }
@@ -396,12 +399,13 @@ test('waves: stage/wave progression, variable waves per stage, finite rosters, b
   {
     // Each wave keeps its authored mix and never shrinks below it.
     const short = table.find((t) => (t.s < cfg.authored.length && t.roster.length < sizeOf(cfg.authored[t.s].waves[t.w])) || !t.roster.every((e) => e.active));
-    // Generated waves buy mobs from a budget, so heavier picks mean fewer bodies:
-    // sizes trend upward rather than rising every single stage.
+    // Generated waves buy mobs from a budget, so heavier picks mean fewer bodies
+    // on any one roll: what grows with the stage is the budget spent, not the count.
     const firstSizes = cfg.rosters.map((st) => sizeOf(st[0]));
-    !short && firstSizes[firstSizes.length - 1] >= 2 * firstSizes[0]
-      ? pass(`hand-written waves never shrink below their authored size, and waves grow with the stage (Wave 1 sizes ${firstSizes.join(' / ')})`)
-      : fail(`wave sizes: ${JSON.stringify(short ?? firstSizes)}`);
+    const firstCosts = cfg.rosters.map((st) => costOf(st[0]));
+    !short && firstCosts[firstCosts.length - 1] >= 2 * firstCosts[0]
+      ? pass(`hand-written waves never shrink below their authored size, and waves grow with the stage (Wave 1 sizes ${firstSizes.join(' / ')}, budgets ${firstCosts.map((c) => c.toFixed(1)).join(' / ')})`)
+      : fail(`wave growth: ${JSON.stringify(short ?? { sizes: firstSizes, costs: firstCosts })}`);
   }
   const overlapping = table.find((t) => minGap(t.roster) <= 0);
   !overlapping
