@@ -176,6 +176,11 @@ menu adds "Change champion", which returns to the start screen and begins a new 
 
 ## Phases
 
+The full order, including the foundation work that comes first (profile store, run event
+bus, `GameScene` split, layered art), is in
+[ARCHITECTURE_PROPOSAL.md](ARCHITECTURE_PROPOSAL.md). In its numbering this proposal is
+Phase 0b; the table below is the champion-specific part only.
+
 | Phase | What | Player-visible change |
 | --- | --- | --- |
 | **0. Refactor** | Champion contract and registry with Ezreal only; slot keybinds with migration; status effects; shared zones/projectiles; hit funnel; run log `champion` field | None. All 24 active suites must pass, with only renames in the tests |
