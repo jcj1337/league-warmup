@@ -12,7 +12,7 @@ shared across champions: see the main README's [Controls](../../../README.md#con
 | Q, Noxious Blast | ground point | 150ms | 3500ms† | 275, blast radius 45 | 1 on landing, then poison |
 | W, Miasma | ground point | 150ms | 12000ms† | 250; a wall of 7 clouds across your aim, ~180 × 60 | 0; slows 35% and poisons, only while inside |
 | E, Twin Fang | the enemy **under** the cursor | 150ms | 800ms† | 250 | 1, **2 if poisoned** |
-| R, Petrifying Gaze | cone toward the cursor | 500ms, rooted; strikes as it ends | 45000ms†, **−500ms per poisoned fang** | 420, 80° wide | 1; **stuns enemies facing you** 1.5s, slows the rest 50% |
+| R, Petrifying Gaze | cone toward the cursor | 500ms, rooted; strikes as it ends | 45000ms†, **−500ms per poisoned fang** | 280, 80° wide | 1; **stuns enemies facing you** 1.5s, slows the rest 50% |
 | F | cursor | instant | 20000ms | 190 | — |
 
 \* her level-1 auto cycle is 950ms (Ezreal's is 700ms), +3% attack speed per level; the
@@ -35,14 +35,13 @@ the slow and for setting up E, not for damage on its own. **Spellcasters** (the 
 Sovereign) can't be poisoned to death: poisoned above one pip, it wears them down to one and
 stops, so tagging one with Q and running doesn't kill it. Poisoned at one pip, it can.
 
-**One feel for the whole kit.** Everything she casts is venom that leaves her body, arcs
-through the air with its shadow on the ground, and bursts open where it lands into soft,
-blotchy puffs that pop a little past their size, splatter droplets and shrink away. W set
-the tone; Q, E and R now share it. It's all look: no timing changed.
+**One feel for the whole kit.** Everything she casts bursts open into soft, blotchy puffs
+that pop a little past their size, splatter droplets and shrink away, with smooth outlines
+rather than dotted ones. W set the tone; Q, E and R share it.
 
-**Q and W are telegraphed.** Q lands 400ms after you place it: a glob of venom is lobbed
-from her onto a faint ring marking the spot, and the blast goes off as it lands, bursting
-into a cluster of puffs. Anything that walks out of the ring before then is missed. Q is
+**Q and W are telegraphed.** Q lands 400ms after you place it: venom wells up in place
+under the target, the ring filling from its centre as puffs bubble up inside it, then it
+bursts. Anything that walks out of the ring before then is missed. Q is
 small on purpose: in League it's about three champion radii wide, so you aim it at one
 enemy, from a little further out than your auto.
 

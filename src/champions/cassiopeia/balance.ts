@@ -118,7 +118,8 @@ export const E = {
  * from where she lands (R-Flash).
  */
 export const R = {
-  radius: 420,
+  /** ~1.4x her auto range: a close-quarters gaze. (Was 420.) */
+  radius: 280,
   /** Half the opening, in radians (40°). */
   halfAngle: 0.698,
   castTimeMs: 500,

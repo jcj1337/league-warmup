@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import type { CastTelegraph, FxKey } from '../../champions/types';
 import { THEME } from '../../config/theme';
-import { dottedWedge, wedgePoints } from './pixelDraw';
+import { smoothWedge, wedgePoints } from './pixelDraw';
 
 /**
  * A slot's cast telegraph (AbilityDef.telegraph): the shape the spell will
@@ -33,7 +33,7 @@ export class CastTelegraphView {
     g.fillPoints(wedgePoints(x, y, angle, half, radius), true);
     g.fillStyle(f.color, T.coreAlpha);
     g.fillPoints(wedgePoints(x, y, angle, half, radius * progress), true);
-    dottedWedge(g, x, y, angle, half, radius, f.color, edgeAlpha);
+    smoothWedge(g, x, y, angle, half, radius, f.color, edgeAlpha, T.edgeWidth);
   }
 
   destroy(): void {

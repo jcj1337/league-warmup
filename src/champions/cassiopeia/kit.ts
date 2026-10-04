@@ -63,8 +63,6 @@ export class CassiopeiaKit implements Kit {
     if (slot === 'q') {
       this.zones.place({
         kind: 'circle', x: aim.x, y: aim.y, radius: Q.radius, delayMs: Q.delayMs,
-        // A glob lobbed from her body, landing as the blast goes off.
-        thrownFrom: { x: this.ctx.player.x, y: this.ctx.player.y },
         onLand: (inside) => {
           for (const e of inside) {
             this.pip(e);

@@ -54,6 +54,42 @@ export function dottedLine(
   }
 }
 
+/** A solid, smooth ring (or arc, with `from`/`to`): the clean outline for the player's spells. */
+export function smoothRing(
+  g: Phaser.GameObjects.Graphics,
+  cx: number,
+  cy: number,
+  r: number,
+  color: number,
+  alpha: number,
+  width = 2,
+  from = 0,
+  to = TAU,
+): void {
+  if (r <= 0 || alpha <= 0) return;
+  g.lineStyle(width, color, Math.min(1, alpha));
+  g.beginPath();
+  g.arc(cx, cy, r, from, to, false);
+  g.strokePath();
+}
+
+/** A cone's solid, smooth outline: both sides and the arc. */
+export function smoothWedge(
+  g: Phaser.GameObjects.Graphics,
+  cx: number,
+  cy: number,
+  angle: number,
+  halfAngle: number,
+  r: number,
+  color: number,
+  alpha: number,
+  width = 2,
+): void {
+  if (r <= 0 || alpha <= 0) return;
+  g.lineStyle(width, color, Math.min(1, alpha));
+  g.strokePoints(wedgePoints(cx, cy, angle, halfAngle, r, 24), true, true);
+}
+
 /** The outline of a cone from (cx, cy): its tip, then the arc. For fillPoints. */
 export function wedgePoints(cx: number, cy: number, angle: number, halfAngle: number, r: number, steps = 12): { x: number; y: number }[] {
   const pts = [{ x: cx, y: cy }];

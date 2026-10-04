@@ -458,6 +458,8 @@ export const THEME = {
     coreAlpha: 0.35,
     edgeAlphaStart: 0.5,
     edgeAlphaEnd: 1,
+    /** A smooth solid outline, this wide. */
+    edgeWidth: 2,
   },
 
   /**
@@ -655,6 +657,8 @@ export const THEME = {
     edge: P.toxin,
     edgeAlphaStart: 0.5,
     edgeAlphaEnd: 1,
+    /** Outlines are smooth solid lines this wide. */
+    edgeWidth: 2,
     /** Droplets and rings thrown out where something lands; the gaze's wash. */
     splash: P.toxinLight,
     splashDrops: 8,
@@ -670,8 +674,12 @@ export const THEME = {
     /** How far the rim shows past each puff. */
     cloudRimPx: 3,
     blotchAlpha: 0.7,
-    /** A thrown circle (her Q): the glob in flight, bigger than W's bolts. */
-    globRadius: 10,
+    /**
+     * A circle (her Q) wells up in place: `puffs` puffs bubble up inside the
+     * ring, each starting `stagger` of the delay after the last and growing
+     * over `grow` of it, to `size` of the radius, `spread` out from the centre.
+     */
+    welling: { puffs: 4, stagger: 0.14, grow: 0.45, size: 0.32, spread: 0.55 },
     /**
      * A burst (Q landing, a bite, an enemy caught by the gaze): a big puff and
      * a ring of smaller ones popping a beat apart, held, then shrinking away.

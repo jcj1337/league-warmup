@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import { THEME } from '../../config/theme';
 import type { BurstStyle, PlacedCloud, PlacedZone } from '../systems/PlayerZoneSystem';
-import { dottedRing, dottedWedge, pixelDisc, wedgePoints } from './pixelDraw';
+import { pixelDisc, smoothRing, smoothWedge, wedgePoints } from './pixelDraw';
 
 type Point = { x: number; y: number };
 
@@ -20,16 +20,17 @@ interface Burst {
  * bursts open where it lands into soft, opaque, blotchy puffs that overshoot
  * a little, splatter droplets, and shrink away.
  *
- *   thrown circle  (Cassiopeia's Q) a glob lobbed onto a faint landing ring,
- *                  bursting into a cluster of puffs as it resolves
- *   circle         a telegraph filling from its centre, then the same burst
+ *   circle         (Cassiopeia's Q) venom welling up in place: the ring fills
+ *                  from its centre while puffs bubble up inside it, then it
+ *                  bursts into a cluster of puffs
  *   cone           a telegraph, then a wave of puffs sweeping out to its edge
  *   cloud          (her W) bolts lobbed onto each puff, which pops open and
  *                  lingers, breathing, with motes drifting up
  *   burst          a puff cluster on its own, where a kit asks (a bite, a gaze)
  *
- * Never the red of hostile ground, which always means "this hurts you". A
- * read of the zone and cloud lists, plus the landings and bursts it was told of.
+ * Outlines are smooth, solid lines. Never the red of hostile ground, which
+ * always means "this hurts you". A read of the zone and cloud lists, plus the
+ * landings and bursts it was told of.
  */
 export class PlayerZoneView {
   /** Ground level: telegraphs, clouds, bursts, the bolts' shadows. */
@@ -64,23 +65,29 @@ export class PlayerZoneView {
         g.fillPoints(wedgePoints(zone.x, zone.y, zone.angle, zone.halfAngle, zone.radius), true);
         g.fillStyle(Z.core, Z.coreAlpha);
         g.fillPoints(wedgePoints(zone.x, zone.y, zone.angle, zone.halfAngle, zone.radius * t), true);
-        dottedWedge(g, zone.x, zone.y, zone.angle, zone.halfAngle, zone.radius, Z.edge, edgeAlpha);
+        smoothWedge(g, zone.x, zone.y, zone.angle, zone.halfAngle, zone.radius, Z.edge, edgeAlpha, Z.edgeWidth);
         continue;
       }
 
+      // Venom welling up under the target: the fill swells from the centre (the
+      // countdown) while puffs bubble up inside the ring, one after another.
       const cx = Math.round(zone.x);
       const cy = Math.round(zone.y);
       g.fillStyle(Z.fill, fillAlpha);
       g.fillCircle(cx, cy, zone.radius);
-      dottedRing(g, cx, cy, zone.radius, Z.edge, edgeAlpha, 3);
-      if (zone.thrownFrom) {
-        // The glob in flight is the countdown: it lands as the zone resolves.
-        this.drawLob(zone.thrownFrom, zone, t, Z.globRadius);
-      } else {
-        // Otherwise a disc swelling from the centre to the edge is.
-        g.fillStyle(Z.core, Z.coreAlpha);
-        g.fillCircle(cx, cy, zone.radius * t);
+      g.fillStyle(Z.core, Z.coreAlpha);
+      g.fillCircle(cx, cy, zone.radius * t);
+      const centres: Point[] = [];
+      const sizes: number[] = [];
+      for (let k = 0; k < Z.welling.puffs; k++) {
+        const a = k * 2.4 + 0.5;
+        const d = zone.radius * Z.welling.spread * (k % 2 ? 1 : 0.55);
+        centres.push({ x: zone.x + Math.cos(a) * d, y: zone.y + Math.sin(a) * d * 0.8 });
+        const u = (t - k * Z.welling.stagger) / Z.welling.grow;
+        sizes.push(u <= 0 ? 0 : zone.radius * Z.welling.size * (u >= 1 ? 1 : popEase(u)));
       }
+      this.drawPuffs(centres, sizes, 'venom', 0.5);
+      smoothRing(g, cx, cy, zone.radius, Z.edge, edgeAlpha, Z.edgeWidth);
     }
 
     for (let i = this.sweeps.length - 1; i >= 0; i--) {
@@ -189,7 +196,7 @@ export class PlayerZoneView {
     if (s < 1) {
       const ease = 1 - (1 - s) ** 2;
       this.drops(b.x, b.y, b.radius * (0.7 + 0.8 * ease), Z.splashDrops, 1 - s, 0.4, S.drop);
-      dottedRing(this.gfx, b.x, b.y, b.radius * (1 + 0.35 * ease), S.drop, (1 - s) * 0.8, 3);
+      smoothRing(this.gfx, b.x, b.y, b.radius * (1 + 0.35 * ease), S.drop, (1 - s) * 0.8, Z.edgeWidth);
     }
   }
 
@@ -217,7 +224,7 @@ export class PlayerZoneView {
       sizes.push(Z.sweepPuffRadius * shrink * (0.75 + 0.25 * Math.sin(i * 2.3)) * (0.5 + 0.5 * reach));
     }
     this.drawPuffs(centres, sizes, 'venom', shrink);
-    if (reach >= 1) dottedWedge(g, zone.x, zone.y, zone.angle, zone.halfAngle, zone.radius * (1 + 0.06 * (t - Z.sweepTravel)), Z.splash, shrink);
+    if (reach >= 1) smoothWedge(g, zone.x, zone.y, zone.angle, zone.halfAngle, zone.radius * (1 + 0.06 * (t - Z.sweepTravel)), Z.splash, shrink, Z.edgeWidth);
   }
 
   /**

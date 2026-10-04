@@ -23,8 +23,6 @@ export interface CircleZone {
   y: number;
   radius: number;
   delayMs: number;
-  /** Thrown: drawn as a glob lobbed from here, landing as the zone resolves. Look only. */
-  thrownFrom?: { x: number; y: number };
   /** The deadline: every active enemy whose body overlaps the circle. */
   onLand: (inside: Enemy[]) => void;
 }
