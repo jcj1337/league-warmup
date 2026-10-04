@@ -1,10 +1,10 @@
 import Phaser from 'phaser';
-import { ARENA, ATTACK, BALANCE_VERSION, BLINK_E, DEBUG, DIFFICULTY, ENEMIES, PLAYER, SKILLSHOT_Q, SKILLSHOT_W } from '../../config/balance';
+import { ARENA, ATTACK, BLINK_E, DEBUG, PLAYER, SKILLSHOT_Q, SKILLSHOT_W } from '../../config/balance';
 import { THEME } from '../../config/theme';
 import { ensureArt } from '../art/textures';
 import { Player } from '../entities/Player';
 import type { DamageKind, Enemy, EnemyArchetype } from '../entities/Enemy';
-import { RunHistory } from '../RunHistory';
+import { Run, type RoundResult } from '../Run';
 import { AttackSystem } from '../systems/AttackSystem';
 import { SkillshotSystem } from '../systems/SkillshotSystem';
 import { EnemyProjectileSystem } from '../systems/EnemyProjectileSystem';
@@ -14,60 +14,19 @@ import { Progression } from '../systems/Progression';
 import { ScoreSystem } from '../systems/ScoreSystem';
 import { KitingMetrics } from '../systems/KitingMetrics';
 import { ApmTracker } from '../systems/ApmTracker';
-import { GameClock } from '../systems/GameClock';
+import type { GameClock } from '../systems/GameClock';
+import { Combat } from '../systems/Combat';
 import { PassiveSystem } from '../systems/PassiveSystem';
-import { WaveDirector, type ClearedWave, type WavePhase } from '../systems/WaveDirector';
+import { WaveDirector, type WavePhase } from '../systems/WaveDirector';
 import { AbilityCooldowns } from '../systems/AbilityCooldowns';
 import { BlinkSystem } from '../systems/BlinkSystem';
 import { CastSystem, type CastAbility, type CastPayload } from '../systems/CastSystem';
 import { InputController, type CommandHandler } from '../systems/InputController';
 import { Battlefield } from '../view/Battlefield';
 import { Fx } from '../view/Fx';
+import { RunFeedback } from '../view/RunFeedback';
 
-export type RoundState = 'running' | 'over';
-
-export interface RoundResult {
-  /** How the run ended. The run is endless, so it always ends in defeat. */
-  outcome: 'defeated';
-  /** The stage and wave in play when the run ended. */
-  stageReached: number;
-  waveReached: number;
-  wavesInStage: number;
-  wavesCleared: number;
-  /** Best stage of earlier logged runs on this growth setting (null: none), and whether this run beat it. */
-  previousBest: number | null;
-  newBest: boolean;
-  /** Total run time on the GameClock, in seconds. */
-  runTimeSeconds: number;
-  score: number;
-  /** Pip-removing hits landed by autos, Q and the E bolt. */
-  hitsLanded: number;
-  /** W marks detonated for their extra pip. */
-  markProcs: number;
-  targetsKilled: number;
-  projectileHitsTaken: number;
-  qFired: number;
-  qHit: number;
-  /** Mechanical counters for the kiting drill — see KitingMetrics. */
-  attacksStarted: number;
-  attacksFired: number;
-  attacksCancelled: number;
-  attacksLanded: number;
-  idleInRangeMs: number;
-  wastedRecoveryMs: number;
-  /** Kills broken down by enemy archetype. */
-  killsByType: Record<string, number>;
-  /** Where the score came from: kills, wave speed bonuses, stage HP bonuses. */
-  scoreFrom: { kills: number; speed: number; hp: number };
-  /** Damage taken per source over the run, and in the stage that killed you; the source of the killing blow. */
-  damageTaken: Record<string, number>;
-  stageDamage: Record<string, number>;
-  killedBy: string | null;
-  /** DIFFICULTY.growth this run was played on. */
-  growth: number;
-  /** The player's level when the run ended. */
-  level: number;
-}
+export type { RoundResult, RoundState } from '../Run';
 
 /** Snapshot the HUD polls every frame. */
 export interface HudState {
@@ -137,26 +96,13 @@ export class GameScene extends Phaser.Scene {
   battlefield!: Battlefield;
   private fx!: Fx;
 
-  /**
-   * Simulated time. Every gameplay deadline is measured against this, never
-   * against Phaser's wall clock, so pausing cannot fast-forward anything.
-   */
-  private clock!: GameClock;
-
-  /** True while the pause menu is up. Freezes the entire simulation. */
-  private paused = false;
-
-  /**
-   * True while the start screen is up: the first round after a page load holds
-   * at time 0 until the player clicks. Restarts go straight in.
-   */
-  private awaitingStart = false;
+  /** The round: its clock, its events, whether it may advance, and its result once over. */
+  private run!: Run;
+  /** The hit funnel: every pip lost and every HP lost, scored and announced once. */
+  private combat!: Combat;
 
   /** Clock time until which the range ring is held up after a T press. */
   private rangeHintUntil = -Infinity;
-
-  private state: RoundState = 'running';
-  private result: RoundResult | null = null;
 
   /** Last cancel we have already drawn a tag for. */
   private lastCancelShownAt = -Infinity;
@@ -175,16 +121,13 @@ export class GameScene extends Phaser.Scene {
 
   create(): void {
     this.roundId++;
-    this.awaitingStart = this.roundId === 1;
-    this.state = 'running';
-    this.result = null;
+    // Only the first round after a page load waits on the start screen.
+    this.run = new Run(this.roundId === 1);
     this.enemies = [];
     this.lastCancelShownAt = -Infinity;
     this.lastReleaseShownAt = -Infinity;
     this.rangeHintUntil = -Infinity;
     this.stunBuffered = null;
-    this.paused = false;
-    this.clock = new GameClock();
 
     // Art first: textures are generated once per game, then reused on restart.
     ensureArt(this);
@@ -209,22 +152,26 @@ export class GameScene extends Phaser.Scene {
       this.clock,
       () => ({ x: this.player.x, y: this.player.y }),
       {
-        onWaveCleared: (wave) => this.onWaveCleared(wave),
-        onStageCleared: () => this.onStageCleared(),
+        onWaveCleared: (wave) => this.combat.waveCleared(wave),
+        onStageCleared: () => this.combat.stageCleared(),
       },
     );
     this.enemies = this.director.enemies;
 
+    this.combat = new Combat(this.clock, this.run.events, this.player, this.scoring, this.director, this.progression);
+    // Presentation that listens to the run's events (kill gold, level-up ring, hit shake).
+    new RunFeedback(this, this.fx, this.player, this.run.events);
+
     this.attacks = new AttackSystem(this, this.player, this.metrics, this.progression, this.passive, {
-      onHit: (target, killed) => this.onTargetHit(target, killed),
+      onHit: (target, killed) => this.combat.hit(target, killed),
     });
 
     this.skillshot = new SkillshotSystem(this, this.player, this.cooldowns, {
       onQHit: (target, killed) => {
-        this.onTargetHit(target, killed);
+        this.combat.hit(target, killed);
         // Ranked-up Q (LEVELS.qRankUp): its extra pips land on whatever survived the first.
         for (let extra = this.progression.qPips - 1; extra > 0 && target.active; extra--) {
-          if (target.takeHit()) this.onKill(target);
+          if (target.takeHit()) this.combat.kill(target);
         }
         this.grantPassiveStack();
         // A landed Q refunds the basic ability cooldowns — never Flash.
@@ -239,7 +186,7 @@ export class GameScene extends Phaser.Scene {
 
     this.blink = new BlinkSystem(this, this.player, this.cooldowns, {
       onBoltHit: (target, killed) => {
-        this.onTargetHit(target, killed);
+        this.combat.hit(target, killed);
         this.grantPassiveStack();
       },
       // A blink cancels an uncommitted auto, exactly like a move order.
@@ -247,14 +194,14 @@ export class GameScene extends Phaser.Scene {
     });
 
     this.enemyProjectiles = new EnemyProjectileSystem(this, this.player, this.director, {
-      onPlayerHit: (damage) => this.onPlayerHit(damage, 'edgeFire'),
+      onPlayerHit: (damage) => this.combat.playerHit(damage, 'edgeFire'),
     });
 
     this.attackTokens = new AttackTokens(() => this.director.difficulty.attackTokens);
 
     // Hostile spells: Magus zones and orbs, basic spit. They live here, so they outlive their caster.
     this.hostileSpells = new HostileSpellSystem(this, this.player, this.director, {
-      onPlayerHit: (damage, source) => this.onEnemyHit(damage, source),
+      onPlayerHit: (damage, source) => this.combat.enemyHit(damage, source),
       onPlayerStunned: (ms) => this.stunPlayer(ms),
       onPlayerSlowed: (fraction, ms) => this.player.slow(this.clock.now, fraction, ms),
     });
@@ -266,7 +213,7 @@ export class GameScene extends Phaser.Scene {
     });
 
     this.inputs = new InputController(this, this.commandHandler());
-    if (this.awaitingStart) this.tweens.pauseAll();
+    if (this.run.isAwaitingStart) this.tweens.pauseAll();
   }
 
   // ---------------------------------------------------------------- input
@@ -347,10 +294,10 @@ export class GameScene extends Phaser.Scene {
 
       targetAt: (x, y) => this.targetAt(x, y),
       recordAction: () => this.apm.record(this.clock.now),
-      isRoundRunning: () => this.state === 'running',
-      acceptsGameplayInput: () => this.ownsMouse,
-      isPaused: () => this.paused,
-      togglePause: () => this.setPaused(!this.paused),
+      isRoundRunning: () => this.run.isRunning,
+      acceptsGameplayInput: () => this.run.isActive,
+      isPaused: () => this.run.isPaused,
+      togglePause: () => this.setPaused(!this.run.isPaused),
       restartRound: () => this.restartRound(),
     };
   }
@@ -449,8 +396,7 @@ export class GameScene extends Phaser.Scene {
    * run on wall time and are paused alongside.
    */
   setPaused(paused: boolean): void {
-    if (this.state !== 'running' || this.awaitingStart || this.paused === paused) return;
-    this.paused = paused;
+    if (!this.run.setPaused(paused)) return;
 
     if (paused) {
       this.tweens.pauseAll();
@@ -460,24 +406,27 @@ export class GameScene extends Phaser.Scene {
   }
 
   get isPaused(): boolean {
-    return this.paused;
+    return this.run.isPaused;
   }
 
   /** True while gameplay owns the mouse (CursorLock holds the pointer lock only then). */
   get ownsMouse(): boolean {
-    return this.state === 'running' && !this.paused && !this.awaitingStart;
+    return this.run.isActive;
   }
 
   /** True while the start screen is holding the first round at time 0. */
   get isAwaitingStart(): boolean {
-    return this.awaitingStart;
+    return this.run.isAwaitingStart;
   }
 
   /** Leave the start screen: the run's clock starts on the next frame. */
   startRun(): void {
-    if (!this.awaitingStart) return;
-    this.awaitingStart = false;
-    this.tweens.resumeAll();
+    if (this.run.start()) this.tweens.resumeAll();
+  }
+
+  /** The run's simulated clock. Systems and the suites read it; only update() advances it. */
+  get clock(): GameClock {
+    return this.run.clock;
   }
 
   /**
@@ -522,7 +471,7 @@ export class GameScene extends Phaser.Scene {
   // ---------------------------------------------------------------- loop
 
   override update(_time: number, delta: number): void {
-    if (this.state !== 'running' || this.paused || this.awaitingStart) return;
+    if (!this.run.isActive) return;
 
     // Clamp dt so an alt-tab / long frame cannot teleport everything.
     const dt = Math.min(delta, 50) / 1000;
@@ -613,7 +562,7 @@ export class GameScene extends Phaser.Scene {
         vy: this.player.vy,
         stunned: this.player.isStunned,
       },
-      damagePlayer: (amount, source, kind) => this.onEnemyHit(amount, source, kind),
+      damagePlayer: (amount, source, kind) => this.combat.enemyHit(amount, source, kind),
       spells: this.hostileSpells,
       attackTokens: this.attackTokens,
       enemiesRemaining: this.director.enemiesRemaining,
@@ -630,71 +579,25 @@ export class GameScene extends Phaser.Scene {
     this.fx.update(dt);
 
     // The run is endless: it ends only on death. There is no timer end.
-    if (!this.player.isAlive) this.endRound('defeated');
+    if (!this.player.isAlive) this.endRound();
   }
 
-  // ---------------------------------------------------------------- events
+  // ---------------------------------------------------------------- combat
 
   /**
-   * Every pip-removing hit funnels through here, AFTER the entity has already
-   * lost its one pip: autos, Q and the E bolt.
-   *
-   * W's mark detonates from this one place, which is why W itself does not call
-   * it — the mark application removes no pip, so it cannot detonate itself.
+   * The hit funnel, for the suites and for systems that are handed a scene:
+   * the same calls the ability systems make through their callbacks. See Combat.
    */
-  private onTargetHit(target: Enemy, killed: boolean): void {
-    this.scoring.addHit();
-
-    if (killed) {
-      this.onKill(target);
-      return;
-    }
-
-    if (target.isMarked(this.clock.now)) this.detonateMark(target);
+  onTargetHit(target: Enemy, killed: boolean): void {
+    this.combat.hit(target, killed);
   }
 
-  /**
-   * Every kill, whatever landed it: score and kill tallies (per archetype, so a
-   * Pursuer is worth more), the wave's bookkeeping, and the kill's XP.
-   */
-  private onKill(target: Enemy): void {
-    const points = this.scoring.addKill(target.archetype, target.scoreMultiplier, this.director.stage);
-    // League's last-hit gold: what this kill was worth, riding on the slime's head until it fades.
-    this.fx.goldPopup(() => ({ x: this.player.x, y: this.overHead(0) }), points);
-    this.director.onEnemyKilled(target, this.clock.now);
-    if (this.progression.addXp(ENEMIES[target.archetype].xp, this.clock.now) > 0) this.onLevelUp();
+  onPlayerHit(damage: number, source: string): void {
+    this.combat.playerHit(damage, source);
   }
 
-  /** Level up: a gold ring and the new level over the slime. The numbers already changed. */
-  private onLevelUp(): void {
-    const { x, y, radius } = this.player;
-    this.fx.ring(x, y, radius + 4, radius + 46, 420, THEME.ui.accent, 1, 6);
-    this.fx.popup(x, this.overHead(0) - 6, `LEVEL ${this.progression.level}`, THEME.ui.accent, 900, 30);
-  }
-
-  /**
-   * Where text over the slime starts: just above the crown, `row` popup rows up.
-   * Row 0 is kill gold; the stage-clear heal, the HP bonus and the speed bonus
-   * stack on rows 1–3 above it, so the kill that clears a stage never hides them.
-   */
-  private overHead(row: number): number {
-    return this.player.y - this.player.radius - 18 - THEME.player.crownPx - row * 24;
-  }
-
-  /**
-   * Cash in a W mark: one extra pip on top of the triggering hit's own.
-   * Deliberately does NOT route back through onTargetHit() — that would recurse,
-   * and a detonation must never grant a second passive stack (the stack was
-   * already given when the mark landed).
-   */
-  private detonateMark(target: Enemy): void {
-    target.clearMark();
-
-    const killed = target.takeHit();
-    this.scoring.addMarkProc();
-    if (killed) this.onKill(target);
-
-    this.fx.detonation(target.x, target.y);
+  onEnemyHit(damage: number, source: EnemyArchetype, kind: DamageKind = 'attack'): void {
+    this.combat.enemyHit(damage, source, kind);
   }
 
   /**
@@ -707,85 +610,19 @@ export class GameScene extends Phaser.Scene {
     this.player.playPassivePulse(this.passive.isMaxStacked);
   }
 
-  /**
-   * Damage from an enemy, scaled by the stage: attacks (swings, spit, Magus
-   * spells) by DIFFICULTY.damage, body contact by DIFFICULTY.contactDamage.
-   * Contact is logged as its own source ('basicContact', …). Edge fire has
-   * its own ramp and skips this.
-   */
-  private onEnemyHit(damage: number, source: EnemyArchetype, kind: DamageKind = 'attack'): void {
-    const diff = this.director.difficulty;
-    const mult = kind === 'contact' ? diff.contactDamage : diff.damage;
-    this.onPlayerHit(Math.round(damage * mult), kind === 'contact' ? `${source}Contact` : source);
-  }
-
-  /** A wave was cleared: its speed bonus (SCORE.waveClear), shown over the slime when earned. */
-  private onWaveCleared(wave: ClearedWave): void {
-    const points = this.scoring.addWaveClear(wave.enemies, wave.elapsedMs, wave.parMs, wave.stage);
-    if (points > 0) this.scorePopup(`+${points} SPEED`, 3);
-  }
-
-  /**
-   * A stage was cleared: the HP bonus for what you finished it with (before
-   * the heal), then back to full HP (DIFFICULTY.stageClearHeal) for the next.
-   */
-  private onStageCleared(): void {
-    const { points, flawless } = this.scoring.addStageClear(this.player.hp, this.director.stage);
-    if (points > 0) this.scorePopup(`+${points} ${flawless ? 'FLAWLESS' : 'HP'}`, 2);
-    this.scoring.startStage();
-    const healed = this.player.heal(Math.round(this.player.maxHp * DIFFICULTY.stageClearHeal));
-    if (healed > 0) {
-      this.fx.popup(this.player.x, this.overHead(1), `+${healed}`, THEME.ui.good, 800, 26);
-    }
-  }
-
-  /** A score bonus over the slime; `row` stacks it above the heal popup. */
-  private scorePopup(text: string, row: number): void {
-    this.fx.popup(this.player.x, this.overHead(row), text, THEME.ui.accent, 1100, 26);
-  }
-
-  /** Every hit on the player lands here, tagged with its source for the run log. */
-  private onPlayerHit(damage: number, source: string): void {
-    const hpBefore = this.player.hp;
-    const taken = this.player.takeDamage(damage, this.clock.now);
-    if (taken <= 0) return;
-    // Log the HP actually lost: overkill on the final hit is not damage taken.
-    this.scoring.addDamageTaken(source ?? 'unknown', hpBefore - this.player.hp, !this.player.isAlive);
-
-    this.scoring.addProjectileHit();
-    this.cameras.main.shake(90, 0.004);
-
-    // Red rim flash: hits register even when your eyes are on the enemy.
-    const rim = this.add
-      .rectangle(ARENA.width / 2, ARENA.height / 2, ARENA.width - 8, ARENA.height - 8, 0x000000, 0)
-      .setStrokeStyle(8, THEME.ui.hitRim, 0.55)
-      .setDepth(THEME.depth.screen);
-    this.tweens.add({
-      targets: rim,
-      alpha: 0,
-      duration: 260,
-      onComplete: () => rim.destroy(),
-    });
-  }
-
-  private endRound(outcome: RoundResult['outcome']): void {
-    this.state = 'over';
+  /** The player died: freeze the field, build the result, log the run. */
+  private endRound(): void {
     this.attacks.cancel();
     this.cast.cancel();
     this.inputs.cancelPending();
     this.player.setRangeRingState(false, false, 0);
     this.player.stop();
 
-    const previousBest = RunHistory.summary(DIFFICULTY.growth, BALANCE_VERSION).best;
-    this.result = {
-      outcome,
+    this.run.finish({
       stageReached: this.director.stage,
       waveReached: this.director.wave,
       wavesInStage: this.director.wavesInStage,
       wavesCleared: this.director.wavesCleared,
-      previousBest,
-      newBest: previousBest === null || this.director.stage > previousBest,
-      runTimeSeconds: this.clock.now / 1000,
       score: Math.round(this.scoring.score),
       hitsLanded: this.scoring.hitsLanded,
       markProcs: this.scoring.markProcs,
@@ -804,24 +641,7 @@ export class GameScene extends Phaser.Scene {
       damageTaken: { ...this.scoring.damageTaken },
       stageDamage: { ...this.scoring.stageDamage },
       killedBy: this.scoring.killedBy,
-      growth: DIFFICULTY.growth,
       level: this.progression.level,
-    };
-
-    // Local tuning log (see RunHistory). Only finished runs: a restart mid-run is not logged.
-    RunHistory.record({
-      at: new Date().toISOString(),
-      outcome,
-      stage: this.result.stageReached,
-      wave: this.result.waveReached,
-      runTimeSeconds: Math.round(this.result.runTimeSeconds * 10) / 10,
-      growth: DIFFICULTY.growth,
-      balanceVersion: BALANCE_VERSION,
-      level: this.result.level,
-      score: this.result.score,
-      killedBy: this.result.killedBy,
-      damageTaken: this.result.damageTaken,
-      stageDamage: this.result.stageDamage,
     });
   }
 
@@ -831,7 +651,7 @@ export class GameScene extends Phaser.Scene {
   getHudState(): HudState {
     return {
       round: this.roundId,
-      runTime: this.clock ? this.clock.now / 1000 : 0,
+      runTime: this.run ? this.run.clock.now / 1000 : 0,
       score: this.scoring ? Math.round(this.scoring.score) : 0,
       hp: this.player ? this.player.hp : PLAYER.maxHp,
       maxHp: PLAYER.maxHp,
@@ -844,7 +664,7 @@ export class GameScene extends Phaser.Scene {
         flash: this.abilityCooldown('flash'),
       },
       attackMovePending: this.inputs ? this.inputs.attackMovePending : false,
-      apm: this.apm && this.clock ? this.apm.valueAt(this.clock.now) : 0,
+      apm: this.apm && this.run ? this.apm.valueAt(this.run.clock.now) : 0,
       stage: this.director ? this.director.stage : 1,
       wave: this.director ? this.director.wave : 1,
       wavesInStage: this.director ? this.director.wavesInStage : 0,
@@ -865,7 +685,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   getRoundResult(): RoundResult | null {
-    return this.result;
+    return this.run ? this.run.roundResult : null;
   }
 
   get attackRange(): number {

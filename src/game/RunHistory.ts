@@ -1,39 +1,22 @@
+import { Profile, type RunRecord } from '../profile/Profile';
+
 /**
  * A local log of finished runs, for tuning the difficulty curve against real
  * play: where each run ended, what killed it, and which growth setting it was
- * played on. Kept in this browser's localStorage only — nothing leaves the
- * machine.
+ * played on. Kept in the player's Profile (this browser's localStorage):
+ * nothing leaves the machine. To discard the data, run `__runs.clear()`.
  *
- * Self-contained on purpose: to discard the feature, delete this file, its two
- * call sites (GameScene.endRound, the UIScene end screen) and the `__runs`
- * console hook in main.ts. To discard the data, run `__runs.clear()`.
- *
- * Storage can be unavailable (private windows, blocked site data), so every
- * read and write is guarded: the game never depends on it.
+ * RunRecord fields (see Profile.ts for the type):
+ *   at              ISO timestamp of when the run ended
+ *   growth          DIFFICULTY.growth the run was played on; runs are only compared within one setting
+ *   balanceVersion  BALANCE_VERSION it was played on (absent on runs logged before it existed)
+ *   level / score   the player's level and final score (absent on older runs)
+ *   killedBy        source of the hit that took the last HP ('pursuer', 'basic', 'magus', 'edgeFire'), or null
+ *   damageTaken     HP actually lost over the run, per source
+ *   stageDamage     the same for the stage that ended the run (HP is restored at every stage clear)
  */
 
-export interface RunRecord {
-  /** ISO timestamp of when the run ended. */
-  at: string;
-  outcome: 'completed' | 'defeated';
-  stage: number;
-  wave: number;
-  runTimeSeconds: number;
-  /** DIFFICULTY.growth the run was played on. Runs are only compared within one setting. */
-  growth: number;
-  /** BALANCE_VERSION the run was played on (absent on runs logged before it existed). */
-  balanceVersion?: number;
-  /** The player's level when the run ended (absent before levels existed). */
-  level?: number;
-  /** Final score (absent on runs logged before it was recorded). */
-  score?: number;
-  /** Source of the hit that took the last HP ('pursuer', 'basic', 'magus', 'edgeFire'), or null. */
-  killedBy: string | null;
-  /** Damage actually taken over the run, per source. */
-  damageTaken: Record<string, number>;
-  /** Damage taken in the stage that ended the run (HP is restored at every stage clear). */
-  stageDamage?: Record<string, number>;
-}
+export type { RunRecord } from '../profile/Profile';
 
 export interface RunSummary {
   growth: number;
@@ -50,47 +33,26 @@ export interface RunSummary {
   killedBy: Record<string, number>;
 }
 
-const KEY = 'warmup.runHistory.v1';
-/** Oldest runs are dropped past this. */
-const MAX_RUNS = 500;
-
-function read(): RunRecord[] {
-  try {
-    const raw = window.localStorage.getItem(KEY);
-    const parsed = raw ? JSON.parse(raw) : [];
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
-}
-
-function write(runs: RunRecord[]): void {
-  try {
-    window.localStorage.setItem(KEY, JSON.stringify(runs.slice(-MAX_RUNS)));
-  } catch {
-    // Storage unavailable or full: the run simply isn't logged.
-  }
-}
+const read = (): RunRecord[] => Profile.data.runs;
 
 export const RunHistory = {
   /** Every logged run, oldest first. */
   list(): RunRecord[] {
-    return read();
+    return [...read()];
   },
 
+  /** Log a finished run. The Profile caps the log (oldest dropped). */
   record(run: RunRecord): void {
-    const runs = read();
-    runs.push(run);
-    write(runs);
+    Profile.update((data) => {
+      data.runs.push(run);
+    });
   },
 
   /** Delete the whole log. */
   clear(): void {
-    try {
-      window.localStorage.removeItem(KEY);
-    } catch {
-      // Nothing to clear.
-    }
+    Profile.update((data) => {
+      data.runs = [];
+    });
   },
 
   /** Stats over the runs played on one growth setting and balance version. */

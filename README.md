@@ -460,7 +460,7 @@ is armed and flashes briefly after `T`.
   (Magus zones and orbs, basic spit), `ScoreSystem`, `KitingMetrics`.
 - `src/game/ui/` — `AbilityBar`, `PassiveDisplay`, `PauseMenu`.
 
-See [TECHNICAL_REPORT.md](TECHNICAL_REPORT.md) for how the systems actually work.
+See [docs/TECHNICAL_REPORT.md](docs/TECHNICAL_REPORT.md) (historical: it predates the endless run and the Magus / Sovereign; see the proposals in [docs/proposals/](docs/proposals/) for what changed since) for how the systems actually work.
 
 While playtesting, from the browser console:
 

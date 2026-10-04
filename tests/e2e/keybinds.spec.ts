@@ -187,7 +187,7 @@ test('keybinds: rebind from the pause menu, swaps, Escape cancels, ability bar l
   await page.keyboard.press('Escape');
 
   // Broken saved bindings (two actions on one key) fall back to the defaults.
-  await page.evaluate(() => localStorage.setItem('warmup.keybinds.v1', JSON.stringify({ skillshotQ: 'KeyW' })));
+  await page.evaluate(() => window.__profile.update((d) => { d.keybinds = { skillshotQ: 'KeyW' }; }));
   await page.reload({ waitUntil: 'load' });
   await waitForGame(page, 300);
   {

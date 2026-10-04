@@ -22,8 +22,8 @@ change and all suites green. What's deliberately **not** touched: `WaveDirector`
 
 ### 1. Persistence is scattered
 
-[Keybinds.ts](src/game/Keybinds.ts), [MouseSpeed.ts](src/game/MouseSpeed.ts),
-[Settings.ts](src/game/Settings.ts) and [RunHistory.ts](src/game/RunHistory.ts) each own a
+[Keybinds.ts](../../src/game/Keybinds.ts), [MouseSpeed.ts](../../src/game/MouseSpeed.ts),
+[Settings.ts](../../src/game/Settings.ts) and [RunHistory.ts](../../src/game/RunHistory.ts) each own a
 `localStorage` key (`warmup.*.v1`), a guarded read, a guarded write and their own
 validation. Cosmetics add currency, unlocks, the equipped look and the chosen champion:
 three or four more copies of the same code, and no single place that knows what "the
@@ -32,14 +32,14 @@ player's data" is.
 ### 2. The player's art is baked
 
 The crown is drawn into every one of the five player frames via `crowned()` in
-[sprites.ts](src/game/art/sprites.ts). A hat cosmetic would mean redrawing every frame
+[sprites.ts](../../src/game/art/sprites.ts). A hat cosmetic would mean redrawing every frame
 of every champion per hat. The pixel pipeline (character maps + a per-sprite palette)
 is actually ideal for cosmetics; it just needs to compose at texture time instead of
 being hand-merged in the sprite table.
 
 ### 3. `GameScene` does six jobs
 
-[GameScene.ts](src/game/scenes/GameScene.ts) (~875 lines) builds every system, wires their
+[GameScene.ts](../../src/game/scenes/GameScene.ts) (~875 lines) builds every system, wires their
 callbacks by hand, owns the round lifecycle and pause, is the hit/kill funnel, assembles
 the HUD snapshot, assembles the `RoundResult`, and writes the run log. The champion
 proposal's `ctx.hit()` is this same funnel, so splitting it is Phase 0 work either way.
@@ -59,7 +59,7 @@ The suites touch `director` 66 times, `attacks` 18, `skillshot` 17, `hostileSpel
 
 ### 6. Docs
 
-[TECHNICAL_REPORT.md](TECHNICAL_REPORT.md) still describes ten authored stages and two
+[TECHNICAL_REPORT.md](../TECHNICAL_REPORT.md) still describes ten authored stages and two
 enemies. Seven proposals sit at the repo root.
 
 ### Leave alone

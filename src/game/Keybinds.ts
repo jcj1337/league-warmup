@@ -1,4 +1,5 @@
 import { KEYBINDS } from '../config/balance';
+import { Profile } from '../profile/Profile';
 
 /**
  * The player's key bindings: which physical key triggers which action.
@@ -8,11 +9,8 @@ import { KEYBINDS } from '../config/balance';
  * Shift, Caps Lock and keyboard layouts. Defaults come from KEYBINDS in
  * balance.ts; the player's changes are layered on top.
  *
- * Saved in this browser's localStorage: they survive closing the tab and
- * restarting the browser, on this device only. When profiles arrive, swap
- * `load` / `save` for the profile's store.
- * Storage can be unavailable (private windows, blocked site data), so every
- * read and write is guarded: the defaults always work.
+ * Saved in the player's Profile (this browser's localStorage): they survive
+ * closing the tab and restarting the browser, on this device only.
  *
  * Escape and the end-screen restart keys are not rebindable: Escape backs out
  * of everything, including a rebind in progress.
@@ -31,8 +29,6 @@ export const BINDABLE = [
 ] as const;
 
 export type BindableAction = (typeof BINDABLE)[number]['action'];
-
-const STORAGE_KEY = 'warmup.keybinds.v1';
 
 /** What `set` did: the action now on the key, and the action that was swapped onto its old key (if any). */
 export interface RebindResult {
@@ -147,30 +143,22 @@ function defaults(): Record<BindableAction, string> {
   return out;
 }
 
-/** Saved bindings, or nothing if they're missing, unreadable or inconsistent (two actions on one key). */
+/** Saved bindings, or nothing if they're inconsistent (two actions on one key). */
 function load(): Partial<Record<BindableAction, string>> {
-  try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
-    if (!raw) return {};
-    const parsed = JSON.parse(raw) as Record<string, unknown>;
-    const merged = defaults();
-    for (const { action } of BINDABLE) {
-      const code = parsed[action];
-      if (typeof code === 'string' && code && !isReserved(code)) merged[action] = code;
-    }
-    const codes = Object.values(merged);
-    return new Set(codes).size === codes.length ? merged : {};
-  } catch {
-    return {};
+  const saved = Profile.data.keybinds;
+  const merged = defaults();
+  for (const { action } of BINDABLE) {
+    const code = saved[action];
+    if (typeof code === 'string' && code && !isReserved(code)) merged[action] = code;
   }
+  const codes = Object.values(merged);
+  return new Set(codes).size === codes.length ? merged : {};
 }
 
 function save(binds: Record<BindableAction, string>): void {
-  try {
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(binds));
-  } catch {
-    // Storage blocked: the bindings still hold for this page.
-  }
+  Profile.update((data) => {
+    data.keybinds = { ...binds };
+  });
 }
 
 const NAMED: Record<string, string> = {

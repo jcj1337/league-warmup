@@ -1,0 +1,114 @@
+import { DIFFICULTY, ENEMIES } from '../../config/balance';
+import type { DamageKind, Enemy, EnemyArchetype } from '../entities/Enemy';
+import type { Player } from '../entities/Player';
+import type { RunEvents } from '../RunEvents';
+import type { GameClock } from './GameClock';
+import type { Progression } from './Progression';
+import type { ScoreSystem } from './ScoreSystem';
+import type { ClearedWave, WaveDirector } from './WaveDirector';
+
+/**
+ * The hit funnel: every pip an enemy loses and every HP the player loses
+ * passes through here once, so score, kill tallies, XP, the wave's
+ * bookkeeping and the run log can never disagree about what happened.
+ *
+ * It decides nothing visual. Each outcome is emitted on the run's events, and
+ * the presentation (kill gold, the level-up ring, the hit shake) listens.
+ */
+export class Combat {
+  constructor(
+    private readonly clock: GameClock,
+    private readonly events: RunEvents,
+    private readonly player: Player,
+    private readonly scoring: ScoreSystem,
+    private readonly director: WaveDirector,
+    private readonly progression: Progression,
+  ) {}
+
+  /**
+   * A pip-removing hit landed, AFTER the enemy has already lost its pip:
+   * autos, Q and the E bolt. A W mark detonates from this one place, which is
+   * why W itself does not call it — the mark removes no pip, so it cannot
+   * detonate itself.
+   */
+  hit(target: Enemy, killed: boolean): void {
+    this.scoring.addHit();
+    this.events.emit('hit', { target, killed });
+
+    if (killed) {
+      this.kill(target);
+      return;
+    }
+
+    if (target.isMarked(this.clock.now)) this.detonateMark(target);
+  }
+
+  /**
+   * Every kill, whatever landed it: score and kill tallies (per archetype, so
+   * a Pursuer is worth more), the wave's bookkeeping, and the kill's XP.
+   */
+  kill(target: Enemy): void {
+    const points = this.scoring.addKill(target.archetype, target.scoreMultiplier, this.director.stage);
+    this.director.onEnemyKilled(target, this.clock.now);
+    this.events.emit('kill', { target, points });
+    if (this.progression.addXp(ENEMIES[target.archetype].xp, this.clock.now) > 0) {
+      this.events.emit('levelUp', { level: this.progression.level });
+    }
+  }
+
+  /**
+   * Cash in a W mark: one extra pip on top of the triggering hit's own.
+   * Deliberately does NOT route back through hit() — that would recurse, and
+   * a detonation must never grant a second passive stack (the stack was
+   * already given when the mark landed).
+   */
+  private detonateMark(target: Enemy): void {
+    target.clearMark();
+    const killed = target.takeHit();
+    this.scoring.addMarkProc();
+    this.events.emit('markDetonated', { target });
+    if (killed) this.kill(target);
+  }
+
+  /**
+   * Damage from an enemy, scaled by the stage: attacks (swings, spit, Magus
+   * spells) by DIFFICULTY.damage, body contact by DIFFICULTY.contactDamage.
+   * Contact is logged as its own source ('basicContact', …). Edge fire has
+   * its own ramp and calls playerHit() directly.
+   */
+  enemyHit(damage: number, source: EnemyArchetype, kind: DamageKind = 'attack'): void {
+    const diff = this.director.difficulty;
+    const mult = kind === 'contact' ? diff.contactDamage : diff.damage;
+    this.playerHit(Math.round(damage * mult), kind === 'contact' ? `${source}Contact` : source);
+  }
+
+  /** Every hit on the player lands here, tagged with its source for the run log. */
+  playerHit(damage: number, source: string): void {
+    const hpBefore = this.player.hp;
+    const taken = this.player.takeDamage(damage, this.clock.now);
+    if (taken <= 0) return;
+    // Log the HP actually lost: overkill on the final hit is not damage taken.
+    const lethal = !this.player.isAlive;
+    this.scoring.addDamageTaken(source ?? 'unknown', hpBefore - this.player.hp, lethal);
+    this.scoring.addProjectileHit();
+    this.events.emit('playerHit', { damage: hpBefore - this.player.hp, source, lethal });
+  }
+
+  /** A wave was cleared: its speed bonus (SCORE.waveClear). */
+  waveCleared(wave: ClearedWave): void {
+    const points = this.scoring.addWaveClear(wave.enemies, wave.elapsedMs, wave.parMs, wave.stage);
+    this.events.emit('waveCleared', { ...wave, points });
+  }
+
+  /**
+   * A stage was cleared: the HP bonus for what you finished it with (before
+   * the heal), then back to full HP (DIFFICULTY.stageClearHeal) for the next.
+   */
+  stageCleared(): void {
+    const stage = this.director.stage;
+    const { points, flawless } = this.scoring.addStageClear(this.player.hp, stage);
+    this.scoring.startStage();
+    const healed = this.player.heal(Math.round(this.player.maxHp * DIFFICULTY.stageClearHeal));
+    this.events.emit('stageCleared', { stage, points, flawless, healed });
+  }
+}

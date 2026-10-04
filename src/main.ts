@@ -8,6 +8,7 @@ import { Keybinds } from './game/Keybinds';
 import { MouseSpeed } from './game/MouseSpeed';
 import { RunHistory } from './game/RunHistory';
 import { Settings } from './game/Settings';
+import { Profile } from './profile/Profile';
 
 const game = new Phaser.Game({
   type: Phaser.AUTO,
@@ -40,6 +41,7 @@ const game = new Phaser.Game({
 //   __keybinds.all() / .set('flash', 'CapsLock') / .reset()  // key bindings (saved in this browser)
 //   __mouseSpeed.value / .set(2.5) / .reset()                // Mouse Speed (saved in this browser)
 //   __settings.all() / .pauseOnFocusLoss = false             // pause-menu settings (saved in this browser)
+//   __profile.data / .reset()                                // everything saved, in one place
 const runs = {
   list: () => RunHistory.list(),
   summary: (growth: number = balance.DIFFICULTY.growth, version: number = balance.BALANCE_VERSION) =>
@@ -48,5 +50,5 @@ const runs = {
 };
 Object.assign(window as unknown as Record<string, unknown>, {
   __warmup: game, __balance: balance, __theme: THEME, __runs: runs, __keybinds: Keybinds, __mouseSpeed: MouseSpeed,
-  __settings: Settings,
+  __settings: Settings, __profile: Profile,
 });

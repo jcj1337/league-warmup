@@ -1,5 +1,13 @@
 # Warmup — Technical Report
 
+> **Historical (as of 2026-10-04).** This report was written when the run had ten
+> authored stages and two enemy types. The endless run, the Magus, the Sovereign, the
+> start screen, the profile store and the `Run` / `Combat` split in `GameScene` all
+> came after it. The mechanics it explains (attack cycle, casting, pausing, the
+> GameClock) are still accurate; the stage table, enemy roster and file layout are
+> not. It will be rewritten once the champion refactor
+> ([proposals/CHAMPIONS_PROPOSAL.md](proposals/CHAMPIONS_PROPOSAL.md)) settles.
+
 How the codebase actually works: architecture, mechanics, timing, state flow, and
 known weaknesses. Written to be trustworthy enough to learn the project from.
 

@@ -1,15 +1,13 @@
 import { MOUSE } from '../config/balance';
+import { Profile } from '../profile/Profile';
 
 /**
  * The player's Mouse Speed: a multiplier on cursor movement, MOUSE.minSpeed to
  * MOUSE.maxSpeed in MOUSE.step increments. `CursorLock` applies it.
  *
- * Saved in this browser's localStorage like the key bindings: it survives
- * closing the tab. Storage can be unavailable, so every read and
- * write is guarded: the default always works.
+ * Saved in the player's Profile like the key bindings: it survives closing
+ * the tab.
  */
-
-const STORAGE_KEY = 'warmup.mouseSpeed.v1';
 
 class MouseSpeedStore {
   private speed: number;
@@ -61,20 +59,12 @@ function snap(value: number): number {
 }
 
 function load(): number | null {
-  try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
-    if (raw === null) return null;
-    const parsed = Number(raw);
-    return Number.isFinite(parsed) ? snap(parsed) : null;
-  } catch {
-    return null;
-  }
+  const saved = Profile.data.mouseSpeed;
+  return Number.isFinite(saved) ? snap(saved) : null;
 }
 
 function save(speed: number): void {
-  try {
-    window.localStorage.setItem(STORAGE_KEY, String(speed));
-  } catch {
-    // Storage blocked: the speed still holds for this page.
-  }
+  Profile.update((data) => {
+    data.mouseSpeed = speed;
+  });
 }

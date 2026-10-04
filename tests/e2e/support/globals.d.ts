@@ -14,6 +14,8 @@ declare global {
     __mouseSpeed: any;
     /** The saved pause-menu settings (all / pauseOnFocusLoss / cycle…), exposed by src/main.ts. */
     __settings: any;
+    /** The player's profile store (data / update / reset): everything saved, exposed by src/main.ts. */
+    __profile: any;
     /** Not exposed by the game; the hud suite falls back when it is absent. */
     __theme?: any;
   }

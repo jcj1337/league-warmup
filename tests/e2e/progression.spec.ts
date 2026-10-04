@@ -193,7 +193,7 @@ test('progression: contact damage, levels from kills (haste, attack speed, Q ran
   await page.evaluate(() => {
     window.__runs.clear();
     // An older-version run on the same growth: must not count.
-    localStorage.setItem('warmup.runHistory.v1', JSON.stringify([{ at: new Date().toISOString(), outcome: 'defeated', stage: 30, wave: 1, runTimeSeconds: 1, growth: window.__balance.DIFFICULTY.growth, killedBy: null, damageTaken: {} }]));
+    window.__profile.update((d) => d.runs.push({ at: new Date().toISOString(), outcome: 'defeated', stage: 30, wave: 1, runTimeSeconds: 1, growth: window.__balance.DIFFICULTY.growth, killedBy: null, damageTaken: {} }));
     const g = window.__warmup.scene.getScene('GameScene');
     g.player.hp = 1; g.player.lastHitAt = Number.NEGATIVE_INFINITY;
     g.onPlayerHit(5, 'edgeFire');

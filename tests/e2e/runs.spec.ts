@@ -113,9 +113,11 @@ test('runs: damage by source, killing blow, local run log, end-screen summary, c
     Storage.prototype.setItem = () => { throw new Error('storage blocked'); };
   });
   const blocked = await dieTo('pursuer');
-  blocked.result?.outcome === 'defeated' && blocked.runs.length === 0 && /YOUR BEST\s+not logged/.test(blocked.screen)
-    ? pass('with storage blocked the run still ends normally; it just is not logged')
-    : fail(`blocked storage: ${JSON.stringify({ outcome: blocked.result?.outcome, runs: blocked.runs.length })}\n${blocked.screen}`);
+  // The profile keeps the run for this page, as it keeps bindings; nothing reaches storage.
+  const stored = await page.evaluate(() => (JSON.parse(localStorage.getItem('warmup.profile.v1') ?? '{}').runs ?? []).length);
+  blocked.result?.outcome === 'defeated' && blocked.runs.length === 1 && stored === 0
+    ? pass('with storage blocked the run still ends normally and is kept for this page; nothing is written')
+    : fail(`blocked storage: ${JSON.stringify({ outcome: blocked.result?.outcome, runs: blocked.runs.length, stored })}\n${blocked.screen}`);
 
   await finish();
 });

@@ -149,16 +149,54 @@ test('start screen, saved pause-menu settings, pause on focus loss', async ({ pa
     await page.waitForTimeout(80);
   }
 
-  // Garbage in storage falls back to the defaults, setting by setting.
-  await page.evaluate(() => localStorage.setItem('warmup.settings.v1', JSON.stringify({ attackRangeDisplay: 'sometimes', showDamageNumbers: false, pauseOnFocusLoss: 'yes' })));
+  // Garbage in the saved profile falls back to the defaults, setting by setting.
+  await page.evaluate(() => localStorage.setItem('warmup.profile.v1', JSON.stringify({
+    version: 1, settings: { attackRangeDisplay: 'sometimes', showDamageNumbers: false, pauseOnFocusLoss: 'yes' }, mouseSpeed: 'fast', runs: 'none',
+  })));
   await page.reload({ waitUntil: 'load' });
   await waitForGame(page, 100);
   {
-    const s = await page.evaluate(() => window.__settings.all());
-    s.attackRangeDisplay === 'contextual' && s.showDamageNumbers === false && s.pauseOnFocusLoss === true
+    const s = await page.evaluate(() => ({ ...window.__settings.all(), mouseSpeed: window.__mouseSpeed.value, runs: window.__runs.list().length }));
+    s.attackRangeDisplay === 'contextual' && s.showDamageNumbers === false && s.pauseOnFocusLoss === true && s.mouseSpeed === 1 && s.runs === 0
       ? pass('invalid saved values are ignored one by one; valid ones load')
       : fail(`partial load: ${JSON.stringify(s)}`);
   }
+
+  // === 2b. The profile folds in the keys from before it existed ===============
+  section('2b. Migration');
+  await page.evaluate(() => {
+    localStorage.removeItem('warmup.profile.v1');
+    localStorage.setItem('warmup.keybinds.v1', JSON.stringify({ skillshotQ: 'KeyY', flash: 'CapsLock' }));
+    localStorage.setItem('warmup.mouseSpeed.v1', '2.5');
+    localStorage.setItem('warmup.settings.v1', JSON.stringify({ attackRangeDisplay: 'off', showDamageNumbers: true, pauseOnFocusLoss: false }));
+    localStorage.setItem('warmup.runHistory.v1', JSON.stringify([
+      { at: '2026-10-01T10:00:00.000Z', outcome: 'defeated', stage: 4, wave: 2, runTimeSeconds: 90, growth: 1.15, killedBy: 'magus', damageTaken: { magus: 100 } },
+      { broken: true },
+    ]));
+  });
+  await page.reload({ waitUntil: 'load' });
+  await waitForGame(page, 100);
+  {
+    const m = await page.evaluate(() => ({
+      binds: window.__keybinds.all(),
+      speed: window.__mouseSpeed.value,
+      settings: window.__settings.all(),
+      runs: window.__runs.list(),
+      profile: window.__profile.data,
+      legacyLeft: ['warmup.keybinds.v1', 'warmup.mouseSpeed.v1', 'warmup.settings.v1', 'warmup.runHistory.v1'].filter((k) => localStorage.getItem(k) !== null),
+      saved: localStorage.getItem('warmup.profile.v1') !== null,
+    }));
+    m.binds.skillshotQ === 'KeyY' && m.binds.flash === 'CapsLock' && m.speed === 2.5 && m.settings.attackRangeDisplay === 'off' &&
+      m.settings.pauseOnFocusLoss === false && m.runs.length === 1 && m.runs[0].stage === 4
+      ? pass('old bindings, Mouse Speed, settings and run log all carry into the profile (a broken run is dropped)')
+      : fail(`migrated: ${JSON.stringify(m)}`);
+    m.legacyLeft.length === 0 && m.saved && m.profile.version === 1 && m.profile.champion === 'ezreal' && m.profile.currency === 0
+      ? pass('the profile is saved and the old keys are removed')
+      : fail(`cleanup: ${JSON.stringify({ legacyLeft: m.legacyLeft, saved: m.saved, profile: m.profile })}`);
+  }
+  await page.evaluate(() => window.__profile.reset());
+  await page.reload({ waitUntil: 'load' });
+  await waitForGame(page, 100);
 
   // === 3. Pause on focus loss =================================================
   section('3. Focus loss');
