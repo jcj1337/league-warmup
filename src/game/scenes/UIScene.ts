@@ -388,7 +388,7 @@ export class UIScene extends Phaser.Scene {
     const prompt = pixelText(this, cx, cy + 84, 'CLICK OR PRESS ANY KEY', 3, THEME.ui.text).setOrigin(0.5);
     // The credit, with qwer's rank beside it: a challenger crest over TOP 50, the pair centred as one line.
     const credit = pixelText(this, 0, cy + 136, 'DESIGNED BY QWER', 2, THEME.ui.faint).setOrigin(0, 0.5);
-    const badge = this.add.image(0, cy + 124, TEX.ui.challenger).setScale(3);
+    const badge = this.add.image(0, cy + 126, TEX.ui.challenger).setScale(2);
     const rank = pixelText(this, 0, cy + 152, 'TOP 50', 2, THEME.ui.accent).setOrigin(0.5);
     const badgeW = Math.max(badge.displayWidth, rank.width);
     const gap = 14;
