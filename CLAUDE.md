@@ -24,7 +24,8 @@ this file is for working on the code.
 - `src/champions/` — playable champions. `types.ts` is the contract (a `Champion` has
   stats, auto pacing, level perks, body art and a slot definition per ability; its `Kit`
   decides what a slot does when its cast resolves). `index.ts` is the registry. One
-  folder per champion: `balance.ts`, `art.ts`, `kit.ts`, `index.ts`, `README.md`.
+  folder per champion: `balance.ts`, `art.ts`, `motions.ts` (what the body does per
+  auto and cast, `src/game/view/motion.ts`), `kit.ts`, `index.ts`, `README.md`.
   The engine never switches on a champion id; see "Adding a champion" in the README.
 - `src/game/scenes/GameScene.ts` — Phaser glue: builds the systems, `update()` order,
   input commands, `castSlot` (aim resolution from a slot's targeting), HUD snapshot.
