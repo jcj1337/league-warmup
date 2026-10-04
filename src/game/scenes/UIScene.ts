@@ -339,7 +339,17 @@ export class UIScene extends Phaser.Scene {
       .rectangle(0, 0, ARENA.width, ARENA.height, THEME.ui.scrim, THEME.startScreen.scrimAlpha)
       .setOrigin(0, 0)
       .setInteractive({ useHandCursor: true });
-    scrim.on('pointerup', () => this.game_.startRun());
+    // A click starts the run only if it was pressed on the card too: Change
+    // Champion acts on the press, and the release of that same click lands on
+    // this card a moment later. (The keys below follow the same rule.)
+    let pressedOnCard = false;
+    scrim.on('pointerdown', () => {
+      pressedOnCard = true;
+    });
+    scrim.on('pointerup', () => {
+      if (pressedOnCard) this.game_.startRun();
+      pressedOnCard = false;
+    });
 
     // Any key, on its release. Only a key pressed while the card is up counts,
     // so the release of the F5 / Ctrl+R that reloaded the page can't start the run.

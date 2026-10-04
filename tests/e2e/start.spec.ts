@@ -163,8 +163,15 @@ test('start screen, saved pause-menu settings, pause on focus loss', async ({ pa
       .find((o: { type: string; text?: string }) => /Text$/.test(o.type) && o.text === 'CHANGE CHAMPION');
     return t ? { x: t.x, y: t.y } : null;
   });
-  if (changeAt) await page.mouse.click(changeAt.x, changeAt.y);
-  await page.waitForFunction((r) => window.__warmup.scene.getScene('GameScene').getHudState().round !== r, roundBefore);
+  // Held like a person's click: the button acts on the press, and the release
+  // lands on the start screen a moment later. It must not start the run.
+  if (changeAt) {
+    await page.mouse.move(changeAt.x, changeAt.y);
+    await page.mouse.down();
+    await page.waitForFunction((r) => window.__warmup.scene.getScene('GameScene').getHudState().round !== r, roundBefore);
+    await page.waitForTimeout(120);
+    await page.mouse.up();
+  }
   await page.waitForTimeout(150);
   {
     const s = await game();
