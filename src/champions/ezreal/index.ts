@@ -34,17 +34,17 @@ export const EZREAL: Champion = {
   slots: {
     q: {
       label: 'Mystic Shot', targeting: 'direction',
-      castTimeMs: () => SKILLSHOT_Q.castTimeMs, cooldownMs: () => SKILLSHOT_Q.cooldownMs,
+      castTimeMs: ({ castSpeed }) => SKILLSHOT_Q.castTimeMs / castSpeed, cooldownMs: () => SKILLSHOT_Q.cooldownMs,
       icon: TEX.icons.q, accent: THEME.ability.accents.q, castStyle: 'bolt', fx: 'q',
     },
     w: {
       label: 'Essence Flux', targeting: 'direction',
-      castTimeMs: () => SKILLSHOT_W.castTimeMs, cooldownMs: () => SKILLSHOT_W.cooldownMs,
+      castTimeMs: ({ castSpeed }) => SKILLSHOT_W.castTimeMs / castSpeed, cooldownMs: () => SKILLSHOT_W.cooldownMs,
       icon: TEX.icons.w, accent: THEME.ability.accents.w, castStyle: 'orb', fx: 'w',
     },
     e: {
       label: 'Arcane Shift', targeting: 'direction',
-      castTimeMs: () => BLINK_E.castTimeMs, cooldownMs: () => BLINK_E.cooldownMs,
+      castTimeMs: ({ castSpeed }) => BLINK_E.castTimeMs / castSpeed, cooldownMs: () => BLINK_E.cooldownMs,
       icon: TEX.icons.e, accent: THEME.ability.accents.e, castStyle: 'blink', fx: 'e',
     },
     r: {

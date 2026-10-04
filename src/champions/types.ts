@@ -58,6 +58,14 @@ export interface CastTelegraph {
 /** Which THEME.fx entry colours a slot's effects. Grows with each champion. */
 export type FxKey = 'q' | 'w' | 'e' | 'r' | 'poison' | 'miasma' | 'fang' | 'gaze';
 
+/** What a cast window scales with: both are 1 at level 1 with no passive. */
+export interface CastPace {
+  /** From ability haste: 1 + LEVELS.castHasteShare × haste / 100. */
+  castSpeed: number;
+  /** Level and passive together, as the auto windup reads them. */
+  attackSpeed: number;
+}
+
 export interface AbilityDef {
   /** 'Mystic Shot': the pause menu's key row and the champion's README. */
   label: string;
@@ -66,10 +74,11 @@ export interface AbilityDef {
   range?: number;
   /**
    * Read live, so console tuning applies to the next cast. 0 means instant.
-   * Handed the champion's attack speed right now (level and passive), for a
-   * cast that speeds up with it; most ignore it.
+   * Handed how fast she casts right now: `castSpeed` from ability haste (most
+   * slots divide by it), `attackSpeed` from level and passive (for a cast that
+   * speeds up with her autos instead, like Ezreal's R).
    */
-  castTimeMs(pace: { attackSpeed: number }): number;
+  castTimeMs(pace: CastPace): number;
   cooldownMs(): number;
   /** Texture key of the slot icon. */
   icon: string;

@@ -18,6 +18,7 @@ shared across champions: see the main README's [Controls](../../../README.md#con
 \* her level-1 auto cycle is 950ms (Ezreal's is 700ms), +3% attack speed per level; the
 windup is a quarter of it. † at level 1; ability haste (+5 per level) shortens Q / W / E / R,
 as for Ezreal: ×0.8 at level 6, ×0.67 at 11, ×0.54 at 18 (Q 3.5s → 1.9s, E 800 → 430ms).
+Haste shortens every cast window at half that rate: ×0.70 at level 18 (R 500 → 351ms).
 
 **Sizes come from League, by proportion.** Ranges are scaled by her auto range (League's
 550 is her 200): W and E 700 → 250. Q is the exception: shorter than League's ratio, just

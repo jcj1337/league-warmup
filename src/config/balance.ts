@@ -612,6 +612,13 @@ export const LEVELS = {
   max: 18,
   /** XP from level 1 to 2, and how much more each later level needs. */
   xp: { first: 10, growth: 1.2 },
+  /**
+   * Ability haste shortens cast windows too, at this share of what it does to
+   * cooldowns: cast = base / (1 + share × haste / 100). 85 haste at level 18
+   * is ×0.70 (Cassiopeia's R 500 → 351ms). A slot that scales with attack
+   * speed instead (Ezreal's R) ignores it.
+   */
+  castHasteShare: 0.5,
 };
 
 /** Body contact: an active enemy touching you hurts (see Enemy.checkContact). */

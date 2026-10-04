@@ -28,22 +28,22 @@ export const CASSIOPEIA: Champion = {
   slots: {
     q: {
       label: 'Noxious Blast', targeting: 'point', range: Q.range,
-      castTimeMs: () => Q.castTimeMs, cooldownMs: () => Q.cooldownMs,
+      castTimeMs: ({ castSpeed }) => Q.castTimeMs / castSpeed, cooldownMs: () => Q.cooldownMs,
       icon: TEX.icons.cassioQ, accent: THEME.ability.accents.venom, castStyle: 'orb', fx: 'poison',
     },
     w: {
       label: 'Miasma', targeting: 'point', range: W.range,
-      castTimeMs: () => W.castTimeMs, cooldownMs: () => W.cooldownMs,
+      castTimeMs: ({ castSpeed }) => W.castTimeMs / castSpeed, cooldownMs: () => W.cooldownMs,
       icon: TEX.icons.cassioW, accent: THEME.ability.accents.miasma, castStyle: 'orb', fx: 'miasma',
     },
     e: {
       label: 'Twin Fang', targeting: 'unit', range: E.range,
-      castTimeMs: () => E.castTimeMs, cooldownMs: () => E.cooldownMs,
+      castTimeMs: ({ castSpeed }) => E.castTimeMs / castSpeed, cooldownMs: () => E.cooldownMs,
       icon: TEX.icons.cassioE, accent: THEME.ability.accents.fang, castStyle: 'fang', fx: 'fang',
     },
     r: {
       label: 'Petrifying Gaze', targeting: 'direction',
-      castTimeMs: () => R.castTimeMs, cooldownMs: () => R.cooldownMs,
+      castTimeMs: ({ castSpeed }) => R.castTimeMs / castSpeed, cooldownMs: () => R.cooldownMs,
       telegraph: { kind: 'cone', radius: () => R.radius, halfAngle: () => R.halfAngle, fx: 'poison' },
       icon: TEX.icons.cassioR, accent: THEME.ability.accents.stone, castStyle: 'orb', fx: 'gaze',
     },

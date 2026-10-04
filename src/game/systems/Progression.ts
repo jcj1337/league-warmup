@@ -8,7 +8,8 @@ import type { AttackPacing } from './AttackSystem';
  * faster by its own perks —
  *
  *   ability haste    perks.abilityHastePerLevel per level on the slots
- *                    (cooldown = base / (1 + haste / 100); Flash is a summoner, untouched)
+ *                    (cooldown = base / (1 + haste / 100); Flash is a summoner, untouched),
+ *                    and on their cast windows at LEVELS.castHasteShare of that
  *   attack speed     +perks.attackSpeedPerLevel per level on the base auto cycle
  *   move speed       +perks.moveSpeedPerLevel per level
  *
@@ -52,6 +53,11 @@ export class Progression implements AttackPacing {
   /** Multiplies the slot cooldowns. */
   get cooldownMultiplier(): number {
     return 100 / (100 + this.abilityHaste);
+  }
+
+  /** Divides the slots' cast windows: haste at LEVELS.castHasteShare of its cooldown effect. */
+  get castSpeedMultiplier(): number {
+    return 1 + (LEVELS.castHasteShare * this.abilityHaste) / 100;
   }
 
   get attackSpeedMultiplier(): number {

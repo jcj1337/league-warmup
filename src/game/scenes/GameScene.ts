@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import { ARENA, DEBUG, FLASH } from '../../config/balance';
 import { activeChampion, type Champion, type Kit, type Slot } from '../../champions';
-import type { AbilityDef, Aim } from '../../champions/types';
+import type { AbilityDef, Aim, CastPace } from '../../champions/types';
 import { THEME } from '../../config/theme';
 import { ensurePlayerFrames } from '../art/look';
 import { ensureArt } from '../art/textures';
@@ -329,9 +329,15 @@ export class GameScene extends Phaser.Scene {
     this.attacks.onMoveOrder();
     const payload = this.kit.commit(slot, aim);
     this.cooldowns.start(slot);
-    // Level and passive together, as the auto windup reads them.
-    const attackSpeed = this.progression.attackSpeedMultiplier * this.kit.attackSpeedMultiplier;
-    this.beginCastOrResolve(slot, payload, def.castTimeMs({ attackSpeed }), def.anchored ?? false);
+    this.beginCastOrResolve(slot, payload, def.castTimeMs(this.castPace), def.anchored ?? false);
+  }
+
+  /** How fast she casts right now: haste for most slots, level and passive attack speed for some. */
+  private get castPace(): CastPace {
+    return {
+      castSpeed: this.progression.castSpeedMultiplier,
+      attackSpeed: this.progression.attackSpeedMultiplier * this.kit.attackSpeedMultiplier,
+    };
   }
 
   /** Where a cast goes, from the cursor and the slot's targeting. Null: nothing to cast at. */

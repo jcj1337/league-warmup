@@ -17,6 +17,8 @@ see the main README's [Controls](../../../README.md#controls).
 \* the auto cooldown is set by your level (700ms at level 1, +6% attack speed per level,
 347ms at 18); the windup is a quarter of it, and both shrink further as the passive stacks.
 † at level 1; ability haste (+5 per level) shortens Q / W / E / R to ×0.54 at level 18.
+Q / W / E cast windows shrink with haste at half that rate (×0.70 at 18); R's charge
+follows attack speed instead.
 
 **Cast windows.** Q/W/E commit for a short window anchored to the auto windup
 (auto 175 ≈ Q 165 < W 185 < E 210). The aim (Q/W) or destination (E) is frozen at

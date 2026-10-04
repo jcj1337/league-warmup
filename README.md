@@ -87,8 +87,9 @@ inert and never bump.
 
 **Levels.** Kills give XP (basic 1, Pursuer 2, Magus 3); 10 XP reaches level 2, and each
 later level needs 20% more, up to level 18. Each level gives **+5 ability haste** (Q / W
-/ E cooldowns ÷ (1 + haste/100): ×0.69 at level 10, ×0.54 at 18; Flash is a summoner
-and never changes) and **+6% attack speed** on the base auto cycle (700ms at level 1,
+/ E / R cooldowns ÷ (1 + haste/100): ×0.69 at level 10, ×0.54 at 18; Flash is a summoner
+and never changes; cast windows shrink at half that rate, ×0.82 at 10, ×0.70 at 18, so
+a windup and its animation quicken as you level) and **+6% attack speed** on the base auto cycle (700ms at level 1,
 455ms at 10, 347ms at 18). From **level 9**, Q is ranked up and each Q hit removes 2
 pips. The XP curve is calibrated so your level tracks the stage: about level 11
 entering Stage 10, level 18 around Stage 17. The vitals plate shows `LV n` and a slim

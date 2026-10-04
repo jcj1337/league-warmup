@@ -9,6 +9,7 @@ test('progression: contact damage, levels from kills (haste, attack speed, Q ran
     contact: window.__balance.CONTACT,
     levels: { ...window.__balance.LEVELS, ...window.__ezreal.LEVELS },
     q: window.__ezreal.SKILLSHOT_Q,
+    r: window.__ezreal.ULT_R,
     flash: window.__balance.FLASH,
   }));
 
@@ -135,7 +136,12 @@ test('progression: contact damage, levels from kills (haste, attack speed, Q ran
     const out = {};
     for (const l of [1, 9, 18]) {
       g.progression.level = l;
-      out[l] = { q: g.cooldowns.totalMs('q'), w: g.cooldowns.totalMs('w'), e: g.cooldowns.totalMs('e'), flash: g.cooldowns.totalMs('flash'), base: g.attacks.baseCooldownMs, qPips: g.kit.qPips };
+      out[l] = {
+        q: g.cooldowns.totalMs('q'), w: g.cooldowns.totalMs('w'), e: g.cooldowns.totalMs('e'), flash: g.cooldowns.totalMs('flash'),
+        base: g.attacks.baseCooldownMs, qPips: g.kit.qPips,
+        qCast: g.champion.slots.q.castTimeMs(g.castPace), rCast: g.champion.slots.r.castTimeMs(g.castPace),
+        attackSpeed: g.progression.attackSpeedMultiplier * g.kit.attackSpeedMultiplier,
+      };
     }
     g.progression.level = 1;
     return out;
@@ -146,6 +152,13 @@ test('progression: contact damage, levels from kills (haste, attack speed, Q ran
     Math.abs(kit[18].q - cfg.q.cooldownMs * haste(18)) < 1e-6 && kit[1].q === cfg.q.cooldownMs && kit[9].w < kit[1].w && kit[18].e < kit[9].e
       ? pass(`ability haste: Q ${kit[1].q} → ${Math.round(kit[9].q)} (level 9) → ${Math.round(kit[18].q)}ms (level 18)`)
       : fail(`cooldowns by level: ${JSON.stringify(kit)}`);
+    const castHaste = (l) => 1 / (1 + cfg.levels.castHasteShare * cfg.levels.abilityHastePerLevel * (l - 1) / 100);
+    kit[1].qCast === cfg.q.castTimeMs && [9, 18].every((l) => Math.abs(kit[l].qCast - cfg.q.castTimeMs * castHaste(l)) < 1e-6)
+      ? pass(`haste shortens cast windows at half strength: Q cast ${kit[1].qCast} → ${Math.round(kit[9].qCast)} → ${Math.round(kit[18].qCast)}ms`)
+      : fail(`cast windows by level: ${JSON.stringify(kit)}`);
+    [1, 18].every((l) => Math.abs(kit[l].rCast - cfg.r.castTimeMs / kit[l].attackSpeed) < 1e-6)
+      ? pass(`R's charge follows attack speed, not haste: ${kit[1].rCast} → ${Math.round(kit[18].rCast)}ms`)
+      : fail(`R cast by level: ${JSON.stringify(kit)}`);
     kit[1].flash === cfg.flash.cooldownMs && kit[18].flash === cfg.flash.cooldownMs
       ? pass('Flash is a summoner: levels never touch it')
       : fail(`flash by level: ${kit[1].flash} / ${kit[18].flash}`);
