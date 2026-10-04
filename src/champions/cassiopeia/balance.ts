@@ -76,15 +76,20 @@ export const W = {
   cooldownMs: 12000,
 };
 
-/** E, Twin Fang: a point-and-click bolt. One pip; two if the target is poisoned. */
+/**
+ * E, Twin Fang: point-and-click, as in League. Press it with the cursor on an
+ * enemy within range; empty ground, or an enemy out of range, casts nothing.
+ * One pip; two if the target is poisoned.
+ */
 export const E = {
-  range: 400,
+  /** To the target's edge. 1.27x her auto range, League's 700 / 550. */
+  range: 330,
   castTimeMs: 150,
   cooldownMs: 800,
   pips: 1,
   pipsOnPoisoned: 2,
+  /** League's 2500 is ~1180 here. */
   boltSpeed: 1150,
-  boltRadius: 6,
 };
 
 /**

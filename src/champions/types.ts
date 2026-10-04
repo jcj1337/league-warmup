@@ -31,13 +31,15 @@ export const SLOTS: readonly Slot[] = ['q', 'w', 'e', 'r'];
  * kit sees it:
  *   direction  toward the cursor (a skillshot)
  *   point      the cursor, clamped to `range` from the player (a ground spell)
- *   unit       the enemy nearest the cursor within `range`; nothing in range, no cast
+ *   unit       the enemy under the cursor (the right-click hit test), its body within
+ *              `range`; no enemy there, or out of range, no cast (out of range flashes
+ *              the slot's range ring)
  *   self       on the player
  */
 export type Targeting = 'direction' | 'point' | 'unit' | 'self';
 
 /** The charge-up drawn on the slime during the cast window (PlayerView). */
-export type CastStyle = 'bolt' | 'orb' | 'blink' | 'none';
+export type CastStyle = 'bolt' | 'orb' | 'blink' | 'fang' | 'none';
 
 /**
  * A shape drawn on the ground during the cast window, from the player toward

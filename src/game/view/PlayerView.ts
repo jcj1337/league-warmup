@@ -92,6 +92,8 @@ export class PlayerView {
   private castKind: CastKind | null = null;
   private castProgress = 0;
   private castAngle: number | null = null;
+  /** The last cast's aim, kept past its release for the 'fang' lunge. */
+  private lastCastAngle = 0;
   private rangeVisibility = 0;
   private rangeInRange = false;
   private rangePending = false;
@@ -159,6 +161,7 @@ export class PlayerView {
     this.castKind = ability;
     this.castProgress = Phaser.Math.Clamp(progress, 0, 1);
     this.castAngle = ability !== null && aimX !== null && aimY !== null ? Math.atan2(aimY - y, aimX - x) : null;
+    if (this.castAngle !== null) this.lastCastAngle = this.castAngle;
   }
 
   setRangeRingState(inRange: boolean, attackMovePending: boolean, visibility: number): void {
@@ -226,8 +229,9 @@ export class PlayerView {
       : this.pose === 'walk' ? F.walk[Math.floor(this.visualMs / P.walkFrameMs) % 2]
       : F.idle[Math.floor(this.visualMs / P.idleFrameMs) % 2];
 
-    const bx = Math.round(s.x + this.offsetX);
-    const by = Math.round(s.y + this.offsetY);
+    const lunge = this.fangOffset();
+    const bx = Math.round(s.x + this.offsetX + lunge.x);
+    const by = Math.round(s.y + this.offsetY + lunge.y);
 
     this.sprite.setTexture(frame).setFlipX(this.facing < 0).setPosition(bx, by).setDepth(actorDepth(s.y));
     // Hit: a brief white pop, then a red wash — the hero never vanishes into a silhouette.
@@ -322,6 +326,18 @@ export class PlayerView {
     }
   }
 
+  /** The 'fang' style moves the whole body: it rears back through the cast and lunges as it goes. */
+  private fangOffset(): { x: number; y: number } {
+    const C = THEME.cast;
+    let d = 0;
+    if (this.castKind !== null) {
+      if (this.lookOf(this.castKind as Slot).style === 'fang') d = -C.fangRearPx * Math.pow(this.castProgress, C.anticipationCurve);
+    } else if (this.castReleaseAge < C.fangLungeMs && this.lookOf(this.castReleaseKind as Slot).style === 'fang') {
+      d = C.fangLungePx * (1 - this.castReleaseAge / C.fangLungeMs);
+    }
+    return { x: Math.cos(this.lastCastAngle) * d, y: Math.sin(this.lastCastAngle) * d };
+  }
+
   /** Cast charge-ups, driven only by cast progress. */
   private drawCast(g: Phaser.GameObjects.Graphics, s: PlayerViewState, bx: number, by: number, hand: { x: number; y: number }): void {
     const C = THEME.cast;
@@ -341,6 +357,24 @@ export class PlayerView {
       }
       pixelDisc(g, tipX, tipY, Phaser.Math.Linear(2, 6, t), f.color, 0.7 + 0.3 * t, 3);
       pixelDisc(g, tipX, tipY, Phaser.Math.Linear(1, 3, t), f.core, 1, 3);
+      return;
+    }
+
+    if (look.style === 'fang') {
+      // Jaws opening at the mouth: two fangs parting either side of the aim, venom welling between.
+      const open = C.fangJawPx * t;
+      const nx = -Math.sin(a);
+      const ny = Math.cos(a);
+      pixelDisc(g, tipX, tipY, 3 + 3 * t, f.deep, 0.6 + 0.4 * t, 3);
+      pixelDisc(g, tipX, tipY, 2 + 2 * t, f.color, 0.8, 3);
+      for (const side of [-1, 1]) {
+        for (let i = 0; i < 4; i++) {
+          // Base at the mouth, out to the side; the point reaches forward and curls in.
+          const along = 7 + i * 6;
+          const spread = (open + 4) * (1 - i * 0.28);
+          pixelDisc(g, hand.x + Math.cos(a) * along + nx * spread * side, hand.y + Math.sin(a) * along + ny * spread * side, 4.5 - i, f.core, 1, 3);
+        }
+      }
       return;
     }
 

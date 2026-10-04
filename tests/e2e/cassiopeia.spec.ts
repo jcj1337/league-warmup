@@ -188,7 +188,7 @@ test('cassiopeia: picked from the profile, slow autos, Q blast + poison ticks, W
   await page.waitForFunction(() => window.__warmup.scene.getScene('GameScene').director.enemies[0]?.hp < 4, null, { timeout: 2000 });
   const fang1 = await G();
   fang1.enemies[0].hp === 3 && fang1.stats.fangs === 1 && fang1.cd.e > 0 && fang1.cd.e <= cfg.E.cooldownMs
-    ? pass(`E takes the enemy under the cursor for one pip (${Math.round(fang1.cd.e)}ms cooldown)`)
+    ? pass(`E bites the enemy under the cursor for one pip (${Math.round(fang1.cd.e)}ms cooldown)`)
     : fail(`E: ${JSON.stringify({ e: fang1.enemies[0], stats: fang1.stats, cd: fang1.cd })}`);
   await page.evaluate(() => { const g = window.__warmup.scene.getScene('GameScene'); g.kit.poison(g.director.enemies[0]); g.cooldowns.reset(); });
   await page.keyboard.press('e');
@@ -198,15 +198,24 @@ test('cassiopeia: picked from the profile, slow autos, Q blast + poison ticks, W
   fang2.enemies[0].hp === 1 && fang2.stats.fangsOnPoisoned === 1
     ? pass('on a poisoned target E takes two pips')
     : fail(`poisoned E: ${JSON.stringify({ e: fang2.enemies[0], stats: fang2.stats })}`);
-  // Out of range: nothing to cast at, so no cast and no cooldown.
+  // Out of range: the cursor is on an enemy, but too far away, so no cast and no cooldown.
   await stage(1200, 360, 3);
   await page.mouse.move(1200, 360);
   await page.keyboard.press('e');
   await page.waitForTimeout(cfg.E.castTimeMs + 100);
   const none = await G();
   none.cd.e === 0 && none.bolts === 0 && none.enemies[0].hp === 3
-    ? pass(`with nothing within ${cfg.E.range}px, E doesn't cast and keeps its cooldown`)
+    ? pass(`on an enemy beyond ${cfg.E.range}px, E doesn't cast and keeps its cooldown`)
     : fail(`E out of range: ${JSON.stringify({ cd: none.cd, bolts: none.bolts })}`);
+  // Point-and-click: an enemy in range but not under the cursor is not a target.
+  await stage(900, 360, 3);
+  await page.mouse.move(900, 430);            // 70px off its centre: beside it, not on it
+  await page.keyboard.press('e');
+  await page.waitForTimeout(cfg.E.castTimeMs + 100);
+  const beside = await G();
+  beside.cd.e === 0 && beside.bolts === 0 && beside.enemies[0].hp === 3
+    ? pass('with the cursor beside an enemy in range, not on it, E does not cast')
+    : fail(`E beside: ${JSON.stringify({ cd: beside.cd, bolts: beside.bolts, hp: beside.enemies[0].hp })}`);
 
   // === 5. R: the cone reads facing ============================================
   section('5. R');

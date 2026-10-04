@@ -445,6 +445,32 @@ export const THEME = {
   },
 
   /**
+   * Cassiopeia's Twin Fang, past the cast: two fangs that split apart in flight
+   * and snap shut on the target. A poisoned target takes a second, wider bite
+   * (closing a beat later, since its fangs start further out), a bigger burst
+   * and a short shake.
+   */
+  twinFang: {
+    /** How far apart the two fangs weave at mid-flight. */
+    weavePx: 9,
+    /** Each fang starts this far outside the target's edge and snaps to `biteDepth` of its radius inside it. */
+    biteGapPx: 14,
+    biteDepth: 0.45,
+    biteMs: 90,
+    /** The second bite on a poisoned target: wider, and turned across the first. */
+    poisonedGapPx: 28,
+    poisonedTurn: 1.1,
+    /** Past the target's edge. */
+    burstPx: 12,
+    poisonedBurstPx: 26,
+    burstMs: 200,
+    sparks: 6,
+    poisonedSparks: 12,
+    shakeMs: 70,
+    shakeIntensity: 0.003,
+  },
+
+  /**
    * Ability cast animations. Pure presentation — the CastSystem timer decides
    * when a cast completes; these only shape how that reads on screen.
    */
@@ -457,6 +483,11 @@ export const THEME = {
     eRingEndPad: 2,
     releaseFlashMs: 105,
     releaseFlashRadius: 30,
+    /** The 'fang' style: she rears back with her jaws opening, then lunges as the cast goes. */
+    fangRearPx: 5,
+    fangJawPx: 10,
+    fangLungePx: 9,
+    fangLungeMs: 120,
   },
 
   passive: {
@@ -558,6 +589,8 @@ export const THEME = {
   rangeHint: {
     holdMs: 320,
     fadeMs: 160,
+    /** A point-and-click slot pressed on an enemy out of range: its range ring closes in to the edge, in the slot's colour. */
+    unitOutOfRange: { fromPx: 14, ms: 360, alpha: 0.9 },
   },
 
   /** Bottom-centre ability bar: the Q/W/E kit row plus a separate Flash slot. */

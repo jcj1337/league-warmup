@@ -1,9 +1,8 @@
-import { AutoAttackMissile } from '../../game/entities/AutoAttackMissile';
 import type { Enemy } from '../../game/entities/Enemy';
 import { PlayerZoneSystem } from '../../game/systems/PlayerZoneSystem';
-import { PROJECTILE_ART } from '../../game/view/projectileArt';
 import type { Aim, Kit, KitContext, KitStat, Slot } from '../types';
 import { E, GAZE_SLOW, MIASMA_SLOW, PETRIFY_STATUS, POISON, POISON_STATUS, Q, R, W } from './balance';
+import { TwinFang, playBite } from './TwinFang';
 
 /**
  * Cassiopeia's kit, for one run.
@@ -11,7 +10,8 @@ import { E, GAZE_SLOW, MIASMA_SLOW, PETRIFY_STATUS, POISON, POISON_STATUS, Q, R,
  *   Q  Noxious Blast     a delayed blast at a ground point: one pip, and poison
  *   W  Miasma            venom lobbed into a wall of clouds across her aim: enemies inside are
  *                        slowed and poisoned
- *   E  Twin Fang         a quick point-and-click bolt: one pip, two on a poisoned target
+ *   E  Twin Fang         point-and-click on the enemy under the cursor: twin fangs that bite
+ *                        for one pip, two on a poisoned target
  *   R  Petrifying Gaze   a cone, striking as its cast ends: enemies facing her are stunned, the
  *                        rest slowed; one pip to all; back at every stage clear
  *
@@ -25,8 +25,8 @@ import { E, GAZE_SLOW, MIASMA_SLOW, PETRIFY_STATUS, POISON, POISON_STATUS, Q, R,
 export class CassiopeiaKit implements Kit {
   /** Ground spells she owns. Public for the suites. */
   readonly zones: PlayerZoneSystem;
-  /** E bolts in flight. */
-  readonly bolts: AutoAttackMissile[] = [];
+  /** E fangs in flight. */
+  readonly bolts: TwinFang[] = [];
   /** Per poisoned enemy: when its next pip ticks, and when the poison lapses (ticks on the deadline still land). */
   private readonly poisonTicks = new Map<Enemy, { nextTickAt: number; until: number }>();
 
@@ -46,7 +46,7 @@ export class CassiopeiaKit implements Kit {
   }
 
   canCast(slot: Slot, aim: Aim): boolean {
-    // E needs a target; the engine only offers one within range.
+    // E needs a target; the engine only offers the one under the cursor, within range.
     return slot !== 'e' || Boolean(aim.target);
   }
 
@@ -85,11 +85,7 @@ export class CassiopeiaKit implements Kit {
       if (!target || !target.active) return;
       this.fangs++;
       const { scene, player } = this.ctx;
-      this.bolts.push(new AutoAttackMissile(
-        scene, player.x, player.y, target, target.spawnId,
-        (hit) => this.onFangImpact(hit),
-        { speed: E.boltSpeed, radius: E.boltRadius, art: PROJECTILE_ART.fang, impact: 'fang' },
-      ));
+      this.bolts.push(new TwinFang(scene, player.x, player.y, target, E.boltSpeed, (hit, angle) => this.onFangImpact(hit, angle)));
     } else if (slot === 'r') {
       const { player } = this.ctx;
       const angle = Math.atan2(aim.y - player.y, aim.x - player.x);
@@ -136,9 +132,10 @@ export class CassiopeiaKit implements Kit {
     this.poisonTicks.set(e, { nextTickAt: live ? live.nextTickAt : now + POISON.tickMs, until: now + POISON.durationMs });
   }
 
-  private onFangImpact(target: Enemy): void {
+  private onFangImpact(target: Enemy, angle: number): void {
     if (!target.active) return;
     const poisoned = target.hasStatus(POISON_STATUS, this.ctx.clock.now);
+    playBite(this.ctx.scene, target, angle, poisoned);
     if (poisoned) this.fangsOnPoisoned++;
     const pips = poisoned ? E.pipsOnPoisoned : E.pips;
     for (let i = 0; i < pips && target.active; i++) this.pip(target);

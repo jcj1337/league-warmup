@@ -347,19 +347,18 @@ export class GameScene extends Phaser.Scene {
         return { x: player.x + (dx / dist) * range, y: player.y + (dy / dist) * range };
       }
       case 'unit': {
-        // The enemy nearest the cursor whose body is within range, like a quick-cast point-and-click.
+        // Point-and-click: the enemy under the cursor, by the same hit test as a
+        // right-click attack. Out of range, nothing casts, and the slot's range
+        // ring flashes so the miss reads as range, not a dropped key.
+        const target = this.targetAt(x, y);
+        if (!target) return null;
         const range = def.range ?? Number.POSITIVE_INFINITY;
-        let best: Enemy | null = null;
-        let bestDist = Number.POSITIVE_INFINITY;
-        for (const e of this.enemies) {
-          if (!e.active || Math.hypot(e.x - player.x, e.y - player.y) > range + e.radius) continue;
-          const d = Math.hypot(e.x - x, e.y - y);
-          if (d < bestDist) {
-            bestDist = d;
-            best = e;
-          }
+        if (Math.hypot(target.x - player.x, target.y - player.y) > range + target.radius) {
+          const R = THEME.rangeHint.unitOutOfRange;
+          Fx.of(this).ring(player.x, player.y, range + R.fromPx, range, R.ms, def.accent, R.alpha);
+          return null;
         }
-        return best ? { x: best.x, y: best.y, target: best } : null;
+        return { x: target.x, y: target.y, target };
       }
     }
   }

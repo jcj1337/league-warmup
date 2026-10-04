@@ -45,6 +45,7 @@ export const TEX = {
     coin: 'fx_coin',
     poison: 'fx_poison',
     petrify: 'fx_petrify',
+    fang: 'fx_fang',
     flashStar: 'fx_flash_star',
     pingMove: 'fx_ping_move',
     pingAttack: 'fx_ping_attack',

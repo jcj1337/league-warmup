@@ -11,7 +11,7 @@ shared across champions: see the main README's [Controls](../../../README.md#con
 | Auto | target | ~240ms windup\* | 950ms\* | 260 | 1 |
 | Q, Noxious Blast | ground point | 150ms | 3500ms† | 400, blast radius 45 | 1 on landing, then poison |
 | W, Miasma | ground point | 150ms | 12000ms† | 330; a wall of 7 clouds across your aim, ~180 × 60 | 0; slows 35% and poisons inside |
-| E, Twin Fang | the enemy nearest the cursor | 150ms | 800ms† | 400 | 1, **2 if poisoned** |
+| E, Twin Fang | the enemy **under** the cursor | 150ms | 800ms† | 330 | 1, **2 if poisoned** |
 | R, Petrifying Gaze | cone toward the cursor | 500ms, rooted; strikes as it ends | 45000ms†, **back at every stage clear** | 420, 80° wide | 1; **stuns enemies facing you** 1.5s, slows the rest 50% |
 | F | cursor | instant | 20000ms | 275 | — |
 
@@ -39,10 +39,16 @@ onto their spots (1200px/s), each cloud bursting open where its bolt lands, and 
 takes hold once they're all down. It lingers 4s and re-applies its slow and poison every half second to
 whatever touches any of the clouds.
 
-**E is point-and-click.** It takes the enemy nearest your cursor whose body is within 400px
-of you, like a quick-cast point-and-click in League; with nothing in range it doesn't cast
-and the cooldown doesn't start. Its cooldown is its own: autos never reset it and it never
-resets autos.
+**E is point-and-click.** Press it with the cursor *on* an enemy (the same hit test as a
+right-click attack) whose body is within 330px of you. Empty ground casts nothing, even
+with an enemy close by; an enemy out of range casts nothing either, and E's range ring
+closes in around you to show the reach. Either way the cooldown doesn't start. Its cooldown
+is its own: autos never reset it and it never resets autos.
+
+**E bites.** She rears back with her jaws opening, then lunges as two fangs leave her. They
+weave apart in flight and meet again in the target, snapping shut across it. A poisoned
+target takes a second, wider bite that closes a beat later, a bigger burst, and a short
+screen shake: that's the two pips.
 
 **W-Flash and R-Flash.** Flash during either cast and the spell comes out of her where
 she lands, aimed the same way: W's bolts leave from the Flash destination and the wall lands

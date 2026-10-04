@@ -36,7 +36,7 @@ export const CASSIOPEIA: Champion = {
     e: {
       label: 'Twin Fang', targeting: 'unit', range: E.range,
       castTimeMs: () => E.castTimeMs, cooldownMs: () => E.cooldownMs,
-      icon: TEX.icons.cassioE, accent: THEME.ability.accents.fang, castStyle: 'bolt', fx: 'fang',
+      icon: TEX.icons.cassioE, accent: THEME.ability.accents.fang, castStyle: 'fang', fx: 'fang',
     },
     r: {
       label: 'Petrifying Gaze', targeting: 'direction',

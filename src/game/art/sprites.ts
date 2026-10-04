@@ -294,6 +294,11 @@ export const SPRITES: Record<string, PixelSprite> = {
     rows: ['...k...', '..kGk..', '..kGk..', '.kGGGk.', '.kGWGk.', 'kGGWGGk', 'kGGGGGk', '.kGGGk.', '..kkk..'],
     pal: { k: P.ink, G: P.toxin, W: P.toxinCore },
   },
+  /** One fang of Twin Fang's bite, its tip pointing right (rotated to where it snaps). */
+  fx_fang: {
+    rows: ['kk.....', 'kWkk...', 'kWWWkk.', 'kWWWWWk', 'kLLkkk.', 'kk.....'],
+    pal: { k: P.ink, W: P.toxinCore, L: P.toxinLight },
+  },
   fx_petrify: {
     rows: ['..kkkkk..', '.kSSSSSk.', 'kSSkkkSSk', 'kSkGGGkSk', 'kSSkkkSSk', '.kSSSSSk.', '..kkkkk..'],
     pal: { k: P.ink, S: P.stone, G: P.venom },
