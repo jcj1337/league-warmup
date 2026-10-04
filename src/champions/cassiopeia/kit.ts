@@ -9,7 +9,7 @@ import { E, GAZE_SLOW, MIASMA_SLOW, PETRIFY_STATUS, POISON, POISON_STATUS, Q, R,
  * Cassiopeia's kit, for one run.
  *
  *   Q  Noxious Blast     a delayed blast at a ground point: one pip, and poison
- *   W  Miasma            a lingering cloud: enemies inside are slowed and poisoned
+ *   W  Miasma            a wall of clouds across her aim: enemies inside are slowed and poisoned
  *   E  Twin Fang         a quick point-and-click bolt: one pip, two on a poisoned target
  *   R  Petrifying Gaze   a cone: enemies facing her are stunned, the rest slowed; one pip to all;
  *                        back at every stage clear
@@ -64,7 +64,7 @@ export class CassiopeiaKit implements Kit {
       }, now);
     } else if (slot === 'w') {
       this.zones.placeCloud({
-        x: aim.x, y: aim.y, radius: W.radius, durationMs: W.durationMs, tickMs: W.tickMs,
+        x: aim.x, y: aim.y, puffs: this.miasmaPuffs(aim), radius: W.puffRadius, durationMs: W.durationMs, tickMs: W.tickMs,
         onTick: (inside) => {
           const t = this.ctx.clock.now;
           for (const e of inside) {
@@ -91,6 +91,28 @@ export class CassiopeiaKit implements Kit {
         onLand: (inside) => this.gaze(inside),
       }, now);
     }
+  }
+
+  /**
+   * Where W's clouds land: W.puffs of them on an arc across her aim, the
+   * middle one on the aim point. The arc is centred behind the aim point, at
+   * her distance (or W.arcMinRadius, whichever is larger), so the field bows
+   * away from her like venom spat in a sweep. Public for the suites.
+   */
+  miasmaPuffs(aim: Aim): { x: number; y: number }[] {
+    const { player } = this.ctx;
+    const dist = Math.hypot(aim.x - player.x, aim.y - player.y);
+    const facing = dist > 0 ? Math.atan2(aim.y - player.y, aim.x - player.x) : 0;
+    const arc = Math.max(dist, W.arcMinRadius);
+    const cx = aim.x - Math.cos(facing) * arc;
+    const cy = aim.y - Math.sin(facing) * arc;
+    const sweep = W.spanPx / arc;
+    const puffs: { x: number; y: number }[] = [];
+    for (let i = 0; i < W.puffs; i++) {
+      const a = facing + (W.puffs > 1 ? (i / (W.puffs - 1) - 0.5) * sweep : 0);
+      puffs.push({ x: cx + Math.cos(a) * arc, y: cy + Math.sin(a) * arc });
+    }
+    return puffs;
   }
 
   /** One pip through the hit funnel. */

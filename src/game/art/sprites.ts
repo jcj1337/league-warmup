@@ -230,7 +230,7 @@ export const SPRITES: Record<string, PixelSprite> = {
       '..............',
       '..............',
     ],
-    pal: { k: P.ink, g: P.venomDeep, G: P.venom, W: P.venomCore },
+    pal: { k: P.ink, g: P.toxinDeep, G: P.toxin, W: P.toxinCore },
   },
   icon_cassio_w: {
     rows: [
@@ -249,7 +249,7 @@ export const SPRITES: Record<string, PixelSprite> = {
       '..............',
       '..............',
     ],
-    pal: { k: P.ink, m: P.venomDeep, M: P.miasma, W: P.venomCore, g: P.venomDeep },
+    pal: { k: P.ink, m: P.miasmaDeep, M: P.miasma, W: P.toxinLight, g: P.miasma },
   },
   icon_cassio_e: {
     rows: [
@@ -268,7 +268,7 @@ export const SPRITES: Record<string, PixelSprite> = {
       '..............',
       '..............',
     ],
-    pal: { k: P.ink, G: P.venomLight, W: P.venomCore },
+    pal: { k: P.ink, G: P.toxinLight, W: P.toxinCore },
   },
   icon_cassio_r: {
     rows: [
@@ -287,12 +287,12 @@ export const SPRITES: Record<string, PixelSprite> = {
       '..............',
       '..............',
     ],
-    pal: { k: P.ink, s: P.stoneDeep, S: P.stone, G: P.venom, W: P.venomCore },
+    pal: { k: P.ink, s: P.stoneDeep, S: P.stone, G: P.venom, W: P.venomShine },
   },
-  proj_fang: { rows: ['..gG..', 'gGGWWW', '..gG..'], pal: { g: P.venom, G: P.venomLight, W: P.venomCore } },
+  proj_fang: { rows: ['..gG..', 'gGGWWW', '..gG..'], pal: { g: P.toxin, G: P.toxinLight, W: P.toxinCore } },
   fx_poison: {
     rows: ['...k...', '..kGk..', '..kGk..', '.kGGGk.', '.kGWGk.', 'kGGWGGk', 'kGGGGGk', '.kGGGk.', '..kkk..'],
-    pal: { k: P.ink, G: P.venom, W: P.venomCore },
+    pal: { k: P.ink, G: P.toxin, W: P.toxinCore },
   },
   fx_petrify: {
     rows: ['..kkkkk..', '.kSSSSSk.', 'kSSkkkSSk', 'kSkGGGkSk', 'kSSkkkSSk', '.kSSSSSk.', '..kkkkk..'],

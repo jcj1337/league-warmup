@@ -4,8 +4,8 @@ import { PlayerZoneView } from '../view/PlayerZoneView';
 
 /**
  * Ground spells the player owns: telegraphed shapes that resolve against the
- * enemies inside them at their deadline, and clouds that linger and act on
- * whoever is inside at each tick.
+ * enemies inside them at their deadline, and clouds (one or more overlapping
+ * puffs) that linger and act on whoever is inside at each tick.
  *
  * The mirror of HostileSpellSystem, which resolves against the player. A kit
  * places zones and says what landing means; this does the geometry and the
@@ -39,8 +39,12 @@ export type ZoneSpec = CircleZone | ConeZone;
 export type PlacedZone = ZoneSpec & { placedAt: number; resolveAt: number };
 
 export interface CloudSpec {
+  /** The aim point. */
   x: number;
   y: number;
+  /** Where each puff sits; an enemy touching any of them is inside the cloud. */
+  puffs: readonly { x: number; y: number }[];
+  /** Every puff's radius. */
   radius: number;
   durationMs: number;
   tickMs: number;
@@ -78,6 +82,7 @@ export class PlayerZoneSystem {
       if (nowMs < zone.resolveAt) continue;
       this.zones.splice(i, 1);
       this.zonesResolved++;
+      this.view.landed(zone, nowMs);
       zone.onLand(enemies.filter((e) => e.active && inside(zone, e)));
     }
 
@@ -91,7 +96,7 @@ export class PlayerZoneSystem {
       while (nowMs >= cloud.nextTickAt && nowMs < cloud.expiresAt) {
         cloud.nextTickAt += cloud.tickMs;
         this.ticks++;
-        cloud.onTick(enemies.filter((e) => e.active && Math.hypot(e.x - cloud.x, e.y - cloud.y) <= cloud.radius + e.radius));
+        cloud.onTick(enemies.filter((e) => e.active && inCloud(cloud, e)));
       }
     }
 
@@ -102,8 +107,14 @@ export class PlayerZoneSystem {
   clear(): void {
     this.zones.length = 0;
     this.clouds.length = 0;
+    this.view.clearSplashes();
     this.view.draw(this.zones, this.clouds, this.now);
   }
+}
+
+/** Does the enemy's body reach into any of the cloud's puffs? Each enemy counts once per tick. */
+function inCloud(cloud: PlacedCloud, e: Enemy): boolean {
+  return cloud.puffs.some((p) => Math.hypot(e.x - p.x, e.y - p.y) <= cloud.radius + e.radius);
 }
 
 /** Does the enemy's body reach into the zone? */

@@ -154,8 +154,14 @@ export const PALETTE = {
   venomLight: 0x9cf09a,
   venomShine: 0xeaffe6,
   venomScale: 0x3a9c5a,
-  venomCore: 0xf2fff0,
-  miasma: 0x8de0a0,
+  // Her spells are purple, as in League: violet blasts, a plum miasma, lilac fangs.
+  toxinDeepest: 0x1a0a26,
+  toxinDeep: 0x3a1656,
+  toxin: 0x9446d0,
+  toxinLight: 0xc890f5,
+  toxinCore: 0xf6ecff,
+  miasmaDeep: 0x2a1040,
+  miasma: 0x6e3a9e,
   stone: 0x9aa0ad,
   stoneCore: 0xeef1f7,
   stoneDeep: 0x5c6270,
@@ -412,10 +418,10 @@ export const THEME = {
     q: { color: P.q, core: P.qCore, deep: P.qDeep, castFlashRadius: 24, castFlashMs: 120, impactRadius: 30, impactMs: 200, sparks: 9 },
     w: { color: P.w, core: P.wCore, deep: P.wDeep, castFlashRadius: 28, castFlashMs: 130, impactRadius: 34, impactMs: 220, sparks: 8 },
     e: { color: P.e, core: P.eCore, deep: P.eDeep, blue: P.eBlue, blinkMs: 180, impactRadius: 24, impactMs: 200, sparks: 7 },
-    // Cassiopeia: venom for Q and the poison, a paler haze for W, bright fangs for E, stone for R.
-    poison: { color: P.venom, core: P.venomCore, deep: P.venomDeep, castFlashRadius: 22, castFlashMs: 120, impactRadius: 28, impactMs: 220, sparks: 8 },
-    miasma: { color: P.miasma, core: P.venomCore, deep: P.venomDeep, castFlashRadius: 26, castFlashMs: 130, impactRadius: 30, impactMs: 220, sparks: 6 },
-    fang: { color: P.venomLight, core: P.venomCore, deep: P.venom, castFlashRadius: 18, castFlashMs: 100, impactRadius: 20, impactMs: 170, sparks: 6 },
+    // Cassiopeia: violet for Q and the poison, plum for W, lilac fangs for E, stone for R.
+    poison: { color: P.toxin, core: P.toxinCore, deep: P.toxinDeep, castFlashRadius: 22, castFlashMs: 120, impactRadius: 28, impactMs: 220, sparks: 8 },
+    miasma: { color: P.miasma, core: P.toxinCore, deep: P.miasmaDeep, castFlashRadius: 26, castFlashMs: 130, impactRadius: 30, impactMs: 220, sparks: 6 },
+    fang: { color: P.toxinLight, core: P.toxinCore, deep: P.toxin, castFlashRadius: 18, castFlashMs: 100, impactRadius: 20, impactMs: 170, sparks: 6 },
     gaze: { color: P.stone, core: P.stoneCore, deep: P.stoneDeep, castFlashRadius: 30, castFlashMs: 160, impactRadius: 36, impactMs: 260, sparks: 10 },
     flash: { color: P.flash, core: P.flashCore, burstMs: 220 },
     hostile: { color: P.fireOrange, core: P.fireCore, deep: P.fire },
@@ -434,7 +440,7 @@ export const THEME = {
       orb: { color: P.arcane, spacing: 10, life: 200, size: 4 },
       sphere: { color: P.voidGlow, spacing: 10, life: 220, size: 5 },
       glob: { color: P.redDeep, spacing: 10, life: 160, size: 3 },
-      fang: { color: P.venomLight, spacing: 10, life: 140, size: 3 },
+      fang: { color: P.toxinLight, spacing: 10, life: 140, size: 3 },
     },
   },
 
@@ -568,7 +574,7 @@ export const THEME = {
     sweepColor: P.ink,
     sweepAlpha: 0.7,
     /** Per-slot accent: the ability's own colour. */
-    accents: { q: P.q, w: P.w, e: P.e, flash: P.flash, venom: P.venom, miasma: P.miasma, fang: P.venomLight, stone: P.stone } as Record<string, number>,
+    accents: { q: P.q, w: P.w, e: P.e, flash: P.flash, venom: P.toxin, miasma: P.miasma, fang: P.toxinLight, stone: P.stone } as Record<string, number>,
   },
 
   /** Title card before the first run of a page load. Presentation only. */
@@ -580,23 +586,39 @@ export const THEME = {
   },
 
   /**
-   * The player's ground spells (PlayerZoneView): green, never the red that
-   * means "this hurts you". A telegraph fills over its delay; a cloud is a
-   * soft disc with motes drifting up.
+   * The player's ground spells (PlayerZoneView): Cassiopeia's purple, never
+   * the red that means "this hurts you". A telegraph fills from its centre
+   * over its delay and splashes when it lands; a cloud is overlapping plum
+   * puffs with dark blotches and motes drifting up.
    */
   playerZone: {
-    fill: P.venomDeep,
-    fillAlphaStart: 0.1,
-    fillAlphaEnd: 0.32,
-    edge: P.venom,
+    fill: P.toxinDeep,
+    fillAlphaStart: 0.12,
+    fillAlphaEnd: 0.4,
+    /** The disc growing from the centre that counts the delay down. */
+    core: P.toxin,
+    coreAlpha: 0.35,
+    edge: P.toxin,
     edgeAlphaStart: 0.5,
     edgeAlphaEnd: 1,
-    cloudFill: P.venomDeep,
-    cloudFillAlpha: 0.28,
-    cloudEdgeAlpha: 0.55,
+    /** The landing splash: a ring and droplets thrown out past the edge. */
+    splash: P.toxinLight,
+    splashMs: 260,
+    splashDrops: 8,
+    /**
+     * The puffs are opaque: translucent ones would stack where they overlap and
+     * read as a string of beads, not one cloud. They shrink away instead of fading.
+     */
+    cloudRim: P.miasma,
+    /** How far the rim shows past each puff. */
+    cloudRimPx: 3,
+    cloudFill: P.miasmaDeep,
+    blotch: P.toxinDeepest,
+    blotchAlpha: 0.7,
     cloudPulseMs: 1400,
-    cloudMotes: 6,
-    mote: P.miasma,
+    /** Motes per puff. */
+    cloudMotes: 2,
+    mote: P.toxinLight,
     moteRiseMs: 1100,
   },
 

@@ -9,21 +9,33 @@ shared across champions: see the main README's [Controls](../../../README.md#con
 | | Aim | Cast time | Cooldown | Range | Pips removed |
 | --- | --- | --- | --- | --- | --- |
 | Auto | target | ~240ms windup\* | 950ms\* | 260 | 1 |
-| Q, Noxious Blast | ground point | 150ms | 3500ms† | 500, blast radius 70 | 1 on landing, then poison |
-| W, Miasma | ground point | 150ms | 12000ms† | 450, cloud radius 90 | 0; slows 35% and poisons inside |
+| Q, Noxious Blast | ground point | 150ms | 3500ms† | 400, blast radius 45 | 1 on landing, then poison |
+| W, Miasma | ground point | 150ms | 12000ms† | 330; a wall of 7 clouds across your aim, ~180 × 60 | 0; slows 35% and poisons inside |
 | E, Twin Fang | the enemy nearest the cursor | 150ms | 800ms† | 400 | 1, **2 if poisoned** |
 | R, Petrifying Gaze | cone toward the cursor | 200ms | 45000ms†, **back at every stage clear** | 420, 80° wide | 1; **stuns enemies facing you** 1.5s, slows the rest 50% |
 | F | cursor | instant | 20000ms | 275 | — |
 
 \* her level-1 auto cycle is 950ms (Ezreal's is 700ms), +3% attack speed per level; the
-windup is a quarter of it. † at level 1; ability haste (+5 per level) shortens Q / W / E / R.
+windup is a quarter of it. † at level 1; ability haste (+5 per level) shortens Q / W / E / R,
+as for Ezreal: ×0.8 at level 6, ×0.67 at 11, ×0.54 at 18 (Q 3.5s → 1.9s, E 800 → 430ms).
+
+**Sizes come from League, by proportion.** Ranges are scaled by her auto range (League's
+550 is our 260): Q 850 → 400, W 700 → 330. Areas are scaled by body size instead, since
+our bodies are far smaller relative to range than League's.
 
 **Poison.** Q's blast and W's cloud poison what they touch for 4s: a pip every 2s while it
 lasts (two more pips if they stay alive). Being poisoned is what makes E hit for two.
 
-**Q and W are telegraphed.** Q lands 400ms after you place it; the green ring closing in
-is the countdown, and anything that walks out before it lands is missed. W lingers 4s and
-re-applies its slow and poison every half second to whatever is inside.
+**Q and W are telegraphed.** Q lands 400ms after you place it; the purple disc swelling
+to the edge is the countdown, and anything that walks out before it lands is missed. Q is
+small on purpose: in League it's about three champion radii wide, so you aim it at one
+enemy, from a little further out than your auto.
+
+**W is a wall, not a circle.** As in League, she spits venom in an arc: seven clouds land
+side by side *across* your aim, the middle one on the cursor, bowing slightly away from
+her. Lay it across a path to cut it off; an enemy just past the cursor along your aim line
+is not inside. It lingers 4s and re-applies its slow and poison every half second to
+whatever touches any of the clouds.
 
 **E is point-and-click.** It takes the enemy nearest your cursor whose body is within 400px
 of you, like a quick-cast point-and-click in League; with nothing in range it doesn't cast

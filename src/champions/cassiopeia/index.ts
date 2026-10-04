@@ -6,7 +6,7 @@ import { CASSIOPEIA_ART } from './art';
 import { E, LEVELS, PETRIFY_STATUS, POISON_STATUS, Q, R, STATS, W } from './balance';
 import { CassiopeiaKit } from './kit';
 
-/** Poisoned: a green drip overhead and a venom ring at the feet. Petrified: a stone eye. */
+/** Poisoned: a violet drip overhead and a venom ring at the feet. Petrified: a stone eye. */
 registerStatusLook(POISON_STATUS, { icon: TEX.fx.poison, ringColor: THEME.fx.poison.color, warnMs: 800, bobPx: 2 });
 registerStatusLook(PETRIFY_STATUS, { icon: TEX.fx.petrify, ringColor: THEME.fx.gaze.color, warnMs: 400, bobPx: 0 });
 

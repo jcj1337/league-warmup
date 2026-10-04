@@ -1,7 +1,7 @@
 import { test } from '@playwright/test';
 import { startSuite } from './support/harness';
 
-test('cassiopeia: picked from the profile, slow autos, Q blast + poison ticks, W cloud slow, E twin fang, R gaze by facing, per-stage R, speed per level', async ({ page }, testInfo) => {
+test('cassiopeia: picked from the profile, slow autos, Q blast + poison ticks, W cloud wall, E twin fang, R gaze by facing, per-stage R, speed per level', async ({ page }, testInfo) => {
   const { pass, fail, section, finish } = await startSuite(page, testInfo, 400, { champion: 'cassiopeia' });
 
   const cfg = await page.evaluate(() => ({
@@ -111,6 +111,38 @@ test('cassiopeia: picked from the profile, slow autos, Q blast + poison ticks, W
   left.enemies[0].slow === 1 ? pass('leaving the cloud, the slow lapses') : fail(`slow after leaving: ${left.enemies[0].slow}`);
   await page.waitForTimeout(cfg.W.durationMs);
   (await G()).clouds === 0 ? pass(`the cloud expires after ${cfg.W.durationMs}ms`) : fail('cloud still there');
+
+  // The field is a wall across her aim, not a disc: an enemy off to the side of
+  // the aim point is inside, one the same distance straight behind it is not.
+  await stage(800, 440, 3);                   // 80px to the side of the aim point
+  await page.evaluate(() => {
+    const g = window.__warmup.scene.getScene('GameScene');
+    const d = g.director;
+    const behind = d.spawnEnemy('pursuer');   // 80px past the aim point, along her aim
+    behind.x = 880; behind.y = 360; behind.hp = 3; behind.maxHp = 3;
+    behind.nextAttackAt = Number.POSITIVE_INFINITY; behind.canDash = false; behind.speedFraction = 0;
+    behind.goalX = 880; behind.goalY = 360; behind.nextPlanAt = Number.POSITIVE_INFINITY;
+    d.enemies.push(behind);
+  });
+  await page.mouse.move(800, 360);
+  await page.keyboard.press('w');
+  await page.waitForTimeout(cfg.W.castTimeMs + cfg.W.tickMs + 80);
+  const wall = await page.evaluate(() => {
+    const g = window.__warmup.scene.getScene('GameScene');
+    const c = g.kit.zones.clouds[0];
+    const xs = c ? c.puffs.map((p) => p.x) : [];
+    const ys = c ? c.puffs.map((p) => p.y) : [];
+    return {
+      puffs: c ? c.puffs.length : 0,
+      across: ys.length ? Math.max(...ys) - Math.min(...ys) : 0,
+      along: xs.length ? Math.max(...xs) - Math.min(...xs) : 0,
+      side: g.director.enemies[0].hasStatus('cassiopeia.poison', g.clock.now),
+      behind: g.director.enemies[1].hasStatus('cassiopeia.poison', g.clock.now),
+    };
+  });
+  wall.puffs === cfg.W.puffs && wall.across > wall.along * 3 && wall.side && !wall.behind
+    ? pass(`W lays ${wall.puffs} clouds in a wall across her aim (${Math.round(wall.across)}px across, ${Math.round(wall.along)}px deep): the side is inside, straight behind is not`)
+    : fail(`W shape: ${JSON.stringify(wall)}`);
 
   // === 4. E: point-and-click, two pips on a poisoned target ===================
   section('4. E');

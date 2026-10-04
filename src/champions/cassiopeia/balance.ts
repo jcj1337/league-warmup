@@ -1,5 +1,5 @@
 /**
- * Cassiopeia's numbers. Tunable live from the console: __cassiopeia.Q.radius = 90
+ * Cassiopeia's numbers. Tunable live from the console: __cassiopeia.Q.radius = 60
  *
  * She drills a different rhythm from Ezreal: autos are slower and her E is
  * the beat between them; Q and W are ground spells you place ahead of where
@@ -22,10 +22,15 @@ export const LEVELS = {
   moveSpeedPerLevel: 0.03,
 };
 
-/** Q, Noxious Blast: a delayed blast at a ground point. One pip, and poison. */
+/**
+ * Q, Noxious Blast: a delayed blast at a ground point. One pip, and poison.
+ * Sized from League by body widths, not by range: her Q is 200 units against a
+ * ~65-unit champion, about three radii, so a small blast you aim at one enemy.
+ */
 export const Q = {
-  range: 500,
-  radius: 70,
+  /** 1.55x her auto range, League's 850 / 550: you walk up to cast it. */
+  range: 400,
+  radius: 45,
   /** The telegraph: enemies can walk out of it. */
   delayMs: 400,
   castTimeMs: 150,
@@ -38,10 +43,24 @@ export const POISON = {
   tickMs: 2000,
 };
 
-/** W, Miasma: a lingering cloud. Enemies inside are slowed and poisoned; it deals no pip itself. */
+/**
+ * W, Miasma: venom spat in an arc, a wall of clouds across her aim. Enemies
+ * inside any cloud are slowed and poisoned; it deals no pip itself.
+ */
 export const W = {
-  range: 450,
-  radius: 90,
+  /** 1.27x her auto range, League's 700 / 550. */
+  range: 330,
+  /** How many clouds, laid side by side across her aim, the middle one on the aim point. */
+  puffs: 7,
+  puffRadius: 30,
+  /** Centre of the first cloud to centre of the last; the field is this plus a cloud's width end to end. */
+  spanPx: 120,
+  /**
+   * The clouds sit on an arc centred behind the aim point, as if thrown from
+   * her: its radius is her distance to the aim point, never tighter than this,
+   * so a W at her feet is a gentle curve, not a ring around her.
+   */
+  arcMinRadius: 220,
   durationMs: 4000,
   /** How often the cloud re-applies its slow and poison. */
   tickMs: 500,
