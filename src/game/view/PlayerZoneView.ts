@@ -1,31 +1,32 @@
 import Phaser from 'phaser';
 import { THEME } from '../../config/theme';
-import type { BurstShape, BurstStyle, PlacedCloud, PlacedZone } from '../systems/PlayerZoneSystem';
+import type { BurstStyle, PlacedCloud, PlacedZone } from '../systems/PlayerZoneSystem';
 import { pixelDisc, smoothRing, smoothWedge, wedgePoints } from './pixelDraw';
 
 type Point = { x: number; y: number };
 
-/** A burst being drawn: puffs popping open where something landed and shrinking away, or a splash. */
+/** A burst being drawn: puffs popping open where something landed, then shrinking away. */
 interface Burst {
   x: number;
   y: number;
   radius: number;
   style: BurstStyle;
-  shape: BurstShape;
   at: number;
 }
 
 /**
- * Draws the player's ground spells. Clouds are venom lobbed from the caster's
- * body that bursts open into soft, opaque, blotchy puffs; the quick spells
- * land clean, as a splash of droplets and a ring.
+ * Draws the player's ground spells, all in one language: venom that leaves
+ * the caster's body, arcs through the air with its shadow on the ground, and
+ * bursts open where it lands into soft, opaque, blotchy puffs that overshoot
+ * a little, splatter droplets, and shrink away.
  *
  *   circle         (Cassiopeia's Q) venom welling up in place: the ring fills
- *                  from its centre, then it lands in a splash
- *   cone           a telegraph, then a pale front sweeping out to its edge
+ *                  from its centre while puffs bubble up inside it, then it
+ *                  bursts into a cluster of puffs
+ *   cone           a telegraph, then a wave of puffs sweeping out to its edge
  *   cloud          (her W) bolts lobbed onto each puff, which pops open and
  *                  lingers, breathing, with motes drifting up
- *   burst          puffs or a splash on their own, where a kit asks (a bite, a gaze)
+ *   burst          a puff cluster on its own, where a kit asks (a bite, a gaze)
  *
  * Outlines are smooth, solid lines. Never the red of hostile ground, which
  * always means "this hurts you". A read of the zone and cloud lists, plus the
@@ -68,13 +69,24 @@ export class PlayerZoneView {
         continue;
       }
 
-      // Venom welling up under the target: the fill swells from the centre (the countdown).
+      // Venom welling up under the target: the fill swells from the centre (the
+      // countdown) while puffs bubble up inside the ring, one after another.
       const cx = Math.round(zone.x);
       const cy = Math.round(zone.y);
       g.fillStyle(Z.fill, fillAlpha);
       g.fillCircle(cx, cy, zone.radius);
       g.fillStyle(Z.core, Z.coreAlpha);
       g.fillCircle(cx, cy, zone.radius * t);
+      const centres: Point[] = [];
+      const sizes: number[] = [];
+      for (let k = 0; k < Z.welling.puffs; k++) {
+        const a = k * 2.4 + 0.5;
+        const d = zone.radius * Z.welling.spread * (k % 2 ? 1 : 0.55);
+        centres.push({ x: zone.x + Math.cos(a) * d, y: zone.y + Math.sin(a) * d * 0.8 });
+        const u = (t - k * Z.welling.stagger) / Z.welling.grow;
+        sizes.push(u <= 0 ? 0 : zone.radius * Z.welling.size * (u >= 1 ? 1 : popEase(u)));
+      }
+      this.drawPuffs(centres, sizes, 'venom', 0.5);
       smoothRing(g, cx, cy, zone.radius, Z.edge, edgeAlpha, Z.edgeWidth);
     }
 
@@ -164,10 +176,6 @@ export class PlayerZoneView {
   private drawBurst(b: Burst, since: number): void {
     const Z = THEME.playerZone;
     const S = Z.styles[b.style];
-    if (b.shape === 'splash') {
-      this.drawSplash(b, since);
-      return;
-    }
     const t = since / Z.burstMs;
     const shrink = t > Z.burstHoldFraction ? (1 - t) / (1 - Z.burstHoldFraction) : 1;
     const centres: Point[] = [{ x: b.x, y: b.y }];
@@ -193,43 +201,30 @@ export class PlayerZoneView {
   }
 
   /**
-   * A clean landing: droplets thrown out past the edge and two rings running
-   * ahead of them, no puffs.
-   */
-  private drawSplash(b: Burst, since: number): void {
-    const Z = THEME.playerZone;
-    const S = Z.styles[b.style];
-    const s = since / Z.splashMs;
-    if (s >= 1) return;
-    const ease = 1 - (1 - s) ** 2;
-    this.drops(b.x, b.y, b.radius * (0.5 + 0.9 * ease), Z.splashDrops, 1 - s, 0.4, S.drop);
-    smoothRing(this.gfx, b.x, b.y, b.radius * (0.6 + 0.6 * ease), S.drop, (1 - s) * 0.9, Z.edgeWidth);
-    smoothRing(this.gfx, b.x, b.y, b.radius * (0.3 + 0.5 * ease), S.rim, (1 - s) * 0.6, Z.edgeWidth);
-  }
-
-  /**
-   * The gaze: a pale stone front sweeping out from her to the cone's edge
-   * with a faint wash behind it, a fainter echo trailing it, then the edge
-   * flashing as it arrives and fading.
+   * The gaze: a wave of puffs sweeping out from her to the cone's edge, a
+   * pale wash behind it, the front breaking into droplets as it reaches the
+   * rim, then shrinking away.
    */
   private drawSweep(zone: PlacedZone & { kind: 'cone' }, t: number): void {
     const g = this.gfx;
     const Z = THEME.playerZone;
     const reach = Math.min(1, t / Z.sweepTravel);
     const front = zone.radius * (1 - (1 - reach) ** 2);
-    const fade = t > Z.sweepTravel ? Math.max(0, (1 - t) / (1 - Z.sweepTravel)) : 1;
-    g.fillStyle(Z.sweepWash, Z.sweepWashAlpha * (1 - t));
+    const shrink = t > Z.sweepTravel ? Math.max(0, (1 - t) / (1 - Z.sweepTravel)) : 1;
+    g.fillStyle(Z.splash, Z.sweepWashAlpha * (1 - t));
     g.fillPoints(wedgePoints(zone.x, zone.y, zone.angle, zone.halfAngle, front), true);
-    const arc = (r: number, color: number, alpha: number, width: number) => {
-      if (r <= 0 || alpha <= 0) return;
-      g.lineStyle(width, color, alpha);
-      g.beginPath();
-      g.arc(zone.x, zone.y, r, zone.angle - zone.halfAngle, zone.angle + zone.halfAngle);
-      g.strokePath();
-    };
-    arc(front * 0.82, Z.sweepWash, 0.5 * fade, Z.edgeWidth);
-    arc(front, Z.sweepFront, fade, Z.sweepFrontWidth);
-    if (reach >= 1) smoothWedge(g, zone.x, zone.y, zone.angle, zone.halfAngle, zone.radius * (1 + 0.06 * (t - Z.sweepTravel)), Z.sweepFront, fade, Z.edgeWidth);
+    const arc = 2 * zone.halfAngle * front;
+    const n = Math.max(3, Math.round(arc / Z.sweepPuffSpacing));
+    const centres: Point[] = [];
+    const sizes: number[] = [];
+    for (let i = 0; i <= n; i++) {
+      const a = zone.angle - zone.halfAngle + (2 * zone.halfAngle * i) / n;
+      centres.push({ x: zone.x + Math.cos(a) * front, y: zone.y + Math.sin(a) * front });
+      // Lumpy, not a ruled line: each puff a little bigger or smaller than its neighbours.
+      sizes.push(Z.sweepPuffRadius * shrink * (0.75 + 0.25 * Math.sin(i * 2.3)) * (0.5 + 0.5 * reach));
+    }
+    this.drawPuffs(centres, sizes, 'venom', shrink);
+    if (reach >= 1) smoothWedge(g, zone.x, zone.y, zone.angle, zone.halfAngle, zone.radius * (1 + 0.06 * (t - Z.sweepTravel)), Z.splash, shrink, Z.edgeWidth);
   }
 
   /**
@@ -263,15 +258,15 @@ export class PlayerZoneView {
     }
   }
 
-  /** A zone resolved: a circle lands in a splash, a cone sends its front out. */
+  /** A zone resolved: a circle bursts open, a cone sends its wave out. */
   landed(zone: PlacedZone, nowMs: number): void {
     if (zone.kind === 'cone') this.sweeps.push({ zone, at: nowMs });
-    else this.bursts.push({ x: zone.x, y: zone.y, radius: zone.radius, style: 'venom', shape: 'splash', at: nowMs });
+    else this.bursts.push({ x: zone.x, y: zone.y, radius: zone.radius, style: 'venom', at: nowMs });
   }
 
-  /** A burst on its own (a kit's bite, a gaze landing on an enemy). */
-  burst(x: number, y: number, radius: number, style: BurstStyle, nowMs: number, shape: BurstShape = 'puffs'): void {
-    this.bursts.push({ x, y, radius, style, shape, at: nowMs });
+  /** A puff cluster on its own (a kit's bite, a gaze landing on an enemy). */
+  burst(x: number, y: number, radius: number, style: BurstStyle, nowMs: number): void {
+    this.bursts.push({ x, y, radius, style, at: nowMs });
   }
 
   clearSplashes(): void {

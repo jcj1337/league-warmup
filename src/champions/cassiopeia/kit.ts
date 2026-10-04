@@ -167,8 +167,8 @@ export class CassiopeiaKit implements Kit {
     for (const e of inside) {
       const toPlayer = Math.atan2(player.y - e.y, player.x - e.x);
       const facing = Math.cos(e.heading - toPlayer) > 0;
-      // A splash where the gaze catches each one: stone for the petrified, venom for the rest.
-      this.zones.burst(e.x, e.y, e.radius * 1.5, facing ? 'stone' : 'venom', 'splash');
+      // A puff where the gaze catches each one: stone for the petrified, venom for the rest.
+      this.zones.burst(e.x, e.y, e.radius * 1.5, facing ? 'stone' : 'venom');
       this.pip(e);
       if (!e.active) continue;
       if (facing) {

@@ -178,7 +178,7 @@ export const SPRITES: Record<string, PixelSprite> = {
   },
   fx_muzzle_venom: {
     rows: ['.g.', 'gWg', '.g.'],
-    pal: { g: P.toxin, W: P.toxinCore },
+    pal: { g: P.toxinDeep, W: P.toxinLight },
   },
   fx_muzzle: {
     rows: ['..w..', '.wWw.', 'wWWWw', '.wWw.', '..w..'],
@@ -329,7 +329,7 @@ export const SPRITES: Record<string, PixelSprite> = {
 
   // ---- projectiles -------------------------------------------------------------
   /** Cassiopeia's auto: a slim needle of venom, a third the height of Ezreal's bolt. */
-  proj_venom: { rows: ['dgGGGWW'], pal: { d: P.toxinDeep, g: P.toxin, G: P.toxinLight, W: P.toxinCore } },
+  proj_venom: { rows: ['dgGGGWW'], pal: { d: P.toxinDeepest, g: P.toxinDeep, G: P.toxin, W: P.toxinLight } },
   proj_auto: { rows: ['...cc.', 'bccWWW', '...cc.'], pal: { b: P.autoDeep, c: P.auto, W: P.autoCore } },
   proj_q: { rows: ['.....TT..', 'ttTTTWWWW', '.....TT..'], pal: { t: P.qDeep, T: P.q, W: P.qCore } },
   proj_w: {

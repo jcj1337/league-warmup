@@ -14,11 +14,8 @@ import { PlayerZoneView } from '../view/PlayerZoneView';
  * timing, on the GameClock, so a pause freezes every deadline.
  */
 
-/** How a burst looks (THEME.playerZone.styles). */
+/** How a burst of puffs looks (THEME.playerZone.styles). */
 export type BurstStyle = 'venom' | 'stone';
-
-/** A burst of opaque puffs (a bite), or a clean splash: a ring and droplets, no puffs (Q landing, the gaze catching). */
-export type BurstShape = 'puffs' | 'splash';
 
 export interface CircleZone {
   kind: 'circle';
@@ -134,9 +131,9 @@ export class PlayerZoneSystem {
     this.view.draw(this.zones, this.clouds, nowMs);
   }
 
-  /** A burst where a kit asks for one: a bite landing, an enemy caught by a gaze. Look only. */
-  burst(x: number, y: number, radius: number, style: BurstStyle, shape: BurstShape = 'puffs'): void {
-    this.view.burst(x, y, radius, style, this.now, shape);
+  /** A puff cluster where a kit asks for one: a bite landing, an enemy caught by a gaze. Look only. */
+  burst(x: number, y: number, radius: number, style: BurstStyle): void {
+    this.view.burst(x, y, radius, style, this.now);
   }
 
   /** Drop everything without resolving it (round end, restart). */
