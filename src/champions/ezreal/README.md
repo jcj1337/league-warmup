@@ -11,7 +11,7 @@ see the main README's [Controls](../../../README.md#controls).
 | Q | 165ms | 3000ms† | 450 | 1250 px/s | 1 (2 from level 9) |
 | W | 185ms | 6000ms† | 450 | 1000 px/s | 0 on contact, **+1 on detonation** |
 | E | 210ms | 8000ms† | 225 blink / 380 bolt acquisition | 1050 px/s bolt | 1 |
-| R | 1000ms÷attack speed, rooted | 60000ms† | global (the whole arena), 40 either side of its line | 950 px/s, pierces | **2 to the first enemy, 1 to each after** |
+| R | 1000ms÷attack speed, rooted | 30000ms† | global (the whole arena), 40 either side of its line | 950 px/s, pierces | **2 to the first enemy, 1 to each after** |
 | F | instant | 20000ms | 190 | — | — |
 
 \* the auto cooldown is set by your level (700ms at level 1, +6% attack speed per level,

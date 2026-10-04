@@ -136,7 +136,7 @@ export const ULT_R = {
    * ~625ms at level 11, ~495ms at 18, less with passive stacks.
    */
   castTimeMs: 1000,
-  cooldownMs: 60000,
+  cooldownMs: 30000,
   /** League's 2000 is ~950 here: about a second and a half to cross the arena. */
   speed: 950,
   /**
