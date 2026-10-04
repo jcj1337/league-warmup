@@ -612,6 +612,13 @@ export class GameScene extends Phaser.Scene {
       castDef?.telegraph ?? null, castDef?.fx ?? 'q', this.player.x, this.player.y, aim ? aim.x : 0, aim ? aim.y : 0, this.cast.progress,
     );
 
+    // A cast that resolved this frame starts its follow-through before the redraw,
+    // so the release pose is on screen the very frame the spell goes off.
+    if (this.cast.lastResolveAt > this.lastCastShownAt) {
+      this.lastCastShownAt = this.cast.lastResolveAt;
+      this.player.playCastRelease(this.cast.lastResolvedAbility);
+    }
+
     // 3. ...and only now does the player move and redraw.
     this.player.update(dt);
 
@@ -621,10 +628,6 @@ export class GameScene extends Phaser.Scene {
       playerMoving: this.player.isMoving,
     });
 
-    if (this.cast.lastResolveAt > this.lastCastShownAt) {
-      this.lastCastShownAt = this.cast.lastResolveAt;
-      this.player.playCastRelease(this.cast.lastResolvedAbility);
-    }
 
     // Cancel tag: fires once per cancel, driven off the system's timestamp.
     if (this.attacks.lastCancelAt > this.lastCancelShownAt) {

@@ -74,6 +74,14 @@ toward the cursor, and it strikes the instant the cast ends: a wave of venom puf
 out from her to the cone's edge, and a puff bursts on every enemy it catches, stone on the
 ones it petrifies. A move order given during it waits, and goes as soon as the gaze lands.
 
+**Her body says what's coming** ([motions.ts](motions.ts)). She's a cobra. Her auto coils
+back, spits mouth-open and ends on a flick of the tongue. Q rears her up tall, then nods
+down hard at the spot. E opens her jaws on two fangs and lunges. R is a breath: she swells
+with her eyes squeezed shut, gulps, holds it trembling, and on the frame the cone strikes
+her eyes snap open, blazing gold, before she lets the breath go. Every windup is keyed to
+the real cast window, so it quickens with haste; under 300ms R drops the trembling hold
+and keeps the breath, the gulp and the glare.
+
 **R reads facing.** An enemy is *facing you* when its heading points toward you: walking at
 you, or standing still having last walked at you. Those are petrified (stunned, with a
 stone eye over their head); enemies walking away are slowed instead. Everyone in the cone

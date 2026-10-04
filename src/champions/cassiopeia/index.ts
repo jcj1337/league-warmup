@@ -5,7 +5,7 @@ import type { Champion } from '../types';
 import { CASSIOPEIA_ART } from './art';
 import { AUTO, E, LEVELS, PETRIFY_STATUS, POISON_STATUS, Q, R, STATS, W } from './balance';
 import { CassiopeiaKit } from './kit';
-import { E_MOTION } from './motions';
+import { AUTO_MOTION, E_MOTION, Q_MOTION, R_MOTION } from './motions';
 
 /** Poisoned: a violet drip overhead and a venom ring at the feet. Petrified: a stone eye. */
 registerStatusLook(POISON_STATUS, { icon: TEX.fx.poison, ringColor: THEME.fx.poison.color, warnMs: 800, bobPx: 2 });
@@ -26,11 +26,12 @@ export const CASSIOPEIA: Champion = {
   },
   levels: LEVELS,
   art: CASSIOPEIA_ART,
+  autoMotion: AUTO_MOTION,
   slots: {
     q: {
       label: 'Noxious Blast', targeting: 'point', range: Q.range,
       castTimeMs: ({ castSpeed }) => Q.castTimeMs / castSpeed, cooldownMs: () => Q.cooldownMs,
-      icon: TEX.icons.cassioQ, accent: THEME.ability.accents.venom, castStyle: 'orb', fx: 'poison',
+      icon: TEX.icons.cassioQ, accent: THEME.ability.accents.venom, castStyle: 'none', fx: 'poison', motion: Q_MOTION,
     },
     w: {
       label: 'Miasma', targeting: 'point', range: W.range,
@@ -46,7 +47,7 @@ export const CASSIOPEIA: Champion = {
       label: 'Petrifying Gaze', targeting: 'direction',
       castTimeMs: ({ castSpeed }) => R.castTimeMs / castSpeed, cooldownMs: () => R.cooldownMs,
       telegraph: { kind: 'cone', radius: () => R.radius, halfAngle: () => R.halfAngle, fx: 'poison' },
-      icon: TEX.icons.cassioR, accent: THEME.ability.accents.stone, castStyle: 'orb', fx: 'gaze',
+      icon: TEX.icons.cassioR, accent: THEME.ability.accents.stone, castStyle: 'none', fx: 'gaze', motion: R_MOTION,
     },
   },
   createKit: (ctx) => new CassiopeiaKit(ctx),

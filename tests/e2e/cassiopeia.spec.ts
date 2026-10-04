@@ -274,7 +274,25 @@ test('cassiopeia: picked from the profile, slow autos, Q blast + poison ticks, W
   midR.casting === 'r' && Math.abs(midR.x - 640) < 1 && Math.abs(midR.y - 360) < 1 && midR.hp.every((h) => h === 3)
     ? pass(`R: ${cfg.R.castTimeMs}ms cast, rooted throughout; a move order waits and nothing is hit yet`)
     : fail(`R mid-cast: ${JSON.stringify(midR)}`);
-  await page.waitForTimeout(cfg.R.castTimeMs / 2 + 120);
+  // Her body through the rest of the window and after: eyes shut while she holds the breath,
+  // and on the frame the cone strikes they snap open, lit.
+  const rBody = await page.evaluate((ms) => new Promise<any[]>((res) => {
+    const g = window.__warmup.scene.getScene('GameScene');
+    const out = [];
+    const t0 = performance.now();
+    const tick = () => {
+      out.push({ casting: g.cast.castingAbility, frame: g.player.view.motionFrame, lit: g.player.view.glowSprite?.visible ?? false });
+      if (performance.now() - t0 < ms) requestAnimationFrame(tick); else res(out);
+    };
+    tick();
+  }), cfg.R.castTimeMs / 2 + 140);
+  {
+    const during = rBody.filter((f) => f.casting === 'r');
+    const after = rBody.findIndex((f) => f.casting !== 'r');
+    during.length > 0 && during.every((f) => f.frame === 'shut' && !f.lit) && after > 0 && rBody[after].frame === 'gaze' && rBody[after].lit
+      ? pass('R: eyes shut through the breath, then open and lit on the frame the gaze strikes')
+      : fail(`R body: ${JSON.stringify(rBody.slice(Math.max(0, after - 2), after + 3))}, during ${JSON.stringify([...new Set(during.map((f) => f.frame))])}`);
+  }
   const gaze = await G();
   Math.hypot(gaze.player.x - 640, gaze.player.y - 360) > 1
     ? pass('the gaze strikes and the waiting move order goes')

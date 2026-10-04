@@ -159,6 +159,7 @@ export const PALETTE = {
   venomLight: 0x9cf09a,
   venomShine: 0xeaffe6,
   venomScale: 0x3a9c5a,
+  tongue: 0xe8445e,
   // Her spells are purple, as in League: violet blasts, a plum miasma, lilac fangs.
   toxinDeepest: 0x1a0a26,
   toxinDeep: 0x3a1656,
