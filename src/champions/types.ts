@@ -250,8 +250,9 @@ export interface KitContext {
   /**
    * The hit funnel: a pip the kit removed itself (`hit`, after `target.takeHit()`),
    * or a kill it caused without a counted hit (`kill`). Every pip scores exactly once.
+   * `bonus` is a small score award of the kit's own (× the stage multiplier).
    */
-  combat: { hit(target: Enemy, killed: boolean): void; kill(target: Enemy): void };
+  combat: { hit(target: Enemy, killed: boolean): void; kill(target: Enemy): void; bonus(points: number): void };
 }
 
 /** One run's worth of a champion's abilities: their live state, counters and effects. */

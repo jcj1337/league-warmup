@@ -481,7 +481,7 @@ test('waves: stage/wave progression, variable waves per stage, finite rosters, b
     : fail(`death result: ${JSON.stringify(dead.result)}`);
   const defeatScreen = await waitFor(() => {
     const ui = window.__warmup.scene.getScene('UIScene');
-    return ui.overlay.visible && ui.overlay.getByName('title').text === 'DEFEATED';
+    return ui.endScreen.container.visible && ui.endScreen.container.getByName('title').text === 'DEFEATED';
   });
   defeatScreen ? pass('end screen reads DEFEATED') : fail('end screen did not show DEFEATED');
 

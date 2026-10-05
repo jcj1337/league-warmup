@@ -37,6 +37,12 @@ export class Combat {
     if (killed) this.kill(target);
   }
 
+  /** A kit's own score award (Magic Boy's E), × the stage multiplier like every award. */
+  bonus(points: number): void {
+    const awarded = this.scoring.addKitBonus(points, this.director.stage);
+    if (awarded > 0) this.events.emit('kitBonus', { points: awarded });
+  }
+
   /**
    * Every kill, whatever landed it: score and kill tallies (per archetype, so
    * a Pursuer is worth more), the wave's bookkeeping, and the kill's XP.

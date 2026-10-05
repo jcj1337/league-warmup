@@ -33,6 +33,8 @@ export class RunFeedback {
 
     events.on('markDetonated', ({ target }) => this.fx.detonation(target.x, target.y));
 
+    events.on('kitBonus', ({ points }) => this.scorePopup(`+${points}`, 1));
+
     events.on('waveCleared', ({ points }) => {
       if (points > 0) this.scorePopup(`+${points} SPEED`, 3);
     });

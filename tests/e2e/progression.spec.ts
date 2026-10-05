@@ -215,7 +215,7 @@ test('progression: contact damage, levels from kills (haste, attack speed, Q ran
   await page.waitForTimeout(100);
   const end = await page.evaluate(() => ({
     result: window.__warmup.scene.getScene('GameScene').getRoundResult(),
-    screen: window.__warmup.scene.getScene('UIScene').resultText.text,
+    screen: window.__warmup.scene.getScene('UIScene').endScreen.text,
     last: window.__runs.list().at(-1),
     summary: window.__runs.summary(),
   }));

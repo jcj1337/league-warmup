@@ -26,6 +26,8 @@ export interface RunEventMap {
   waveCleared: ClearedWave & { points: number };
   /** A stage was cleared: the HP bonus, whether it was flawless, and the HP the heal restored. */
   stageCleared: { stage: number; points: number; bonus: number; flawless: boolean; healed: number };
+  /** A kit awarded itself score (Magic Boy's E). */
+  kitBonus: { points: number };
   /** The player lost HP (hits eaten by i-frames never emit). */
   playerHit: { damage: number; source: string; lethal: boolean };
 }

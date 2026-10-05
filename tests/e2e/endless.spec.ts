@@ -154,7 +154,7 @@ test('endless: generated stages, budgets + caps, first appearances, packs, pip c
     await page.waitForTimeout(100);
     return page.evaluate(() => ({
       result: window.__warmup.scene.getScene('GameScene').getRoundResult(),
-      screen: window.__warmup.scene.getScene('UIScene').resultText.text,
+      screen: window.__warmup.scene.getScene('UIScene').endScreen.text,
     }));
   };
   await page.evaluate(() => window.__runs.clear());
@@ -170,7 +170,7 @@ test('endless: generated stages, budgets + caps, first appearances, packs, pip c
   higher.result.newBest && higher.result.previousBest === 6 && /NEW BEST!/.test(higher.screen) && /YOUR BEST\s+STAGE 9\b/.test(higher.screen)
     ? pass('beating it is, and your best updates (STAGE 9)')
     : fail(`higher: ${JSON.stringify(higher.result)}\n${higher.screen}`);
-  /DEFEATED/.test(await page.evaluate(() => window.__warmup.scene.getScene('UIScene').overlay.getByName('title').text))
+  /DEFEATED/.test(await page.evaluate(() => window.__warmup.scene.getScene('UIScene').endScreen.container.getByName('title').text))
     ? pass('the end screen always reads DEFEATED: the run only ends on death')
     : fail('end screen title');
 

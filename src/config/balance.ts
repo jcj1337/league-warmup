@@ -681,7 +681,7 @@ export const DIFFICULTY = {
  * Bumped whenever tuning changes how hard a run is. The run log tags each run
  * with it, and its summary only compares runs from the same version.
  */
-export const BALANCE_VERSION = 14;
+export const BALANCE_VERSION = 15;
 
 /**
  * The player's level, League style: kills give XP (ENEMIES[id].xp). This is

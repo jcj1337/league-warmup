@@ -140,12 +140,19 @@ Progression comes only from clearing enemies: elapsed time never advances a wave
 stage. A strong player reaches the hard encounters sooner; a struggling player keeps
 practising the easier ones for longer.
 
-When you die, the end screen keeps to what tells you how the run went: the stage and
-wave reached and your level (marked **NEW BEST!** when it beats your logged runs as this
-champion in this mode, on this growth setting and balance version), the difficulty, score, kills and kills by type, Q accuracy, what
-killed you, and your best run (stage and score). Tuning data — the score breakdown,
-damage by source, the raw attack metrics — stays in the round result and the run log, off
-the screen. `R` restarts at Stage 1 Wave 1.
+When you die, the end screen answers four questions, one block each. **What killed me:**
+the killer's portrait and name, beside the HP you lost in the stage that ended the run, per
+source (the top three; a mob's body contact counts as that mob). **How far did I get:** a
+track of stages with the one you died on in red under your slime and your earlier best in
+gold, stamped **NEW BEST!** when the run beats your logged runs as this champion in this
+mode, on this growth setting and balance version. **How did I score:** the score over one
+bar split into kills, clear speed bonus, HP bonus and stage clear bonus (plus an ability
+bonus when the champion's kit earned one). **What did I do:**
+kills by mob and the champion's own lines (Q accuracy). A line under DEFEATED says how qwer
+would have done (`deathTaunt` in `missionMessages.ts`: per mode, by stage reached). The
+blocks arrive one after another; a click or any key shows the rest at once. Tuning data —
+whole-run damage by source, the raw attack metrics — stays in the round result and the run
+log, off the screen. `R` restarts at Stage 1 Wave 1.
 
 **Score** rewards playing well, never time alive — kiting one enemy forever earns
 nothing. Every award is × a stage multiplier (×1 at Stage 1, ×2 at Stage 5, ×3.25 at 10):
@@ -158,6 +165,8 @@ nothing. Every award is × a stage multiplier (×1 at Stage 1, ×2 at Stage 5, �
   the stage cost you no damage at all (**flawless**).
 - **Clear:** clearing a stage also pays the mode's flat bonus: 500 on Normal, 1500 on
   Hard, none on Easy (`stageClearBonus` in `MODES`).
+- **Ability:** a champion's kit can pay a small award of its own. Magic Boy's E pays 10
+  per blink (`BLINK_E.scoreBonus`), popping a gold `+N` over him.
 
 Every kill pops its points over your slime in gold with a coin, like League's last-hit
 gold (`+100`), and the popup rides along on your slime's head as you move until it fades;
@@ -245,6 +254,8 @@ and `STAGE_RAMPS` (your base auto cycle and edge fire per stage).
    `EnemyArchetype` everywhere.
 3. Its entity (`extends Enemy`) and view, and one line in `WaveDirector`'s `ARCHETYPES`
    saying how to build it.
+4. For the end screen: its colour in `THEME.endScreen.sources` and its sprite in
+   `EndScreen`'s `PORTRAITS`. Without them it is still named, in plain text.
 
 Generated stages pick it up from its `unlockStage` on, its first wave fields it alone, the
 chat announces it, and it gets the global speed, projectile and damage scaling for free.
@@ -564,7 +575,7 @@ is armed and flashes briefly after `T`.
 - `src/game/art/` — original pixel sprites as text pixel maps (`sprites.ts`), the 5×7 HUD font (`glyphs.ts`, `font.ts`), and `textures.ts`, which rasterises them once and owns every texture key. Real PNG art can later replace a sprite key-for-key.
 - `src/game/view/` — the read-only view layer: `PlayerView`, `EnemyView` / `PursuerView`, `MagusView`, `SovereignView`, `BulwarkView`, `HostileSpellView` (Magus zones), `ProjectileView` + `projectileArt`, `Fx` (pooled particles, dotted rings, smooth shockwaves and ground flashes, damage numbers), `PixelBar` (health bars), `Battlefield` (painted ground + props) and `pixelDraw` helpers.
 - `src/game/scenes/GameScene.ts` — input wiring, per-frame orchestration, round lifecycle.
-- `src/game/scenes/UIScene.ts` — HUD, ability bar, pause menu, end screen (polls GameScene).
+- `src/game/scenes/UIScene.ts` — HUD, ability bar, pause menu (polls GameScene); `src/game/ui/EndScreen.ts` draws the end screen from a finished run.
 - `src/game/entities/` — `Player` (incl. stun / slow status), `Enemy` (abstract base), `Target`, `Pursuer`, `Magus`, `Sovereign`, `Bulwark`, `Projectile`, `AutoAttackMissile`.
 - `src/game/systems/` — `GameClock`, `Difficulty` (the curve), `InputController`, `AttackSystem`, `CastSystem`, `AttackTokens` (enemy turn-taking),
   `AbilityCooldowns`, `SkillshotSystem` (Q+W), `BlinkSystem` (E+Flash), `PassiveSystem`,

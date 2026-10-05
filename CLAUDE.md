@@ -46,6 +46,8 @@ this file is for working on the code.
 - `src/profile/Profile.ts` — everything saved, one localStorage key, with migrations.
   `Keybinds`, `MouseSpeed`, `Settings`, `RunHistory` are views over it.
 - `src/game/scenes/UIScene.ts` — HUD, start screen (champion row), pause menu, end screen.
+  `src/game/ui/EndScreen.ts` draws the end screen from a `RoundResult`; the suites read it
+  as plain lines through `UIScene.endScreen.text`.
 - `docs/proposals/` — design proposals with their status line; `docs/TECHNICAL_REPORT.md`
   is historical (predates the endless run, champions and most mobs).
 
@@ -80,5 +82,5 @@ assume a frame is ~16ms: thresholds go in px/s or ms, not per call.
 - Commit messages describe behaviour; keep each phase of work its own commit with
   the suites green.
 - Adding a mob: README "Adding a mob". Adding a champion: README "Adding a champion".
-- Planned next: a Cuphead-style death screen, sound cues, then cosmetics with a
+- Planned next: sound cues, then cosmetics with a
   currency from score (`docs/proposals/ARCHITECTURE_PROPOSAL.md`, Cosmetics).

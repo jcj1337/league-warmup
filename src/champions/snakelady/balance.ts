@@ -44,7 +44,7 @@ export const Q = {
   /** The telegraph: enemies can walk out of it. */
   delayMs: 400,
   castTimeMs: 150,
-  cooldownMs: 3500,
+  cooldownMs: 2300,
 };
 
 /**

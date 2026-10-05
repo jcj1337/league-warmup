@@ -198,7 +198,7 @@ test('smoke: movement, attack, Q, enemy fire, context menu, run end + restart, d
   over.result && over.result.outcome === 'defeated' && over.result.stageReached === 11
     ? pass(`the run ends on death, at Stage ${over.result.stageReached} (score ${over.result.score}, kills ${over.result.targetsKilled})`)
     : fail(`run did not end on death: ${JSON.stringify(over.result)}`);
-  const overlayVisible = await page.evaluate(() => window.__warmup.scene.getScene('UIScene').overlay.visible);
+  const overlayVisible = await page.evaluate(() => window.__warmup.scene.getScene('UIScene').endScreen.container.visible);
   overlayVisible ? pass('end screen shown') : fail('end screen not shown');
 
   await page.keyboard.press('r');
@@ -207,7 +207,7 @@ test('smoke: movement, attack, Q, enemy fire, context menu, run end + restart, d
   fresh.result === null && fresh.hud.hp === 100 && fresh.hud.score < over.result.score && fresh.hud.stage === 1 && fresh.hud.wave === 1
     ? pass('restart resets the run to Stage 1 Wave 1')
     : fail(`restart state: hp=${fresh.hud.hp} score=${fresh.hud.score} stage=${fresh.hud.stage} wave=${fresh.hud.wave} result=${JSON.stringify(fresh.result)}`);
-  const overlayHidden = await page.evaluate(() => window.__warmup.scene.getScene('UIScene').overlay.visible);
+  const overlayHidden = await page.evaluate(() => window.__warmup.scene.getScene('UIScene').endScreen.container.visible);
   !overlayHidden ? pass('end screen hidden after restart') : fail('end screen still visible after restart');
 
   // Movement still works after restart (input rewiring check). Spawns are

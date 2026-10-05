@@ -68,7 +68,7 @@ export const Q = {
    * first, `perCatch` more for each catch in a row, up to `max`. Missing one
    * axe ends the streak, and the next catch heals `base` again.
    */
-  catchHeal: { base: 5, perCatch: 5, max: 25 },
+  catchHeal: { base: 5, perCatch: 5, max: 20 },
 };
 
 /**

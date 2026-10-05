@@ -147,6 +147,10 @@ test('kit: W mark + detonation, E blink + bolt priority, Flash, Q cooldown refun
   Math.abs(eNear.px - 760) < 6 && Math.abs(eNear.py - 360) < 6
     ? pass(`E with cursor in range blinks exactly to it (${eNear.px.toFixed(0)},${eNear.py.toFixed(0)})`)
     : fail(`E landed at ${eNear.px},${eNear.py}`);
+  const eBonus = await page.evaluate(() => window.__warmup.scene.getScene('GameScene').scoring.scoreFrom.kit);
+  eBonus === cfg.e.scoreBonus
+    ? pass(`the blink pays its score bonus (+${eBonus} on Stage 1)`)
+    : fail(`E score bonus: ${eBonus}, expected ${cfg.e.scoreBonus}`);
 
   await setup([{ type: 'basic', x: 200, y: 120 }]);
   await page.mouse.move(1270, 360);         // 630px right — beyond E range

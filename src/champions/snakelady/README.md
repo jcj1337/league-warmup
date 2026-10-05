@@ -9,7 +9,7 @@ shared across champions: see the main README's [Controls](../../../README.md#con
 | | Aim | Cast time | Cooldown | Range | Pips removed |
 | --- | --- | --- | --- | --- | --- |
 | Auto | target | ~240ms windup\* | 950ms\* | 200 (Magic Boy's is 260) | 1 |
-| Q | ground point | 150ms | 3500ms† | 275, blast radius 45 | 1 on landing, then poison |
+| Q | ground point | 150ms | 2300ms† | 275, blast radius 45 | 1 on landing, then poison |
 | W | ground point | 150ms | 12000ms† | 250; a wall of 7 clouds across your aim, ~180 × 60 | 0; slows 35% and poisons, only while inside |
 | E | the enemy **under** the cursor | 150ms | 800ms† | 250 | 1, **2 if poisoned** |
 | R | cone toward the cursor | 500ms, rooted; strikes as it ends | 45000ms†, **−500ms per poisoned fang** | 280, 80° wide | 1; **stuns enemies facing you** 1.5s, slows the rest 50% |
@@ -17,7 +17,7 @@ shared across champions: see the main README's [Controls](../../../README.md#con
 
 \* her level-1 auto cycle is 950ms (Magic Boy's is 700ms), +3% attack speed per level; the
 windup is a quarter of it. † at level 1; ability haste (+5 per level) shortens Q / W / E / R,
-as for Magic Boy: ×0.8 at level 6, ×0.67 at 11, ×0.54 at 18 (Q 3.5s → 1.9s, E 800 → 430ms).
+as for Magic Boy: ×0.8 at level 6, ×0.67 at 11, ×0.54 at 18 (Q 2.3s → 1.2s, E 800 → 430ms).
 Haste shortens every cast window at half that rate: ×0.70 at level 18 (R 500 → 351ms).
 
 **Sizes come from League, by proportion.** Ranges are scaled by her auto range (League's

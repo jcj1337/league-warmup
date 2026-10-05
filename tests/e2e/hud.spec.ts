@@ -503,7 +503,7 @@ test('hud: contextual range ring, pause freeze + input gate, Q slot, settings me
   });
   const endedA = await waitFor(() =>
     window.__warmup.scene.getScene('GameScene').getRoundResult()?.outcome === 'defeated'
-    && window.__warmup.scene.getScene('UIScene').overlay.visible);
+    && window.__warmup.scene.getScene('UIScene').endScreen.container.visible);
   trackedA && endedA
     ? pass(`A: run ended by death at Stage ${lastStage} with the UI tracking Stage ${lastStage}`)
     : fail(`A: setup — UI tracked=${trackedA}, ended=${endedA}`);
@@ -537,9 +537,9 @@ test('hud: contextual range ring, pause freeze + input gate, Q slot, settings me
   await page.evaluate(() => { window.__warmup.scene.getScene('GameScene').player.hp = 0; });
   const endedC = await waitFor(() =>
     window.__warmup.scene.getScene('GameScene').getRoundResult()?.outcome === 'defeated'
-    && window.__warmup.scene.getScene('UIScene').overlay.visible);
+    && window.__warmup.scene.getScene('UIScene').endScreen.container.visible);
   const playAgain = await page.evaluate(() => {
-    const t = window.__warmup.scene.getScene('UIScene').overlay.list
+    const t = window.__warmup.scene.getScene('UIScene').endScreen.container.list
       .find((o) => /Text$/.test(o.type) && /^PLAY AGAIN/.test(o.text));
     return t ? { x: t.x, y: t.y } : null;
   });

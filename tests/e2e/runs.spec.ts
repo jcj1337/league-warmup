@@ -30,7 +30,7 @@ test('runs: damage by source, killing blow, local run log, end-screen summary, c
     await page.waitForTimeout(100);
     return page.evaluate(() => ({
       result: window.__warmup.scene.getScene('GameScene').getRoundResult(),
-      screen: window.__warmup.scene.getScene('UIScene').resultText.text,
+      screen: window.__warmup.scene.getScene('UIScene').endScreen.text,
       runs: window.__runs.list(),
     }));
   };
@@ -72,8 +72,9 @@ test('runs: damage by source, killing blow, local run log, end-screen summary, c
     && logged.wave === r.waveReached && logged.growth === r.growth && logged.damageTaken.pursuer === 10 && !Number.isNaN(Date.parse(logged.at))
     ? pass(`the run is saved locally: ${JSON.stringify(logged)}`)
     : fail(`log: ${JSON.stringify(death.runs)}`);
-  /YOUR BEST\s+STAGE 1\s.*\(1 RUN\)/.test(death.screen) && !/DAMAGE|MECHANICS|KILLED BY/.test(death.screen)
-    ? pass('the end screen shows your best; the killer and the tuning data stay off it, in the run log')
+  /YOUR BEST\s+STAGE 1\s.*\(1 RUN\)/.test(death.screen) && /SLAIN BY\s+MAGUS\n/.test(death.screen)
+    && /LOST THIS STAGE\s+PURSUER 10\s+EDGE FIRE 8\s+OTHER 9\n/.test(death.screen) && !/MECHANICS/.test(death.screen)
+    ? pass('the end screen shows your best, the killer and the HP lost in the last stage (top sources, the rest as OTHER); the tuning data stays in the run log')
     : fail(`end screen:\n${death.screen}`);
 
   // === 3. The log persists, per growth setting =============================

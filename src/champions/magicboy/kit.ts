@@ -81,6 +81,7 @@ export class MagicBoyKit implements Kit {
       // Relocate first, THEN acquire, so the bolt is chosen from the new position.
       this.ctx.blink.blinkTo(aim);
       this.fireBolt();
+      this.ctx.combat.bonus(BLINK_E.scoreBonus);
     } else if (slot === 'r') {
       this.rFired++;
       let struck = 0;

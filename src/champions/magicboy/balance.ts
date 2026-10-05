@@ -120,6 +120,8 @@ export const BLINK_E = {
   boltAcquisitionRange: 380,
   boltSpeed: 1050,
   boltRadius: 7,
+  /** Score for each blink, × the stage multiplier: a kill is worth 100, so this is a nudge to use it. */
+  scoreBonus: 10,
 };
 
 /**

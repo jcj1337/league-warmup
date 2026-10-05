@@ -182,9 +182,13 @@ export class AxeManKit implements Kit {
     this.axesCaught++;
     this.takeAxe();
     this.ctx.cooldowns.reduce(Number.POSITIVE_INFINITY, ['w']);
-    const healed = this.ctx.player.heal(this.nextCatchHeal);
+    const offered = this.nextCatchHeal;
+    const healed = this.ctx.player.heal(offered);
     this.catchStreak++;
-    if (healed > 0) Fx.of(this.ctx.scene).popup(drop.x, drop.y - this.ctx.player.radius - 12, `+${healed}`, THEME.ui.good);
+    // HP can be fractional (damage is scaled), so a heal cut short by full HP reads MAX, never "+12.6".
+    if (healed > 0) {
+      Fx.of(this.ctx.scene).popup(drop.x, drop.y - this.ctx.player.radius - 12, healed < offered ? 'MAX' : `+${healed}`, THEME.ui.good);
+    }
     this.ctx.player.playPassivePulse(this.held >= Q.maxHeld);
   }
 

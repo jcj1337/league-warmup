@@ -779,6 +779,29 @@ export const THEME = {
     tints: { easy: P.good, normal: P.creamDim, hard: P.danger } as Record<string, number>,
   },
 
+  /**
+   * The end screen (EndScreen). Each colour means one thing there: gold is an
+   * achievement, red is what ended you, a mob's own colour is that mob, green
+   * is better than your past self, dim cream is a label.
+   */
+  endScreen: {
+    /** A damage source's colour, by ENEMIES id or hazard id; an unlisted one reads as plain text. */
+    sources: {
+      basic: P.red, pursuer: P.purpleLight, magus: P.magusLight, sovereign: P.silver, bulwark: P.sand, edgeFire: P.fireOrange,
+    } as Record<string, number>,
+    /** The score bar's segments, by RoundResult.scoreFrom key. */
+    scoreFrom: { kills: P.gold, speed: P.auto, hp: P.hpGreen, clear: P.w, kit: P.e },
+    /** Most damage rows shown; smaller sources fold into OTHER. */
+    damageRows: 3,
+    /** Widest gap between two stage nodes on the progress track; a long run packs them closer. */
+    trackMaxPitch: 72,
+    /**
+     * The reveal: each block fades in `stepMs` after the one before, the score
+     * counts up and the NEW BEST stamp punches in last. A click or key skips it.
+     */
+    reveal: { stepMs: 220, fadeMs: 180, scoreCountMs: 700, stampMs: 240, stampFromScale: 2.2 },
+  },
+
   /** Title card before the first run of a page load. Presentation only. */
   startScreen: {
     scrimAlpha: 0.85,

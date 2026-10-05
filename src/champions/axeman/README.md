@@ -39,7 +39,7 @@ counts. Once the circle is on the ground, nothing he does moves it.
 as the axe comes down to him (from 120ms before it would touch the ground, which is when
 the falling axe reaches his body), he catches it: the axe is back in his hand, the 6s hold timer starts over, **W is ready again**, and he
 **heals**. The heal grows with a streak: 5 HP for the first catch, 5 more for each catch in
-a row (10, 15, 20), up to 25, never past full. Missing a single axe ends the streak, and
+a row (10, 15), up to 20, never past full (a catch that fills him up reads **MAX**). Missing a single axe ends the streak, and
 the next catch heals 5 again.
 A missed axe lies there for 350ms and can still be picked up by stepping on it; then it
 is gone, and he waits for Q.

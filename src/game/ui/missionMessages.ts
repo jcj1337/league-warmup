@@ -36,3 +36,28 @@ export function stageThreats(stage: number, mode: Mode): string[] {
 export function missionComplete(mission: number): string {
   return `Mission ${mission} complete!`;
 }
+
+/** A line under DEFEATED, said from the first stage it applies to. */
+interface Taunt {
+  fromStage: number;
+  line: string;
+}
+
+/**
+ * The end screen's taunts. A mode with its own list uses it; the rest share
+ * the default. Within a list, the last line whose `fromStage` you reached wins.
+ */
+const TAUNTS: { default: Taunt[]; byMode: Record<string, Taunt[]> } = {
+  default: [{ fromStage: 1, line: "qwer would've won that..." }],
+  byMode: {
+    hard: [
+      { fromStage: 1, line: "qwer would've won that... probably..." },
+      { fromStage: 9, line: "qwer would've lost that too lol" },
+    ],
+  },
+};
+
+export function deathTaunt(modeId: string, stage: number): string {
+  const lines = TAUNTS.byMode[modeId] ?? TAUNTS.default;
+  return lines.reduce((said, t) => (stage >= t.fromStage ? t.line : said), lines[0].line);
+}

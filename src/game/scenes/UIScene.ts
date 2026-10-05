@@ -2,7 +2,7 @@ import Phaser from 'phaser';
 import { CursorLock } from '../CursorLock';
 import { Keybinds } from '../Keybinds';
 import { MouseSpeed } from '../MouseSpeed';
-import { RunHistory, type RunSummary } from '../RunHistory';
+import { RunHistory } from '../RunHistory';
 import { Settings } from '../Settings';
 import { isModeId, modeOf } from '../Mode';
 import { Profile } from '../../profile/Profile';
@@ -17,6 +17,7 @@ import { CASED_FONT_KEY, pixelText, setPixelScale } from '../art/font';
 import { TEX, ensureArt } from '../art/textures';
 import { AbilityBar } from '../ui/AbilityBar';
 import { ChatBox } from '../ui/ChatBox';
+import { EndScreen } from '../ui/EndScreen';
 import { GAME_TITLE, missionBriefing, missionComplete, stageThreats, welcomeMessage } from '../ui/missionMessages';
 import { PassiveDisplay } from '../ui/PassiveDisplay';
 import { PauseMenu } from '../ui/PauseMenu';
@@ -27,9 +28,6 @@ import type { GameScene } from './GameScene';
 type Hud = ReturnType<GameScene['getHudState']>;
 
 const HP_BAR_WIDTH = 200;
-/** End screen: panel width and the text's left / right margin inside it. */
-const END_PANEL_WIDTH = 920;
-const END_PANEL_MARGIN = 64;
 
 /**
  * HUD + end screen. Runs as a parallel scene on top of GameScene and polls it
@@ -78,8 +76,7 @@ export class UIScene extends Phaser.Scene {
   private shownLevel = 1;
   private hpBand: 'high' | 'mid' | 'low' | null = null;
 
-  private overlay!: Phaser.GameObjects.Container;
-  private resultText!: Phaser.GameObjects.BitmapText;
+  private endScreen!: EndScreen;
   private overlayVisible = false;
 
   /** Title card over a held round (page load, "Return to select"); a click or key starts the run. */
@@ -285,46 +282,10 @@ export class UIScene extends Phaser.Scene {
   }
 
   private buildOverlay(): void {
-    const bg = this.add.rectangle(0, 0, ARENA.width, ARENA.height, THEME.ui.scrim, 0.8).setOrigin(0, 0);
-
-    // Wide enough for the longest rows (kills by every mob type); the text is
-    // left-aligned at a fixed margin so a long row can never push the columns
-    // off the panel, and anything longer still wraps inside it.
-    const panelW = END_PANEL_WIDTH;
-    const panelX = ARENA.width / 2 - panelW / 2;
-    const plate = this.add.graphics();
-    pixelPanel(plate, panelX, 56, panelW, 616, {
-      fill: THEME.ui.panel, fillAlpha: 0.96, edge: THEME.ui.panelEdge, highlight: THEME.ui.panelHighlight, border: 3,
+    this.endScreen = new EndScreen(this, {
+      playAgain: () => this.game_.restartRound(),
+      returnToSelect: () => this.game_.returnToStart(),
     });
-
-    const title = pixelText(this, ARENA.width / 2, 110, '', 6).setOrigin(0.5);
-    title.setName('title');
-
-    this.resultText = pixelText(this, panelX + END_PANEL_MARGIN, 368, '', 2)
-      .setOrigin(0, 0.5)
-      .setLineSpacing(2)
-      .setMaxWidth(panelW - END_PANEL_MARGIN * 2);
-
-    const endButton = (cx: number, label: string, onClick: () => void): Phaser.GameObjects.GameObject[] => {
-      const button = this.add
-        .rectangle(cx, 626, 280, 48, THEME.menu.button)
-        .setStrokeStyle(3, THEME.ui.accent)
-        .setInteractive({ useHandCursor: true });
-      const text = pixelText(this, cx, 626, label, 2, THEME.ui.accent).setOrigin(0.5);
-      button.on('pointerover', () => button.setFillStyle(THEME.menu.buttonHover));
-      button.on('pointerout', () => button.setFillStyle(THEME.menu.button));
-      button.on('pointerdown', onClick);
-      return [button, text];
-    };
-    const buttons = [
-      ...endButton(ARENA.width / 2 - 160, 'PLAY AGAIN  [R]', () => this.game_.restartRound()),
-      ...endButton(ARENA.width / 2 + 160, 'RETURN TO SELECT', () => this.game_.returnToStart()),
-    ];
-
-    this.overlay = this.add
-      .container(0, 0, [bg, plate, title, this.resultText, ...buttons])
-      .setDepth(200)
-      .setVisible(false);
   }
 
   /**
@@ -540,6 +501,7 @@ export class UIScene extends Phaser.Scene {
     this.cursorLock.update();
 
     this.syncOverlay();
+    this.endScreen.update();
   }
 
   /**
@@ -613,50 +575,27 @@ export class UIScene extends Phaser.Scene {
 
     if (shouldShow === this.overlayVisible) return;
     this.overlayVisible = shouldShow;
-    this.overlay.setVisible(shouldShow);
-    if (!result) return;
+    if (!result) {
+      this.endScreen.hide();
+      return;
+    }
 
-    const title = this.overlay.getByName('title') as Phaser.GameObjects.BitmapText;
-    title.setText('DEFEATED').setTint(THEME.ui.danger);
-
-    // Only what tells you how the run went. Tuning data (damage per source, the
-    // score breakdown, the raw attack metrics) stays in the result and the run
-    // log (__runs), off the screen.
-    const row = (label: string, value: string) => `${label.padEnd(16, ' ')}${value}`;
-
-    this.resultText.setText(
-      [
-        row(
-          'STAGE REACHED',
-          `${result.stageReached}  (wave ${result.waveReached}/${result.wavesInStage})  LV ${result.level}${result.newBest ? '  NEW BEST!' : ''}`,
-        ),
-        row('DIFFICULTY', modeOf(result.mode).name.toUpperCase()),
-        row('SCORE', `${result.score}`),
-        row('KILLS', `${result.targetsKilled}`),
-        row('KILLS BY TYPE', killsLine(result.killsByType)),
-        ...result.kitRows.map((stat) => row(stat.label, stat.value)),
-        row('YOUR BEST', bestLine(RunHistory.summary(result.growth, BALANCE_VERSION, result.champion, result.mode))),
-      ].join('\n\n'),
-    );
+    // Only what tells you how the run went. Tuning data (whole-run damage per
+    // source, the raw attack metrics) stays in the result and the run log
+    // (__runs), off the screen.
+    this.endScreen.show({
+      result,
+      best: RunHistory.summary(result.growth, BALANCE_VERSION, result.champion, result.mode),
+      champion: championOf(result.champion),
+      look: resolveLook(Profile.data),
+      time: formatRunTime(result.runTimeSeconds),
+    });
   }
 }
 
 /** The registered champion with this id, or the default for an unknown one. */
 function championOf(id: string): Champion {
   return isChampionId(id) ? CHAMPIONS[id] : CHAMPIONS[DEFAULT_CHAMPION];
-}
-
-/** "basic 12  pursuer 3  sovereign 1": only the mobs actually killed, most first. */
-function killsLine(kills: Record<string, number>): string {
-  const parts = Object.entries(kills).filter(([, n]) => n > 0).sort((a, b) => b[1] - a[1]).map(([id, n]) => `${id} ${n}`);
-  return parts.length ? parts.join('  ') : 'none';
-}
-
-/** "STAGE 9  SCORE 45200  (8 RUNS)": your best on the current balance version. */
-function bestLine(s: RunSummary): string {
-  if (s.runs === 0) return 'not logged';
-  const score = s.bestScore !== null ? `  SCORE ${s.bestScore}` : '';
-  return `STAGE ${s.best}${score}  (${s.runs} ${s.runs === 1 ? 'RUN' : 'RUNS'})`;
 }
 
 /** 65.34 → "1:05.3". Run time is a statistic, not a countdown. */

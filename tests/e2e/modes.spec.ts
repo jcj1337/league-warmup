@@ -101,7 +101,7 @@ test('modes: the profile picks the mode, damage, stage-clear bonus, rosters (whe
       const popups = g.children.list
         .filter((o: { text?: unknown }) => typeof o.text === 'string' && /CLEAR$/.test(o.text as string))
         .map((o: { text: string }) => o.text);
-      return { clear: from.clear - before.clear, hp: from.hp - before.hp, score: g.scoring.score, parts: from.kills + from.speed + from.hp + from.clear, popups };
+      return { clear: from.clear - before.clear, hp: from.hp - before.hp, score: g.scoring.score, parts: from.kills + from.speed + from.hp + from.clear + from.kit, popups };
     });
     const want = Math.round(cfg.modes[mode].stageClearBonus * (1 + perStage * 2));
     got.clear === want && got.hp > 0 && got.score === got.parts
@@ -222,7 +222,7 @@ test('modes: the profile picks the mode, damage, stage-clear bonus, rosters (whe
   await playOn('normal');
   const normalRun = await die();
   {
-    const s = await page.evaluate(() => ({ normal: window.__runs.summary(), screen: window.__warmup.scene.getScene('UIScene').resultText.text as string }));
+    const s = await page.evaluate(() => ({ normal: window.__runs.summary(), screen: window.__warmup.scene.getScene('UIScene').endScreen.text as string }));
     normalRun.mode === 'normal' && normalRun.previousBest === null && s.normal.runs === 1
       ? pass('a Normal run after it has no earlier best: bests never cross modes')
       : fail(`normal after hard: ${JSON.stringify({ normalRun: { mode: normalRun.mode, previousBest: normalRun.previousBest }, s })}`);
@@ -299,8 +299,11 @@ test('modes: the profile picks the mode, damage, stage-clear bonus, rosters (whe
   await die();
   await page.waitForTimeout(100);
   {
-    const screen = await page.evaluate(() => window.__warmup.scene.getScene('UIScene').resultText.text as string);
+    const screen = await page.evaluate(() => window.__warmup.scene.getScene('UIScene').endScreen.text as string);
     /DIFFICULTY\s+HARD\n/.test(screen) ? pass('the end screen names the mode') : fail(`end screen:\n${screen}`);
+    screen.startsWith("qwer would've won that... probably...\n")
+      ? pass('an early death on Hard gets Hard\'s taunt')
+      : fail(`taunt:\n${screen}`);
   }
 
   await page.evaluate(() => window.__profile.reset());

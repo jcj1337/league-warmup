@@ -161,9 +161,24 @@ test('axeman: picked from the profile, Q axes on autos, where the axe lands, cat
       k.catchStreak = keep;
       return out as number[];
     });
-    heals.join(',') === '5,10,15,20,25,25,25'
-      ? pass(`a streak of catches heals ${heals.slice(0, 5).join(', ')}, then stays at ${cfg.Q.catchHeal.max}`)
+    heals.join(',') === '5,10,15,20,20,20,20'
+      ? pass(`a streak of catches heals ${heals.slice(0, 4).join(', ')}, then stays at ${cfg.Q.catchHeal.max}`)
       : fail(`streak heals: ${heals.join(',')}`);
+    // A catch that would pass full HP fills him up and says so, instead of a fraction.
+    const capped = await page.evaluate(() => {
+      const g = window.__warmup.scene.getScene('GameScene');
+      const k = g.kit;
+      const keep = { hp: g.player.hp, streak: k.catchStreak, held: k.held, caught: k.axesCaught };
+      g.player.hp = g.player.maxHp - 2.6;
+      k.catchAxe({ x: g.player.x, y: g.player.y, finish() {} });
+      const texts = g.children.list.filter((o: { text?: unknown }) => typeof o.text === 'string').map((o: { text: string }) => o.text);
+      const out = { hp: g.player.hp, max: g.player.maxHp, said: texts.includes('MAX'), fraction: texts.some((t: string) => /^\+\d+\.\d/.test(t)) };
+      g.player.hp = keep.hp; k.catchStreak = keep.streak; k.held = keep.held; k.axesCaught = keep.caught;
+      return out;
+    });
+    capped.hp === capped.max && capped.said && !capped.fraction
+      ? pass('a catch that tops him up reads MAX, not a fractional +N')
+      : fail(`capped catch: ${JSON.stringify(capped)}`);
   }
 
   // === 3. Where it lands ========================================================
