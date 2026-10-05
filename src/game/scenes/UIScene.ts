@@ -4,6 +4,7 @@ import { Keybinds } from '../Keybinds';
 import { MouseSpeed } from '../MouseSpeed';
 import { RunHistory, type RunSummary } from '../RunHistory';
 import { Settings } from '../Settings';
+import { modeOf } from '../Mode';
 import { Profile } from '../../profile/Profile';
 import { resolveLook } from '../../cosmetics/catalogue';
 import { ChampionRow } from '../ui/ChampionRow';
@@ -444,7 +445,7 @@ export class UIScene extends Phaser.Scene {
     this.chatStage = hud.stage;
     this.chatClearedStage = 0;
     this.chat.push(missionBriefing(hud.stage, hud.wavesInStage), 'mission');
-    for (const threat of stageThreats(hud.stage)) this.chat.push(threat, 'threat');
+    for (const threat of stageThreats(hud.stage, modeOf(hud.mode))) this.chat.push(threat, 'threat');
   }
 
   override update(): void {
@@ -567,7 +568,7 @@ export class UIScene extends Phaser.Scene {
       this.chatStage = hud.stage;
       this.chatClearedStage = 0;
       this.chat.push(missionBriefing(hud.stage, hud.wavesInStage), 'mission');
-      for (const threat of stageThreats(hud.stage)) this.chat.push(threat, 'threat');
+      for (const threat of stageThreats(hud.stage, modeOf(hud.mode))) this.chat.push(threat, 'threat');
     }
 
     const stageCleared = hud.wavePhase === 'intermission' && hud.nextTransition === 'stage';

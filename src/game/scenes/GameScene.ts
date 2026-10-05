@@ -190,6 +190,7 @@ export class GameScene extends Phaser.Scene {
       this,
       this.clock,
       () => ({ x: this.player.x, y: this.player.y }),
+      this.mode,
       {
         onWaveCleared: (wave) => this.combat.waveCleared(wave),
         onStageCleared: () => this.combat.stageCleared(),

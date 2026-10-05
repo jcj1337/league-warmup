@@ -810,6 +810,7 @@ export interface StageDefinition {
  *     and the Sovereign (Wave 2) in 5.
  *   - Single waves for Stages 1-3, two for 4-5.
  * Add, remove or edit stages freely: everything past the table is generated.
+ * This is Normal's intro; Easy and Hard have their own below (see MODES).
  */
 export const STAGES: StageDefinition[] = [
   /* 1 */ { waves: [{ basic: 3 }] },
@@ -819,7 +820,25 @@ export const STAGES: StageDefinition[] = [
   /* 5 */ { waves: [{ basic: 2, pursuer: 1, magus: 1 }, { basic: 2, pursuer: 2, sovereign: 1 }] },
 ];
 
-/** Generated stages (everything past STAGES). */
+/** Easy's intro: slimes and Pursuers only. Generated from Stage 7, where the Magus debuts alone. */
+const EASY_STAGES: StageDefinition[] = [
+  /* 1 */ { waves: [{ basic: 3 }] },
+  /* 2 */ { waves: [{ basic: 3 }] },
+  /* 3 */ { waves: [{ basic: 3, pursuer: 1 }] },
+  /* 4 */ { waves: [{ basic: 3, pursuer: 1 }] },
+  /* 5 */ { waves: [{ basic: 3, pursuer: 1 }, { basic: 2, pursuer: 2 }] },
+  /* 6 */ { waves: [{ basic: 3, pursuer: 1 }, { basic: 3, pursuer: 2 }] },
+];
+
+/** Hard's intro: the casters arrive inside it. Generated, with the Bulwark capstone, from Stage 5. */
+const HARD_STAGES: StageDefinition[] = [
+  /* 1 */ { waves: [{ basic: 3, pursuer: 1 }] },
+  /* 2 */ { waves: [{ basic: 2, pursuer: 2 }] },
+  /* 3 */ { waves: [{ basic: 3, pursuer: 1, magus: 1 }, { basic: 3, pursuer: 2 }] },
+  /* 4 */ { waves: [{ basic: 2, pursuer: 1, sovereign: 1 }, { basic: 2, pursuer: 1, magus: 1, sovereign: 1 }] },
+];
+
+/** Generated stages (everything past a mode's intro table). */
 export const ENDLESS = {
   wavesPerStage: 3,
 };
@@ -827,6 +846,9 @@ export const ENDLESS = {
 // ============================================================================
 // MODES — the difficulty picked on the start screen. Normal is the reference;
 // a mode is only numbers, and the engine never asks which mode it is.
+//
+//   Easy   specials unlock later and are drawn less; waves are smaller.
+//   Hard   specials unlock earlier and are drawn more; damage is doubled.
 // ============================================================================
 
 export interface Mode {
@@ -837,15 +859,48 @@ export interface Mode {
   damageMultiplier: number;
   /** Points for clearing a stage, × the stage multiplier like every award (see ScoreSystem). */
   stageClearBonus: number;
+  /** Multiplies DIFFICULTY.waveSize: a wave's size, and a generated wave's budget. */
+  waveSizeMultiplier: number;
+  /** Per mob, the ENEMIES fields this mode overrides (unlock stage, weight, share, per-wave cap). */
+  enemies: Partial<Record<EnemyId, Partial<EnemyEntry>>>;
+  /** Its hand-written intro; every later stage is generated. */
+  stages: StageDefinition[];
 }
 
 export const MODES = {
-  easy: { id: 'easy', name: 'Easy', damageMultiplier: 1, stageClearBonus: 0 },
-  normal: { id: 'normal', name: 'Normal', damageMultiplier: 1, stageClearBonus: 500 },
-  hard: { id: 'hard', name: 'Hard', damageMultiplier: 2, stageClearBonus: 1500 },
+  easy: {
+    id: 'easy', name: 'Easy', damageMultiplier: 1, stageClearBonus: 0, waveSizeMultiplier: 0.75,
+    enemies: {
+      magus: { unlockStage: 7, weight: 0.3 },
+      sovereign: { unlockStage: 8, weight: 0.3 },
+      // Never two.
+      bulwark: { unlockStage: 11, maxPerWave: { base: 1, k: 0, max: 1 } },
+    },
+    stages: EASY_STAGES,
+  },
+  normal: {
+    id: 'normal', name: 'Normal', damageMultiplier: 1, stageClearBonus: 500, waveSizeMultiplier: 1,
+    enemies: {},
+    stages: STAGES,
+  },
+  hard: {
+    id: 'hard', name: 'Hard', damageMultiplier: 2, stageClearBonus: 1500, waveSizeMultiplier: 1,
+    enemies: {
+      magus: { unlockStage: 3, weight: 1.5, maxShare: 0.5, maxPerWave: { base: 2, k: 0.3, max: 4 } },
+      sovereign: { unlockStage: 4, weight: 1.5, maxShare: 0.5, maxPerWave: { base: 1, k: 0.3, max: 2 } },
+      // Two from about Stage 12 (Normal: 18).
+      bulwark: { unlockStage: 5, maxPerWave: { base: 1.3, k: 0.3, max: 2 } },
+    },
+    stages: HARD_STAGES,
+  },
 } satisfies Record<string, Mode>;
 
 export type ModeId = keyof typeof MODES;
+
+/** A mob's registry entry as a mode plays it: ENEMIES[id] with the mode's overrides on top. */
+export function enemyEntry(id: EnemyId, mode: Mode): EnemyEntry {
+  return { ...ENEMIES[id], ...mode.enemies[id] };
+}
 export const DEFAULT_MODE: ModeId = 'normal';
 
 /**

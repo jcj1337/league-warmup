@@ -1,7 +1,7 @@
 import { test } from '@playwright/test';
 import { startSuite } from './support/harness';
 
-test('modes: the profile picks the mode, damage per mode, stage-clear bonus per mode, runs logged and compared per mode', async ({ page }, testInfo) => {
+test('modes: the profile picks the mode, damage, stage-clear bonus, rosters (when specials debut, how many, wave size), run log per mode', async ({ page }, testInfo) => {
   const { pass, fail, section, finish } = await startSuite(page, testInfo, 200, { mode: 'hard' });
 
   /** Save a mode to the profile and restart into a fresh round on it, arena quiet. */
@@ -114,6 +114,89 @@ test('modes: the profile picks the mode, damage per mode, stage-clear bonus per 
   cfg.modes.easy.stageClearBonus === 0 && cfg.modes.normal.stageClearBonus === 500 && cfg.modes.hard.stageClearBonus === 1500
     ? pass('the bonus is none on Easy, 500 on Normal, 1500 on Hard, × the stage multiplier')
     : fail(`bonuses: ${JSON.stringify(cfg.modes)}`);
+
+  // === 2c. Rosters ============================================================
+  section('2c. Rosters');
+  const STAGES_READ = 20;
+  type StageRead = { waves: Record<string, number>[]; waveSize: number; generated: boolean; unlocks: string[] };
+  const rosters: Record<string, StageRead[]> = {};
+  for (const mode of ['easy', 'normal', 'hard']) {
+    await playOn(mode);
+    rosters[mode] = await page.evaluate((n) => {
+      const d = window.__warmup.scene.getScene('GameScene').director;
+      const at = d.stageIndex;
+      const out = [];
+      for (let s = 0; s < n; s++) {
+        const described = d.describeStage(s);
+        d.stageIndex = s;
+        out.push({ waves: described.waves, waveSize: d.difficulty.waveSize, generated: described.generated, unlocks: d.unlocksOn(s + 1) });
+      }
+      d.stageIndex = at;
+      return out;
+    }, STAGES_READ);
+  }
+  /** First 1-based stage that fields `mob`, and whether it is only ever in a stage's last wave. */
+  const debut = (mode: string, mob: string) => rosters[mode].findIndex((st) => st.waves.some((w) => (w[mob] ?? 0) > 0)) + 1;
+  const count = (mode: string, mobs: string[], from: number) => rosters[mode].slice(from - 1)
+    .reduce((n, st) => n + st.waves.reduce((m, w) => m + mobs.reduce((k, mob) => k + (w[mob] ?? 0), 0), 0), 0);
+  const want = { easy: { magus: 7, sovereign: 8, bulwark: 11 }, normal: { magus: 5, sovereign: 5, bulwark: 8 }, hard: { magus: 3, sovereign: 4, bulwark: 5 } };
+  for (const mode of ['easy', 'normal', 'hard'] as const) {
+    const got = { magus: debut(mode, 'magus'), sovereign: debut(mode, 'sovereign'), bulwark: debut(mode, 'bulwark') };
+    JSON.stringify(got) === JSON.stringify(want[mode])
+      ? pass(`${mode}: Magus from Stage ${got.magus}, Sovereign from ${got.sovereign}, Bulwark from ${got.bulwark}`)
+      : fail(`${mode} debuts: ${JSON.stringify(got)}, want ${JSON.stringify(want[mode])}`);
+    const announced = Object.entries(want[mode]).every(([mob, stage]) => rosters[mode][stage - 1].unlocks.includes(mob));
+    announced ? pass(`${mode}: each is announced as a new threat on that stage`) : fail(`${mode} unlocks: ${JSON.stringify(rosters[mode].map((s) => s.unlocks))}`);
+    // The capstone closes every stage from its debut, and appears nowhere else.
+    const capstone = rosters[mode].every((st, i) => st.waves.every((w, wi) =>
+      (w.bulwark ?? 0) > 0 === (i + 1 >= want[mode].bulwark && wi === st.waves.length - 1)));
+    capstone
+      ? pass(`${mode}: a Bulwark closes every stage from Stage ${want[mode].bulwark}, and only there`)
+      : fail(`${mode} bulwarks: ${JSON.stringify(rosters[mode].map((st) => st.waves.map((w) => w.bulwark ?? 0)))}`);
+  }
+  {
+    const sizes = (mode: string) => rosters[mode].map((s) => s.waveSize);
+    const [e, n, h] = [sizes('easy'), sizes('normal'), sizes('hard')];
+    e.every((v, i) => v === Math.max(1, Math.round(n[i] * cfg.modes.easy.waveSizeMultiplier)) && v < n[i]) && h.join() === n.join()
+      ? pass(`Easy waves are ${cfg.modes.easy.waveSizeMultiplier * 100}% of Normal's (Stage 10: ${e[9]} vs ${n[9]}); Hard's are Normal's`)
+      : fail(`wave sizes: ${JSON.stringify({ e, n, h })}`);
+    const bodies = (mode: string, stage: number) => rosters[mode][stage - 1].waves.map((w) => Object.values(w).reduce((a, b) => a + b, 0));
+    bodies('easy', 1)[0] === e[0] && bodies('normal', 1)[0] === n[0]
+      ? pass(`Stage 1 fields ${e[0]} slimes on Easy, ${n[0]} on Normal`)
+      : fail(`stage 1 bodies: ${JSON.stringify({ easy: bodies('easy', 1), normal: bodies('normal', 1) })}`);
+    // Generated waves spend a budget: the mode's wave size.
+    const cost = await page.evaluate(() => Object.fromEntries(Object.entries(window.__balance.ENEMIES).map(([id, v]) => [id, (v as { cost: number }).cost])));
+    const over = ['easy', 'normal', 'hard'].flatMap((mode) => rosters[mode].flatMap((st, i) => st.generated
+      ? st.waves.map((w) => ({ mode, stage: i + 1, cost: Object.entries(w).reduce((c, [id, k]) => c + cost[id] * k, 0), budget: st.waveSize })).filter((x) => x.cost > x.budget + 1e-9)
+      : []));
+    over.length === 0 ? pass('no generated wave overspends its mode\'s budget') : fail(`overspent: ${JSON.stringify(over.slice(0, 5))}`);
+    const generatedFrom = (mode: string) => rosters[mode].findIndex((s) => s.generated) + 1;
+    generatedFrom('easy') === 7 && generatedFrom('normal') === 6 && generatedFrom('hard') === 5
+      ? pass('the hand-written intro is 6 stages on Easy, 5 on Normal, 4 on Hard')
+      : fail(`generated from: ${['easy', 'normal', 'hard'].map(generatedFrom)}`);
+  }
+  {
+    // Over Stages 8-20 (every mode fields both casters by then), casters are rarer on Easy and commoner on Hard.
+    const casters = ['easy', 'normal', 'hard'].map((mode) => count(mode, ['magus', 'sovereign'], 8));
+    casters[0] < casters[1] && casters[1] < casters[2]
+      ? pass(`casters over Stages 8-${STAGES_READ}: ${casters[0]} on Easy, ${casters[1]} on Normal, ${casters[2]} on Hard`)
+      : fail(`casters easy/normal/hard: ${casters}`);
+    const twoBulwarks = (mode: string) => rosters[mode].findIndex((st) => st.waves.some((w) => (w.bulwark ?? 0) >= 2)) + 1;
+    twoBulwarks('easy') === 0 && twoBulwarks('hard') > 0 && twoBulwarks('hard') < twoBulwarks('normal')
+      ? pass(`a second Bulwark: from Stage ${twoBulwarks('hard')} on Hard, ${twoBulwarks('normal')} on Normal, never on Easy`)
+      : fail(`second bulwark: ${['easy', 'normal', 'hard'].map(twoBulwarks)}`);
+  }
+  // The intro's casters really take the field on Hard: Stage 3 spawns a Magus.
+  await playOn('hard');
+  {
+    const fielded = await page.evaluate(() => {
+      const d = window.__warmup.scene.getScene('GameScene').director;
+      d.stageIndex = 2; d.waveIndex = 0; d.currentPhase = 'wave';
+      d.spawnWave(); d.arriveAllNow();
+      return d.enemies.map((e: { archetype: string }) => e.archetype);
+    });
+    fielded.includes('magus') ? pass(`Hard Stage 3 Wave 1 fields a Magus (${fielded.length} enemies)`) : fail(`hard stage 3: ${fielded}`);
+  }
 
   // === 3. The run log is per mode =============================================
   section('3. Run log');

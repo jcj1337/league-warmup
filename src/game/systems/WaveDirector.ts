@@ -5,14 +5,16 @@ import {
   ENDLESS,
   ENEMIES,
   MAGUS,
+  MODES,
   PURSUER,
   SOVEREIGN,
   RUN,
   SCORE,
-  STAGES,
   STAGE_RAMPS,
   TARGETS,
+  enemyEntry,
   type EnemyEntry,
+  type Mode,
   type WaveRoster,
 } from '../../config/balance';
 import { Enemy, type EnemyArchetype, type EnemyContext } from '../entities/Enemy';
@@ -73,7 +75,6 @@ const ARCHETYPES: Record<EnemyArchetype, ArchetypeSpec> = {
 
 /** Every mob id, in registry order (ties and listings follow it). */
 const IDS = Object.keys(ENEMIES) as EnemyArchetype[];
-const entry = (id: EnemyArchetype): EnemyEntry => ENEMIES[id];
 
 /** Where the run is: fighting a wave, or in the breather after one. The run ends only on death. */
 export type WavePhase = 'wave' | 'intermission';
@@ -110,19 +111,24 @@ function expandRoster(roster: WaveRoster): EnemyArchetype[] {
   return out;
 }
 
-/** Authoring guard: fail loudly on a malformed table or registry instead of playing it. */
+/** Authoring guard: fail loudly on a malformed table or registry, in any mode, instead of playing it. */
 function validateConfig(): void {
-  STAGES.forEach((stage, s) => {
-    if (stage.waves.length === 0) throw new Error(`STAGES[${s}] defines no waves`);
-    stage.waves.forEach((wave, w) => {
-      if (expandRoster(wave).length < 1) throw new Error(`STAGES[${s}].waves[${w}] fields no enemies`);
+  for (const mode of Object.values(MODES) as Mode[]) {
+    mode.stages.forEach((stage, s) => {
+      if (stage.waves.length === 0) throw new Error(`${mode.name} stage ${s + 1} defines no waves`);
+      stage.waves.forEach((wave, w) => {
+        if (expandRoster(wave).length < 1) throw new Error(`${mode.name} stage ${s + 1} wave ${w + 1} fields no enemies`);
+      });
     });
-  });
-  for (const id of IDS) {
-    const e = entry(id);
-    if (!(e.cost > 0) || e.weight < 0 || !(e.maxShare > 0) || !(e.unlockStage >= 1)) {
-      throw new Error(`ENEMIES.${id} needs cost > 0, weight >= 0, maxShare > 0 and unlockStage >= 1`);
+    for (const id of IDS) {
+      const e = enemyEntry(id, mode);
+      if (!(e.cost > 0) || e.weight < 0 || !(e.maxShare > 0) || !(e.unlockStage >= 1)) {
+        throw new Error(`ENEMIES.${id} (${mode.name}) needs cost > 0, weight >= 0, maxShare > 0 and unlockStage >= 1`);
+      }
     }
+    if (!(mode.waveSizeMultiplier > 0)) throw new Error(`MODES.${mode.id}.waveSizeMultiplier must be above 0`);
+  }
+  for (const id of IDS) {
     if (!ARCHETYPES[id]) throw new Error(`ENEMIES.${id} has no class registered in WaveDirector.ARCHETYPES`);
   }
   if (!(ENDLESS.wavesPerStage >= 1)) throw new Error('ENDLESS.wavesPerStage must be at least 1');
@@ -141,9 +147,10 @@ function ramp(values: readonly number[], stage: number): number {
  *        ▲                                                                          │
  *        └───────────────── next wave, or Wave 1 of the next stage ◄────────────────┘
  *
- * Stages 1..STAGES.length are hand-written; every later stage is generated
- * (ENDLESS.wavesPerStage waves each, rosters bought from a budget — see
- * rosterFor). Either way a wave is a finite roster, shuffled into a queue and
+ * The mode's intro stages (Mode.stages) are hand-written; every later stage is
+ * generated (ENDLESS.wavesPerStage waves each, rosters bought from a budget —
+ * see rosterFor). The mode also sets each mob's registry entry (entry()) and
+ * the wave size. Either way a wave is a finite roster, shuffled into a queue and
  * grouped into packs:
  *
  *   pending  ─(startsAt)─►  spawning  ─(activeAt)─►  active  ─(killed)─►  dead
@@ -186,6 +193,8 @@ export class WaveDirector implements EnemyFirePressure {
     private readonly scene: Phaser.Scene,
     private readonly clock: GameClock,
     private readonly playerPos: () => { x: number; y: number },
+    /** The difficulty mode: its intro stages, its registry overrides, its wave size. */
+    private readonly mode: Mode,
     private readonly callbacks: {
       /** A wave was cleared (before onStageCleared, when it was the stage's last). */
       onWaveCleared?: (wave: ClearedWave) => void;
@@ -210,7 +219,7 @@ export class WaveDirector implements EnemyFirePressure {
 
   /** Stages with a hand-written table; every later stage is generated. */
   get authoredStages(): number {
-    return STAGES.length;
+    return this.mode.stages.length;
   }
 
   /** 1-based wave number within the current stage. */
@@ -224,7 +233,7 @@ export class WaveDirector implements EnemyFirePressure {
 
   /** How many waves a stage has: its table row's, or ENDLESS.wavesPerStage once generated. */
   wavesIn(stageIndex: number): number {
-    return STAGES[stageIndex]?.waves.length ?? ENDLESS.wavesPerStage;
+    return this.mode.stages[stageIndex]?.waves.length ?? ENDLESS.wavesPerStage;
   }
 
   get phase(): WavePhase {
@@ -278,21 +287,31 @@ export class WaveDirector implements EnemyFirePressure {
     return cleared + this.waveIndex + (this.currentPhase === 'wave' ? 0 : 1);
   }
 
-  /** Every scaled number for the current stage (see Difficulty). */
+  /** Every scaled number for the current stage (see Difficulty), with the mode's wave size. */
   get difficulty(): StageDifficulty {
-    return stageDifficulty(this.stage);
+    return { ...stageDifficulty(this.stage), waveSize: this.waveSize(this.stage) };
+  }
+
+  /** A mob's registry entry in this mode. */
+  private entry(id: EnemyArchetype): EnemyEntry {
+    return enemyEntry(id, this.mode);
+  }
+
+  /** Enemies per wave on a stage, and a generated wave's budget: DIFFICULTY.waveSize × the mode's multiplier. */
+  private waveSize(stage: number): number {
+    return Math.max(1, Math.round(stageDifficulty(stage).waveSize * this.mode.waveSizeMultiplier));
   }
 
   /** The mobs that unlock on a 1-based stage (their first appearance). */
   unlocksOn(stage: number): EnemyArchetype[] {
-    return IDS.filter((id) => entry(id).unlockStage === stage);
+    return IDS.filter((id) => this.entry(id).unlockStage === stage);
   }
 
   /**
    * The roster a wave fields.
    *
-   * Hand-written stages: the authored MIX from STAGES, grown to the stage's
-   * DIFFICULTY.waveSize (never below the authored size), shared out by largest
+   * Hand-written stages: the authored MIX from the mode's table, grown to the
+   * stage's wave size (never below the authored size), shared out by largest
    * remainder so the counts sum exactly, then each mob held to its maxPerWave
    * (never below its authored count), the excess going to the first mob.
    *
@@ -300,11 +319,11 @@ export class WaveDirector implements EnemyFirePressure {
    * run, so the same wave always fields the same roster.
    */
   rosterFor(stageIndex: number, waveIndex: number): ScaledRoster {
-    const authored = STAGES[stageIndex]?.waves[waveIndex];
+    const authored = this.mode.stages[stageIndex]?.waves[waveIndex];
     if (!authored) return this.generateRoster(stageIndex, waveIndex);
 
     const authoredTotal = IDS.reduce((n, id) => n + (authored[id] ?? 0), 0);
-    const total = Math.max(authoredTotal, stageDifficulty(stageIndex + 1).waveSize);
+    const total = Math.max(authoredTotal, this.waveSize(stageIndex + 1));
 
     const exact = IDS.map((id) => ((authored[id] ?? 0) * total) / authoredTotal);
     const counts = exact.map(Math.floor);
@@ -329,7 +348,7 @@ export class WaveDirector implements EnemyFirePressure {
   }
 
   /**
-   * A generated wave, bought from a budget of DIFFICULTY.waveSize points:
+   * A generated wave, bought from a budget of the stage's wave size in points:
    *   1. a mob's first appearance — Wave 1 of its unlockStage — fields exactly
    *      one of it, first;
    *   2. the stage's last wave fields every unlocked capstone (as many as its
@@ -347,8 +366,9 @@ export class WaveDirector implements EnemyFirePressure {
     if (cached) return cached;
 
     const stage = stageIndex + 1;
+    const entry = (id: EnemyArchetype) => this.entry(id);
     const rand = mulberry32(this.seed ^ (stage * 7919 + waveIndex * 104729));
-    let budget = stageDifficulty(stage).waveSize;
+    let budget = this.waveSize(stage);
     const roster = Object.fromEntries(IDS.map((id) => [id, 0])) as ScaledRoster;
 
     const debuts = waveIndex === 0 ? this.unlocksOn(stage).filter((id) => !entry(id).capstone) : [];
@@ -365,7 +385,7 @@ export class WaveDirector implements EnemyFirePressure {
     }
     const crowdedOut = (id: EnemyArchetype) => IDS.some((other) => roster[other] > 0 && entry(other).crowdsOut?.includes(id));
     const cap = (id: EnemyArchetype) => Math.min(
-      Math.max(1, Math.floor(entry(id).maxShare * stageDifficulty(stage).waveSize / entry(id).cost)),
+      Math.max(1, Math.floor(entry(id).maxShare * this.waveSize(stage) / entry(id).cost)),
       this.perWaveCap(id, stage),
     );
 
@@ -400,7 +420,7 @@ export class WaveDirector implements EnemyFirePressure {
     const stage = stageIndex + 1;
     return {
       stage,
-      generated: stageIndex >= STAGES.length,
+      generated: stageIndex >= this.mode.stages.length,
       enemyPips: Object.fromEntries(IDS.map((id) => [id, this.pipsFor(id, stage)])) as Record<EnemyArchetype, number>,
       enemyFire: ramp(STAGE_RAMPS.enemyFire, stage),
       waves: Array.from({ length: this.wavesIn(stageIndex) }, (_, w) => this.rosterFor(stageIndex, w)),
@@ -409,13 +429,13 @@ export class WaveDirector implements EnemyFirePressure {
 
   /** A mob's per-wave cap on a stage: its maxPerWave curve (rounded down), or no cap. */
   private perWaveCap(id: EnemyArchetype, stage: number): number {
-    const curve = entry(id).maxPerWave;
+    const curve = this.entry(id).maxPerWave;
     return curve ? Math.floor(scaled(curve, stage)) : Number.POSITIVE_INFINITY;
   }
 
   /** Health pips a mob spawns with on a stage: `start`, +1 every `every` stages, capped. */
   pipsFor(archetype: EnemyArchetype, stage = this.stage): number {
-    const p = entry(archetype).pips;
+    const p = this.entry(archetype).pips;
     return Math.min(p.max, p.start + Math.floor((stage - 1) / p.every));
   }
 

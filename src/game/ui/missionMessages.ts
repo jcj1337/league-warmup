@@ -1,4 +1,4 @@
-import { ENEMIES, PURSUER, TARGETS, type EnemyEntry } from '../../config/balance';
+import { ENEMIES, PURSUER, TARGETS, enemyEntry, type EnemyId, type Mode } from '../../config/balance';
 
 /** The game's name as players see it. */
 export const GAME_TITLE = "qwer's Backyard";
@@ -17,13 +17,15 @@ export function missionBriefing(mission: number, waves: number): string {
 }
 
 /**
- * What a stage introduces: mobs on their unlock stage, and new attacks on the
- * stage they switch on. Stage 1 introduces nothing (the opening is the intro).
+ * What a stage introduces: mobs on their unlock stage in this mode, and new
+ * attacks on the stage they switch on. Stage 1 introduces nothing (the opening
+ * is the intro).
  */
-export function stageThreats(stage: number): string[] {
+export function stageThreats(stage: number, mode: Mode): string[] {
   if (stage <= 1) return [];
   const out: string[] = [];
-  for (const e of Object.values(ENEMIES) as EnemyEntry[]) {
+  for (const id of Object.keys(ENEMIES) as EnemyId[]) {
+    const e = enemyEntry(id, mode);
     if (e.unlockStage === stage) out.push(`New threat: ${e.name}.`);
   }
   if (TARGETS.spit.fromStage === stage) out.push('New threat: slimes now spit.');
