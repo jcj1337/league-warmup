@@ -257,6 +257,10 @@ test('pressure: wave sizes, staggered arrival + activation window, no premature 
     let tries = 0;
     do { d.spawnWave(); tries++; } while ((d.enemies[0].archetype !== 'pursuer' || chat.contains(d.enemies[0].x, d.enemies[0].y, 80)) && tries < 60);
     d.pending.length = 0;                   // just this one arrival
+    // The cap wave above is gone only now: drop what it still had in flight,
+    // and take the health reading from here, so a late spit cannot land on it.
+    g.hostileSpells.clear();
+    g.player.hp = 100; g.player.lastHitAt = Number.NEGATIVE_INFINITY;
     const e = d.enemies[0];
     e.__probe = 1;
     g.player.x = e.x - 40; g.player.y = e.y; g.player.stop();   // inside its melee reach

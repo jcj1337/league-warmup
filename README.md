@@ -385,7 +385,7 @@ where you're heading (like the Magus) at a random spot within 40px.
 She casts Scatter when a sphere lines up with you, or when you're inside the cone. With
 both ready, 60% of the time she plays **Q→E**: a sphere dropped between you and her, then
 Scattered into you. The sphere landing on that line is your warning. Her spells use the
-same red ground, edged in void lavender instead of the Magus's gold. Tuned in
+same red ground, outlined in void lavender instead of the Magus's gold. Tuned in
 `SOVEREIGN`. Pursuers became rarer when she joined (weight 1.5, at most half a wave).
 
 ### The Bulwark
@@ -478,12 +478,12 @@ stay out of the HUD strips and always draw beneath combatants.
 | Basic spit | hunkers down with a glowing mouth and a short dotted red aim tick; the glob is a small dark-red blob, smaller and darker than the orange fireballs |
 | Pursuer | bigger horned purple slime; rears up with white-hot eyes, flashes `!` and warms the ground red across its reach during the telegraph, then slams flat |
 | Pursuer dash | crouches low with white-hot eyes while a red strip shows its locked path, then lunges trailing purple afterimages |
-| Magus | tall slate slime, brass crest and mask with burning eye slits, two brass rune tablets bobbing at its sides; casting, it draws up tall, the tablets rise and flare, and energy gathers over its crest |
-| Magus zones | red ground edged in gold dots: a strip filling from the Magus outward (Lance), a disc with a ring closing inward and a white sweet spot (Eye / Rite) |
-| Magus orb | windup: a gold dotted aim line, turning into a red strip with white dotted edges when it locks; in flight, a white-gold crackling spark with a gold trail |
-| Sovereign | indigo slime, silver diadem with a tall spike, pale lavender eyes, two dark orbs circling; casting, she draws up tall and the orbs spin fast |
-| Dark Sphere | a near-black orb with a pale rim on the ground, gently pulsing; it flickers through its last second |
-| Scatter | a red wedge from her edged in lavender, plus a red strip from each sphere it will fling |
+| Magus | tall slate slime, brass crest and mask with burning eye slits, two brass rune tablets bobbing at its sides. It hovers and breathes; casting, it eases up tall and trembles, the tablets drift up and in with a glow behind them, motes spiral into the energy swelling over its crest, and it squashes as the spell leaves |
+| Magus zones | red ground under a smooth gold outline, a second fill racing across as the countdown: a strip with a bright seam thickening down its middle (Lance), a disc with a ring closing inward, a sigil of arcs turning inside it and a white sweet spot (Eye / Rite). Landing: a beam or flash across the whole shape, shockwaves and sparks |
+| Magus orb | windup: a gold aim line, turning into a red strip with white edges when it locks; in flight, a white-gold crackling spark with a gold trail |
+| Sovereign | indigo slime, silver diadem with a tall spike, pale lavender eyes, two dark orbs circling. She hovers and sways; casting, she eases up tall and the orbs wind up to speed, then she squashes as the spell leaves |
+| Dark Sphere | drops onto its circle with its shadow gathering under it, pops open where it lands: a near-black orb with a pale rim and a soft glow, breathing; it shrinks away through its last second. In her grip it hangs on a thin tether |
+| Scatter | a red wedge from her under a lavender outline, an arc sweeping out through it, plus a red strip with an arrowhead from each sphere it will fling |
 | Bulwark | wide sand slime, iron helm and flank plates, two tusks, a club in each hand, eased from pose to pose: raised overhead through a Strike, brought down along the line, crossed ahead through the brace, hanging while winded. A pale ring while unstoppable |
 | Bulwark telegraphs | red ground under a smooth outline, filling outward from its body; white-hot outline and a `!` for the Heavy Strike; chevrons running down Path Maker's path |
 | Bulwark, All Out | its plates fly off in an ember flare; after it, a narrower, hotter body split by ember seams, blades for clubs, sparks drifting up |
@@ -508,7 +508,7 @@ is armed and flashes briefly after `T`.
 - `src/config/balance.ts` — gameplay tuning: the run (`RUN`, `DIFFICULTY`, `ENEMIES`, `STAGES`, `ENDLESS`, `STAGE_RAMPS`), ranges, timings, damage, keybinds, debug flags.
 - `src/config/theme.ts` — **the look**: `PALETTE` (raw colours) and `THEME` (sprite scale, depth bands, effect timings, HUD styling). Nothing in it affects gameplay.
 - `src/game/art/` — original pixel sprites as text pixel maps (`sprites.ts`), the 5×7 HUD font (`glyphs.ts`, `font.ts`), and `textures.ts`, which rasterises them once and owns every texture key. Real PNG art can later replace a sprite key-for-key.
-- `src/game/view/` — the read-only view layer: `PlayerView`, `EnemyView` / `PursuerView`, `MagusView`, `SovereignView`, `BulwarkView`, `HostileSpellView` (Magus zones), `ProjectileView` + `projectileArt`, `Fx` (pooled particles, dotted rings, damage numbers), `PixelBar` (health bars), `Battlefield` (painted ground + props) and `pixelDraw` helpers.
+- `src/game/view/` — the read-only view layer: `PlayerView`, `EnemyView` / `PursuerView`, `MagusView`, `SovereignView`, `BulwarkView`, `HostileSpellView` (Magus zones), `ProjectileView` + `projectileArt`, `Fx` (pooled particles, dotted rings, smooth shockwaves and ground flashes, damage numbers), `PixelBar` (health bars), `Battlefield` (painted ground + props) and `pixelDraw` helpers.
 - `src/game/scenes/GameScene.ts` — input wiring, per-frame orchestration, round lifecycle.
 - `src/game/scenes/UIScene.ts` — HUD, ability bar, pause menu, end screen (polls GameScene).
 - `src/game/entities/` — `Player` (incl. stun / slow status), `Enemy` (abstract base), `Target`, `Pursuer`, `Magus`, `Sovereign`, `Bulwark`, `Projectile`, `AutoAttackMissile`.

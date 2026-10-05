@@ -405,39 +405,47 @@ export class Fx {
     this.ring(x, y, reach * 0.4, reach * 0.8, 180, THEME.pursuer.telegraph.color, 0.9, 3, angle - 0.8, angle + 0.8);
   }
 
-  /** A Magus Lance landing: a bright beam of pixel motes along the whole line. */
-  arcaneBeam(x: number, y: number, angle: number, length: number): void {
+  /**
+   * A Magus Lance landing: the beam comes down the whole strip at once, white
+   * down its seam inside a wider wash of gold, and narrows away; a shockwave
+   * and sparks break off its far end.
+   */
+  arcaneBeam(x: number, y: number, angle: number, length: number, halfWidth = 30): void {
     const f = THEME.spellZone.strike;
-    const steps = Math.floor(length / 14);
-    for (let i = 0; i <= steps; i++) {
-      const d = (i / steps) * length;
-      this.particle(TEX.px, x + Math.cos(angle) * d, y + Math.sin(angle) * d, {
-        life: f.ms * (0.7 + 0.3 * (i / steps)),
-        scale: 9,
-        scaleTo: 3,
-        alpha: 1,
-        alphaTo: 0,
-        tint: i % 2 ? f.color : f.core,
-      });
-    }
     const endX = x + Math.cos(angle) * length;
     const endY = y + Math.sin(angle) * length;
+    this.flashStrip(x, y, angle, length, halfWidth, f.ms * 1.5, f.color, 0.55);
+    this.flashStrip(x, y, angle, length, halfWidth * 0.45, f.ms, f.core, 0.95);
+    this.wave(endX, endY, 6, halfWidth * 1.6, f.ms * 1.2, f.core, 0.9, 2, angle, 1.4);
+    this.wave(x, y, 8, halfWidth * 1.2, f.ms, f.color, 0.8, 2);
+    const steps = Math.max(2, Math.floor(length / 90));
+    for (let i = 1; i <= steps; i++) {
+      const d = (i / steps) * length;
+      this.sparks(x + Math.cos(angle) * d, y + Math.sin(angle) * d, [f.core, f.color, f.deep], 3, 150, f.ms * 1.4, 3, angle + Math.PI / 2, Math.PI);
+    }
     this.sparks(endX, endY, [f.core, f.color, f.deep], 8, 220, f.ms * 1.3, 3, angle, 1.4);
   }
 
-  /** A Magus Eye / Rite circle landing, or a Sovereign sphere (style 'void'). */
+  /**
+   * A Magus Eye / Rite circle landing, or a Sovereign sphere (style 'void'):
+   * a flash across the whole circle, a fast pale shockwave and a slower one
+   * in the caster's colour running past its edge, and sparks.
+   */
   arcaneBurst(x: number, y: number, radius: number, style: 'arcane' | 'void' = 'arcane'): void {
     const f = style === 'void' ? THEME.spellZone.voidStrike : THEME.spellZone.strike;
-    this.ring(x, y, radius * 0.3, radius, f.ms, f.core, 1, 6);
-    this.ring(x, y, radius * 0.8, radius * 1.15, f.ms * 1.2, f.color, 0.9, 3);
+    this.flashDisc(x, y, radius, f.ms * 1.3, f.color, 0.5);
+    this.flashDisc(x, y, radius * 0.55, f.ms, f.core, 0.75);
+    this.wave(x, y, radius * 0.25, radius * 1.05, f.ms, f.core, 1, 3);
+    this.wave(x, y, radius * 0.6, radius * 1.3, f.ms * 1.5, f.color, 0.85, 2);
     this.sparks(x, y, [f.core, f.color, f.deep], 12, 260, f.ms * 1.4, 3);
   }
 
-  /** A Sovereign Scatter cone landing: arcs sweeping out across the cone. */
+  /** A Sovereign Scatter cone landing: a flash across the wedge and arcs sweeping out through it. */
   coneBurst(x: number, y: number, angle: number, radius: number, halfAngle: number, style: 'arcane' | 'void' = 'void'): void {
     const f = style === 'void' ? THEME.spellZone.voidStrike : THEME.spellZone.strike;
-    this.ring(x, y, radius * 0.3, radius, f.ms, f.core, 1, 6, angle - halfAngle, angle + halfAngle);
-    this.ring(x, y, radius * 0.2, radius * 0.8, f.ms * 1.2, f.color, 0.9, 3, angle - halfAngle, angle + halfAngle);
+    this.flashWedge(x, y, angle, halfAngle, radius, f.ms * 1.3, f.color, 0.5);
+    this.wave(x, y, radius * 0.25, radius, f.ms, f.core, 1, 3, angle, halfAngle);
+    this.wave(x, y, radius * 0.1, radius * 0.75, f.ms * 1.4, f.color, 0.85, 2, angle, halfAngle);
     this.sparks(x + Math.cos(angle) * radius * 0.5, y + Math.sin(angle) * radius * 0.5, [f.core, f.color], 8, 220, f.ms * 1.3, 3, angle, halfAngle * 2);
   }
 

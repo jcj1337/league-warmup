@@ -338,17 +338,25 @@ export const THEME = {
     frameMs: 320,
     hpBarOffsetY: 26,
     burst: [P.magus, P.brass, P.arcane],
-    /** Two brass rune tablets float at its sides, bobbing out of step; mid-cast they rise, draw in and flare. */
-    runes: { sidePx: 27, liftPx: 8, bobPx: 3, bobMs: 900, castRisePx: 10, castPull: 0.8 },
-    /** Energy gathering over its crest while it casts. */
-    castGlow: { color: P.arcane, core: P.arcaneCore, liftPx: 40, radius: 7 },
-    /** Lance charge: a dotted line that tracks you and reaches full length as the charge completes. */
-    lanceCharge: { color: P.arcane, alphaStart: 0.25, alphaEnd: 0.75 },
     /**
-     * Orb windup: a dotted aim line (orb range long) that tracks you, then turns
+     * Two brass rune tablets float at its sides, bobbing out of step; mid-cast
+     * they ease up and in (`follow` per second) and a glow swells behind them.
+     */
+    runes: { sidePx: 27, liftPx: 8, bobPx: 3, bobMs: 900, castRisePx: 12, castPull: 0.72, follow: 10, glowRadius: 11 },
+    /** Energy gathering over its crest while it casts: a swelling glow, motes spiralling into it. */
+    castGlow: { color: P.arcane, core: P.arcaneCore, liftPx: 40, radius: 8, motes: 4, moteOrbitPx: 26, moteTurnMs: 520 },
+    /** Lance charge: a line that tracks you and reaches full length as the charge completes, a bright head on its tip. */
+    lanceCharge: { color: P.arcane, core: P.arcaneCore, alphaStart: 0.3, alphaEnd: 0.85, width: 2 },
+    /**
+     * Orb windup: an aim line (orb range long) that tracks you, then turns
      * into a red strip with bright edges when it locks.
      */
-    orbAim: { color: P.arcane, alphaStart: 0.25, alphaEnd: 0.6, lockFill: P.warning, lockFillAlpha: 0.22, lockEdge: P.arcaneCore },
+    orbAim: { color: P.arcane, alphaStart: 0.3, alphaEnd: 0.7, lockFill: P.warning, lockFillAlpha: 0.22, lockEdge: P.arcaneCore },
+    /**
+     * How its body moves (see MagusView.animate): a slow hover, drawn up and
+     * trembling through a cast, a squash as the spell leaves.
+     */
+    motion: { hoverMs: 1700, hoverPx: 2, breathe: 0.025, rise: 0.1, tremblePx: 1, releaseMs: 200, releaseSquash: 0.14 },
   },
 
   sovereign: {
@@ -357,12 +365,16 @@ export const THEME = {
     frameMs: 300,
     hpBarOffsetY: 24,
     burst: [P.sov, P.silver, P.voidGlow],
-    /** Two small dark orbs circling her head. */
-    orbs: { count: 2, orbitPx: 24, liftPx: 6, spinMs: 2000, radius: 7 },
+    /** Two small dark orbs circling her head: one turn per `spinMs`, `castSpin` times faster while she casts, eased. */
+    orbs: { count: 2, orbitPx: 24, liftPx: 6, spinMs: 2000, castSpin: 3.5, spinEase: 6, radius: 6 },
     /** A grabbed sphere or slime floats this far over her head before the throw. */
     holdLiftPx: 38,
-    /** Scatter's exit lines: where each sphere will fly. */
-    exitLine: { color: P.voidGlow, fill: P.warning, fillAlphaStart: 0.08, fillAlphaEnd: 0.24 },
+    /** The pull on what she holds: a thin line from her diadem to it. */
+    tether: { color: P.voidGlow, alpha: 0.55, width: 2 },
+    /** Scatter's exit lines: where each sphere will fly, an arrowhead at the far end. */
+    exitLine: { color: P.voidGlow, fill: P.warning, fillAlphaStart: 0.08, fillAlphaEnd: 0.24, width: 2 },
+    /** How her body moves (see SovereignView.animate): a slow hover and sway, drawn up through a cast, a squash as it leaves. */
+    motion: { hoverMs: 2100, hoverPx: 2, breathe: 0.025, rise: 0.09, swayPx: 1.5, releaseMs: 220, releaseSquash: 0.13 },
   },
 
   bulwark: {
@@ -410,19 +422,32 @@ export const THEME = {
   },
 
   /** A Dark Sphere on the ground. It flickers through its last `warnMs`. */
-  darkSphere: { radius: 12, core: P.voidCore, rim: P.voidRim, glow: P.voidGlow, pulseMs: 900, warnMs: 1000 },
+  darkSphere: {
+    radius: 12, core: P.voidCore, rim: P.voidRim, glow: P.voidGlow, pulseMs: 900, warnMs: 1000,
+    /** It pops open over this long where it lands, and drops this far onto its circle. */
+    popMs: 220, dropPx: 150,
+  },
 
   /**
    * Hostile ground zones (Magus Lance / Eye / Rite). The same language as the
-   * Pursuer telegraph — red ground hurts — edged in the Magus's arcane gold.
+   * Pursuer telegraph — red ground hurts — under a smooth outline in the
+   * Magus's arcane gold.
    */
   spellZone: {
     fill: P.warning,
     fillAlphaStart: 0.07,
-    fillAlphaEnd: 0.26,
+    fillAlphaEnd: 0.24,
+    /** The second fill racing across a zone as its countdown. */
+    sweepAlpha: 0.16,
     edge: P.arcane,
     edgeAlphaStart: 0.5,
     edgeAlphaEnd: 1,
+    /** A smooth solid outline, this wide. */
+    edgeWidth: 2,
+    /** The Lance's seam: how thick the line down its middle gets as it charges. */
+    seamWidth: 7,
+    /** The sigil turning inside an arcane circle: `arcs` arcs, each `arcFill` of its share, one turn per `turnMs`. */
+    sigil: { arcs: 3, arcFill: 0.55, turnMs: 2600, radiusStart: 0.82, radiusEnd: 0.66 },
     /** The Eye's sweet spot. */
     centre: P.arcaneCore,
     strike: { color: P.arcane, core: P.arcaneCore, deep: P.arcaneDeep, ms: 240 },

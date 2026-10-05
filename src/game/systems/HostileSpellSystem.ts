@@ -301,7 +301,7 @@ export class HostileSpellSystem implements HostileSpellSink {
     const style = zone.style ?? 'arcane';
 
     if (zone.kind === 'line') {
-      fx.arcaneBeam(zone.x, zone.y, zone.angle, zone.length);
+      fx.arcaneBeam(zone.x, zone.y, zone.angle, zone.length, zone.halfWidth);
       if (distanceToSegment(px, py, zone) <= zone.halfWidth + pr) {
         this.zonesHit++;
         this.callbacks.onPlayerHit(zone.damage, zone.source);
