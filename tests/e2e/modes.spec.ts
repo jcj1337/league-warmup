@@ -1,7 +1,7 @@
 import { test } from '@playwright/test';
 import { startSuite } from './support/harness';
 
-test('modes: the profile picks the mode, damage, stage-clear bonus, rosters (when specials debut, how many, wave size), run log per mode', async ({ page }, testInfo) => {
+test('modes: the profile picks the mode, damage, stage-clear bonus, rosters (when specials debut, how many, wave size), run log per mode, start-screen picker + HUD tag', async ({ page }, testInfo) => {
   const { pass, fail, section, finish } = await startSuite(page, testInfo, 200, { mode: 'hard' });
 
   /** Save a mode to the profile and restart into a fresh round on it, arena quiet. */
@@ -241,6 +241,66 @@ test('modes: the profile picks the mode, damage, stage-clear bonus, rosters (whe
       return window.__runs.summary(undefined, undefined, undefined, 'normal').runs;
     });
     s === 2 ? pass('a run logged without a mode counts as Normal') : fail(`normal runs with a legacy record: ${s}`);
+  }
+
+  // === 4. The start-screen picker =============================================
+  section('4. Picker');
+  await page.reload({ waitUntil: 'load' });       // the suite's seed puts the profile back on Hard
+  await page.waitForFunction(() => window.__warmup?.scene?.getScene('UIScene')?.startScreen?.visible);
+  await page.waitForTimeout(150);
+  const picker = () => page.evaluate(() => {
+    const g = window.__warmup.scene.getScene('GameScene');
+    const ui = window.__warmup.scene.getScene('UIScene');
+    return {
+      selected: ui.modeRow.selectedId as string,
+      buttons: Object.fromEntries([...ui.modeRow.buttons].map(([id, b]: [string, { cx: number; cy: number }]) => [id, { x: b.cx, y: b.cy }])) as Record<string, { x: number; y: number }>,
+      profile: window.__profile.data.mode as string,
+      playing: g.mode.id as string,
+      champion: window.__profile.data.champion as string,
+      awaiting: g.isAwaitingStart as boolean,
+      now: g.clock.now as number,
+      tag: ui.difficultyText.text as string,
+    };
+  });
+  const held = (s: { awaiting: boolean; now: number }) => s.awaiting && s.now === 0;
+  {
+    const s = await picker();
+    s.selected === 'hard' && Object.keys(s.buttons).join() === 'easy,normal,hard' && held(s)
+      ? pass('the card shows a button per mode with the profile\'s pick framed')
+      : fail(`picker: ${JSON.stringify(s)}`);
+    await page.mouse.click(s.buttons.easy.x, s.buttons.easy.y);
+    await page.waitForTimeout(200);
+    const after = await picker();
+    after.selected === 'easy' && after.profile === 'easy' && after.playing === 'easy' && after.tag === 'EASY' && held(after)
+      ? pass('clicking a mode picks it, rebuilds the held round on it, and does not start the run')
+      : fail(`click easy: ${JSON.stringify(after)}`);
+  }
+  await page.keyboard.press('ArrowDown');
+  await page.waitForTimeout(200);
+  const down = await picker();
+  await page.keyboard.press('ArrowUp');
+  await page.keyboard.press('ArrowUp');
+  await page.waitForTimeout(200);
+  {
+    const up = await picker();
+    down.selected === 'normal' && down.playing === 'normal' && up.selected === 'hard' && up.playing === 'hard' && held(down) && held(up)
+      ? pass('Down / Up step through the modes (wrapping) without starting the run')
+      : fail(`arrows: ${JSON.stringify({ down, up })}`);
+    up.champion === 'ezreal' ? pass('the champion pick is untouched') : fail(`champion became ${up.champion}`);
+  }
+  await page.keyboard.press('Space');
+  await page.waitForTimeout(300);
+  {
+    const s = await picker();
+    !s.awaiting && s.now > 0 && s.playing === 'hard' && s.tag === 'HARD'
+      ? pass('any other key starts the run on the picked mode; the HUD names it')
+      : fail(`started: ${JSON.stringify(s)}`);
+  }
+  await die();
+  await page.waitForTimeout(100);
+  {
+    const screen = await page.evaluate(() => window.__warmup.scene.getScene('UIScene').resultText.text as string);
+    /DIFFICULTY\s+HARD\n/.test(screen) ? pass('the end screen names the mode') : fail(`end screen:\n${screen}`);
   }
 
   await page.evaluate(() => window.__profile.reset());

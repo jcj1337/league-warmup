@@ -4,13 +4,14 @@ import { Keybinds } from '../Keybinds';
 import { MouseSpeed } from '../MouseSpeed';
 import { RunHistory, type RunSummary } from '../RunHistory';
 import { Settings } from '../Settings';
-import { modeOf } from '../Mode';
+import { isModeId, modeOf } from '../Mode';
 import { Profile } from '../../profile/Profile';
 import { resolveLook } from '../../cosmetics/catalogue';
 import { ChampionRow } from '../ui/ChampionRow';
+import { ModeRow, modeTint } from '../ui/ModeRow';
 import { CHAMPIONS, DEFAULT_CHAMPION, isChampionId, SLOTS, type Champion } from '../../champions';
 import type { BindableAction } from '../Keybinds';
-import { ARENA, DEBUG, BALANCE_VERSION, MOUSE } from '../../config/balance';
+import { ARENA, DEBUG, BALANCE_VERSION, MODES, MOUSE } from '../../config/balance';
 import { THEME } from '../../config/theme';
 import { pixelText, setPixelScale } from '../art/font';
 import { TEX, ensureArt } from '../art/textures';
@@ -40,6 +41,8 @@ export class UIScene extends Phaser.Scene {
   private timeText!: Phaser.GameObjects.BitmapText;
   private scoreText!: Phaser.GameObjects.BitmapText;
   private progressText!: Phaser.GameObjects.BitmapText;
+  /** Top-centre-right tag naming the difficulty mode being played. */
+  private difficultyText!: Phaser.GameObjects.BitmapText;
   private modeText!: Phaser.GameObjects.BitmapText;
   /** Top-right "APM  180" readout. */
   private apmText!: Phaser.GameObjects.BitmapText;
@@ -82,6 +85,7 @@ export class UIScene extends Phaser.Scene {
   /** Title card over a held round (page load, "Change champion"); a click or key starts the run. */
   private startScreen!: Phaser.GameObjects.Container;
   private championRow!: ChampionRow;
+  private modeRow!: ModeRow;
 
   constructor() {
     // active: true so the HUD boots alongside GameScene — Phaser only
@@ -104,6 +108,10 @@ export class UIScene extends Phaser.Scene {
     // ---- top-centre: stage / wave progress -------------------------------
     this.panel(ARENA.width / 2 - 250, 30, 500, 34);
     this.progressText = pixelText(this, ARENA.width / 2, 47, '', 2).setOrigin(0.5).setDepth(101);
+
+    // ---- right of it: the difficulty mode ----------------------------------
+    this.panel(ARENA.width / 2 + 260, 30, 110, 34);
+    this.difficultyText = pixelText(this, ARENA.width / 2 + 315, 47, '', 2).setOrigin(0.5).setDepth(101);
 
     // ---- top-right: APM ----------------------------------------------------
     const apmW = 130;
@@ -325,7 +333,8 @@ export class UIScene extends Phaser.Scene {
    * The title card shown over a held round (the first after a page load, or
    * after "Change champion"), while GameScene holds it at time 0. A click
    * anywhere or any key starts the run; the champion row picks who plays it
-   * (a click on a tile, or the arrow keys) without starting.
+   * (a click on a tile, or Left / Right) and the mode row picks the difficulty
+   * (a click on a button, or Up / Down), neither starting it.
    * It starts on the release, not the press: the press reaches GameScene while
    * the run is still held, so it is never also a move order or a cast, and it
    * already counts as the user gesture CursorLock needs for a non-1.0 Mouse
@@ -334,7 +343,10 @@ export class UIScene extends Phaser.Scene {
    */
   private buildStartScreen(): void {
     const cx = ARENA.width / 2;
-    const cy = ARENA.height / 2;
+    const panelW = 620;
+    const panelH = 418;
+    // Everything on the card is laid out from the champion row's line.
+    const cy = ARENA.height / 2 - 34;
 
     const scrim = this.add
       .rectangle(0, 0, ARENA.width, ARENA.height, THEME.ui.scrim, THEME.startScreen.scrimAlpha)
@@ -365,16 +377,19 @@ export class UIScene extends Phaser.Scene {
         if (!event.repeat) this.pickChampion(this.championRow.neighbour(event.code === 'ArrowLeft' ? -1 : 1));
         return;
       }
+      // Up / Down step through the difficulty modes.
+      if (event.code === 'ArrowUp' || event.code === 'ArrowDown') {
+        if (!event.repeat) this.pickMode(this.modeRow.neighbour(event.code === 'ArrowUp' ? -1 : 1));
+        return;
+      }
       pressed.add(event.code);
     });
     window.addEventListener('keyup', (event: KeyboardEvent) => {
       if (pressed.delete(event.code) && this.game_?.isAwaitingStart) this.game_.startRun();
     });
 
-    const panelW = 620;
-    const panelH = 350;
     const plate = this.add.graphics();
-    pixelPanel(plate, cx - panelW / 2, cy - panelH / 2, panelW, panelH, {
+    pixelPanel(plate, cx - panelW / 2, cy - 175, panelW, panelH, {
       fill: THEME.ui.panel, fillAlpha: 0.97, edge: THEME.ui.panelEdge, highlight: THEME.ui.panelHighlight, border: 3,
     });
     plate.fillStyle(THEME.ui.accent, 0.9);
@@ -386,11 +401,12 @@ export class UIScene extends Phaser.Scene {
       this, cx, cy - 6, Object.values(CHAMPIONS), championOf(Profile.data.champion).id, resolveLook(Profile.data),
       (id) => this.pickChampion(id),
     );
-    const prompt = pixelText(this, cx, cy + 84, 'CLICK OR PRESS ANY KEY', 3, THEME.ui.text).setOrigin(0.5);
+    this.modeRow = new ModeRow(this, cx, cy + 104, Object.values(MODES), modeOf(Profile.data.mode).id, (id) => this.pickMode(id));
+    const prompt = pixelText(this, cx, cy + 152, 'CLICK OR PRESS ANY KEY', 3, THEME.ui.text).setOrigin(0.5);
     // The credit, with qwer's rank beside it: a challenger crest over TOP 50, the pair centred as one line.
-    const credit = pixelText(this, 0, cy + 136, 'DESIGNED BY QWER', 2, THEME.ui.faint).setOrigin(0, 0.5);
-    const badge = this.add.image(0, cy + 126, TEX.ui.challenger).setScale(2);
-    const rank = pixelText(this, 0, cy + 152, 'TOP 50', 2, THEME.ui.accent).setOrigin(0.5);
+    const credit = pixelText(this, 0, cy + 204, 'DESIGNED BY QWER', 2, THEME.ui.faint).setOrigin(0, 0.5);
+    const badge = this.add.image(0, cy + 194, TEX.ui.challenger).setScale(2);
+    const rank = pixelText(this, 0, cy + 220, 'TOP 50', 2, THEME.ui.accent).setOrigin(0.5);
     const badgeW = Math.max(badge.displayWidth, rank.width);
     const gap = 14;
     const left = Math.round(cx - (credit.width + gap + badgeW) / 2);
@@ -409,7 +425,7 @@ export class UIScene extends Phaser.Scene {
     });
 
     this.startScreen = this.add
-      .container(0, 0, [scrim, plate, title, choose, this.championRow.container, prompt, credit, badge, rank])
+      .container(0, 0, [scrim, plate, title, choose, this.championRow.container, this.modeRow.container, prompt, credit, badge, rank])
       .setDepth(300)
       .setVisible(false);
   }
@@ -425,6 +441,17 @@ export class UIScene extends Phaser.Scene {
     this.game_.returnToStart();
   }
 
+  /** The start screen's difficulty pick: saved to the profile, and the held round is rebuilt on that mode. */
+  private pickMode(id: string): void {
+    if (!isModeId(id) || !this.game_.isAwaitingStart) return;
+    this.modeRow.setSelected(id);
+    if (Profile.data.mode === id) return;
+    Profile.update((data) => {
+      data.mode = id;
+    });
+    this.game_.returnToStart();
+  }
+
   /**
    * GameScene started a new round. UIScene itself is never restarted, so
    * round-scoped HUD state is re-initialised here from the new round's own
@@ -433,6 +460,9 @@ export class UIScene extends Phaser.Scene {
   private beginRound(hud: Hud): void {
     this.observedRound = hud.round;
     this.buildKitHud(championOf(hud.champion));
+    const mode = modeOf(hud.mode);
+    this.modeRow.setSelected(mode.id);
+    this.difficultyText.setText(mode.name.toUpperCase()).setTint(modeTint(mode.id));
     this.lastStage = hud.stage;
     this.lastWave = hud.wave;
     this.bannerText = '';
@@ -601,6 +631,7 @@ export class UIScene extends Phaser.Scene {
           'STAGE REACHED',
           `${result.stageReached}  (wave ${result.waveReached}/${result.wavesInStage})  LV ${result.level}${result.newBest ? '  NEW BEST!' : ''}`,
         ),
+        row('DIFFICULTY', modeOf(result.mode).name.toUpperCase()),
         row('SCORE', `${result.score}`),
         row('KILLS', `${result.targetsKilled}`),
         row('KILLS BY TYPE', killsLine(result.killsByType)),

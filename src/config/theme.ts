@@ -721,6 +721,11 @@ export const THEME = {
     accents: { q: P.q, w: P.w, e: P.e, r: P.r, flash: P.flash, venom: P.toxin, miasma: P.miasma, fang: P.toxinLight, stone: P.stone } as Record<string, number>,
   },
 
+  /** The difficulty modes' colours (start screen picker, HUD tag, end screen), by MODES id. */
+  modes: {
+    tints: { easy: P.good, normal: P.creamDim, hard: P.danger } as Record<string, number>,
+  },
+
   /** Title card before the first run of a page load. Presentation only. */
   startScreen: {
     scrimAlpha: 0.85,
