@@ -161,13 +161,13 @@ test('endless: generated stages, budgets + caps, first appearances, packs, pip c
   const first = await dieAt(6);
   const lower = await dieAt(4);
   const higher = await dieAt(9);
-  first.result.newBest && first.result.previousBest === null && /STAGE REACHED\s+6.*NEW BEST!/.test(first.screen)
+  first.result.newBest && first.result.previousBest === null && /STAGE REACHED\s+6.*NEW BEST/.test(first.screen)
     ? pass('the first logged run is a new best (shown on the end screen)')
     : fail(`first: ${JSON.stringify(first.result)}\n${first.screen}`);
   !lower.result.newBest && lower.result.previousBest === 6 && !/NEW BEST/.test(lower.screen)
     ? pass('a worse run is not')
     : fail(`lower: ${JSON.stringify(lower.result)}`);
-  higher.result.newBest && higher.result.previousBest === 6 && /NEW BEST!/.test(higher.screen) && /YOUR BEST\s+STAGE 9\b/.test(higher.screen)
+  higher.result.newBest && higher.result.previousBest === 6 && /NEW BEST/.test(higher.screen) && /YOUR BEST\s+STAGE 9\b/.test(higher.screen)
     ? pass('beating it is, and your best updates (STAGE 9)')
     : fail(`higher: ${JSON.stringify(higher.result)}\n${higher.screen}`);
   /DEFEATED/.test(await page.evaluate(() => window.__warmup.scene.getScene('UIScene').endScreen.container.getByName('title').text))

@@ -147,10 +147,11 @@ test('kit: W mark + detonation, E blink + bolt priority, Flash, Q cooldown refun
   Math.abs(eNear.px - 760) < 6 && Math.abs(eNear.py - 360) < 6
     ? pass(`E with cursor in range blinks exactly to it (${eNear.px.toFixed(0)},${eNear.py.toFixed(0)})`)
     : fail(`E landed at ${eNear.px},${eNear.py}`);
-  const eBonus = await page.evaluate(() => window.__warmup.scene.getScene('GameScene').scoring.scoreFrom.kit);
-  eBonus === cfg.e.scoreBonus
-    ? pass(`the blink pays its score bonus (+${eBonus} on Stage 1)`)
-    : fail(`E score bonus: ${eBonus}, expected ${cfg.e.scoreBonus}`);
+  const kitScore = () => page.evaluate(() => window.__warmup.scene.getScene('GameScene').scoring.scoreFrom.kit);
+  const noBoltBonus = await kitScore();
+  noBoltBonus === 0
+    ? pass('a blink with nothing in range pays no score: only a bolt that lands does')
+    : fail(`E score bonus with no bolt: ${noBoltBonus}`);
 
   await setup([{ type: 'basic', x: 200, y: 120 }]);
   await page.mouse.move(1270, 360);         // 630px right — beyond E range
@@ -186,6 +187,10 @@ test('kit: W mark + detonation, E blink + bolt priority, Flash, Q cooldown refun
   const eLanded = await G();
   eLanded.hp0 === 9998 ? pass('E bolt removes exactly 1 pip') : fail(`E bolt removed ${9999 - eLanded.hp0} pips`);
   eLanded.stacks >= 1 ? pass('E bolt grants a passive stack') : fail('E bolt granted no stack');
+  const boltBonus = await kitScore();
+  boltBonus === cfg.e.scoreBonus
+    ? pass(`the landed bolt pays E's score bonus (+${boltBonus} on Stage 1)`)
+    : fail(`E score bonus after a landed bolt: ${boltBonus}, expected ${cfg.e.scoreBonus}`);
 
   // No enemy nearby: blink still works, no bolt.
   await setup([{ type: 'basic', x: 100, y: 100 }]);

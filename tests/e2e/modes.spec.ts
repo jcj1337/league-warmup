@@ -268,6 +268,42 @@ test('modes: the profile picks the mode, damage, stage-clear bonus, rosters (whe
     s.selected === 'hard' && Object.keys(s.buttons).join() === 'easy,normal,hard' && held(s)
       ? pass('the card shows a button per mode with the profile\'s pick framed')
       : fail(`picker: ${JSON.stringify(s)}`);
+    // Hovering a button says what that mode changes, read off MODES; it picks nothing.
+    const tip = () => page.evaluate(() => window.__warmup.scene.getScene('UIScene').modeRow.tooltipText as string[] | null);
+    const tips: Record<string, string> = {};
+    for (const id of ['easy', 'normal', 'hard']) {
+      await page.mouse.move(s.buttons[id].x, s.buttons[id].y);
+      await page.waitForTimeout(80);
+      tips[id] = ((await tip()) ?? []).join(' | ');
+    }
+    tips.easy === 'Easy | Waves 25% smaller | Enemy aim 20% slower | Magus from stage 7, Sovereign 8, Bulwark 11 | Casters appear less often | No stage clear bonus'
+      && tips.normal === 'Normal | The standard run | Stage clear bonus 500'
+      && tips.hard === 'Hard | Damage taken x2 | Enemy aim 25% faster | Magus from stage 3, Sovereign 4, Bulwark 5 | Casters appear more often | Stage clear bonus 1500'
+      ? pass('hovering a mode shows what it changes against Normal')
+      : fail(`tooltips: ${JSON.stringify(tips)}`);
+    await page.mouse.move(s.buttons.easy.x, s.buttons.easy.y + 120);
+    await page.waitForTimeout(80);
+    (await tip()) === null && (await picker()).selected === 'hard'
+      ? pass('the tooltip leaves with the mouse, and hovering picked nothing')
+      : fail(`after hover: tip ${JSON.stringify(await tip())}`);
+    // Champion tiles do the same: each says what is the trainer's own about that champion.
+    const champTips = await page.evaluate(async () => {
+      const row = window.__warmup.scene.getScene('UIScene').championRow;
+      return [...row.tiles].map(([id, t]: [string, { cx: number; cy: number }]) => ({ id, x: t.cx, y: t.cy }));
+    });
+    const said: Record<string, string> = {};
+    for (const t of champTips) {
+      await page.mouse.move(t.x, t.y);
+      await page.waitForTimeout(80);
+      said[t.id] = ((await page.evaluate(() => window.__warmup.scene.getScene('UIScene').championRow.tooltipText as string[] | null)) ?? []).join(' | ');
+    }
+    /^Magic Boy \| E's bolt scores \+10 when it hits/.test(said.magicboy) && /^Snake Lady \| E on a poisoned enemy takes 500ms off R's cooldown/.test(said.snakelady) && /A kill with E scores \+10/.test(said.snakelady)
+      && !/comes back through/.test(said.magicboy) && /A catch also readies W and scores \+10/.test(said.axeman)
+      && /^Axe Man \| .*heals more: 5, 10, 15, 20 HP/.test(said.axeman) && (await picker()).champion === s.champion
+      ? pass('hovering a champion shows its own rules, with the live numbers; hovering picks nothing')
+      : fail(`champion tooltips: ${JSON.stringify(said)}`);
+    await page.mouse.move(s.buttons.easy.x, s.buttons.easy.y + 120);
+    await page.waitForTimeout(80);
     await page.mouse.click(s.buttons.easy.x, s.buttons.easy.y);
     await page.waitForTimeout(200);
     const after = await picker();
@@ -301,9 +337,20 @@ test('modes: the profile picks the mode, damage, stage-clear bonus, rosters (whe
   {
     const screen = await page.evaluate(() => window.__warmup.scene.getScene('UIScene').endScreen.text as string);
     /DIFFICULTY\s+HARD\n/.test(screen) ? pass('the end screen names the mode') : fail(`end screen:\n${screen}`);
-    screen.startsWith("qwer would've won that... probably...\n")
-      ? pass('an early death on Hard gets Hard\'s taunt')
+    screen.startsWith("qwer would've won that...\n")
+      ? pass('an early death on Hard gets the plain taunt')
       : fail(`taunt:\n${screen}`);
+    // From Stage 9 on Hard, qwer only probably wins.
+    await page.evaluate(() => window.__warmup.scene.getScene('GameScene').restartRound());
+    await page.waitForFunction(() => window.__warmup.scene.getScene('GameScene').getRoundResult() === null);
+    await page.waitForTimeout(200);
+    await page.evaluate(() => { window.__warmup.scene.getScene('GameScene').director.stageIndex = 8; });
+    await die();
+    await page.waitForTimeout(100);
+    const late = await page.evaluate(() => window.__warmup.scene.getScene('UIScene').endScreen.text as string);
+    late.startsWith("qwer would've won that... probably...\n")
+      ? pass('a death on Hard at Stage 9 or later gets "probably"')
+      : fail(`late taunt:\n${late}`);
   }
 
   await page.evaluate(() => window.__profile.reset());

@@ -319,6 +319,17 @@ export abstract class Enemy {
     return true;
   }
 
+  /**
+   * A Sovereign lifts it (Force of Will). Whatever it was winding up is
+   * dropped, so it never lands holding an attack whose telegraph ran out in
+   * the air.
+   */
+  pickUp(ctx: EnemyContext): void {
+    this.held = true;
+    this.pose.windup = -1;
+    this.onPickedUp(ctx);
+  }
+
   update(deltaSeconds: number, nowMs: number, ctx: EnemyContext): void {
     this.now = nowMs;
     // Activation happens at the GameClock deadline — never on an animation.
@@ -403,6 +414,9 @@ export abstract class Enemy {
 
   /** Called once, the moment this enemy dies. Default: nothing. */
   protected onDeath(): void {}
+
+  /** Called once, the moment it is picked up: drop any attack or cast in progress. Default: nothing to drop. */
+  protected onPickedUp(_ctx: EnemyContext): void {}
 
   /** Behaviour. Default: stand still. */
   protected updateAi(_deltaSeconds: number, _nowMs: number, _ctx: EnemyContext): void {}

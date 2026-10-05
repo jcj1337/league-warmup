@@ -52,5 +52,12 @@ export const SNAKE_LADY: Champion = {
       icon: TEX.icons.snakeR, accent: THEME.ability.accents.stone, castStyle: 'none', fx: 'gaze', motion: R_MOTION,
     },
   },
+  notes: () => [
+    `E on a poisoned enemy takes ${R.poisonedFangCooldownReductionMs}ms off R's cooldown`,
+    `E removes ${E.pipsOnPoisoned} pips from a poisoned enemy`,
+    `A kill with E scores +${E.killScoreBonus}`,
+    "Poison can't finish a Magus or Sovereign",
+    'R stuns enemies facing her, slows the rest',
+  ],
   createKit: (ctx) => new SnakeLadyKit(ctx),
 };

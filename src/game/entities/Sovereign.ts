@@ -16,7 +16,7 @@ import type { GameClock } from '../systems/GameClock';
  *
  *   reposition — hold the spacing band; start a spell when the gap allows
  *   sphere     — brief cast pose after placing a Dark Sphere (Q)
- *   grab       — Force of Will (W): lifting a sphere or a slime over her head
+ *   grab       — Force of Will (W): lifting a sphere or another mob over her head
  *   throw      — the thrown thing in flight toward where it lands
  *   scatter    — Scatter (E): the cone fills; the spheres in it fly at the end
  */
@@ -24,8 +24,8 @@ export type SovereignState = 'reposition' | 'sphere' | 'grab' | 'throw' | 'scatt
 
 type SpellId = 'sphere' | 'will' | 'scatter';
 
-/** What Force of Will is holding: one of her spheres, or one of her basic slimes. */
-type Held = { kind: 'sphere'; x: number; y: number } | { kind: 'slime'; enemy: Enemy };
+/** What Force of Will is holding: one of her spheres, or another mob of her wave. */
+type Held = { kind: 'sphere'; x: number; y: number } | { kind: 'mob'; enemy: Enemy };
 
 /** A sphere Scatter will fling, and the line it will fly along. */
 export interface ExitLine {
@@ -51,8 +51,8 @@ const ART: EnemyArt = {
  * The Sovereign: an indigo-black sphere mage with a Syndra-style kit.
  *
  * She holds you just inside your Q range and builds a board of Dark Spheres
- * (Q), then uses it: Force of Will (W) throws a sphere — or one of her own
- * basic slimes, which lands live — at where you're heading; Scatter (E) flings
+ * (Q), then uses it: Force of Will (W) throws a sphere — or any other mob of
+ * her wave, which lands live — at where you're heading; Scatter (E) flings
  * every sphere in a short cone outward along the line from her, stunning what
  * it hits. She hunts that angle: she casts Scatter when a sphere lines up with
  * you, and sometimes drops a sphere between you and her first (Q→E).
@@ -67,7 +67,7 @@ export class Sovereign extends Caster {
   state: SovereignState = 'reposition';
   /** What Force of Will holds, if anything. */
   holding: Held | null = null;
-  /** Where a held/thrown sphere is drawn (the slime draws itself). Read by the view. */
+  /** Where a held/thrown sphere is drawn (a mob draws itself). Read by the view. */
   heldSpherePos: { x: number; y: number } | null = null;
   /** The spheres Scatter will fling, during its windup. Read by the view. */
   exitLines: ExitLine[] = [];
@@ -133,9 +133,19 @@ export class Sovereign extends Caster {
     this.pose.windup = this.castProgress(nowMs);
   }
 
-  /** Dying mid-throw drops what she holds where it is: a slime lands where it was. */
+  /** Dying mid-throw drops what she holds where it is: a mob lands where it was. */
   protected override onDeath(): void {
-    if (this.holding?.kind === 'slime') this.holding.enemy.held = false;
+    this.dropCast();
+  }
+
+  /** Picked up by another Sovereign: her cast is lost, and what she held drops where it is. */
+  protected override onPickedUp(): void {
+    this.dropCast();
+    this.state = 'reposition';
+  }
+
+  private dropCast(): void {
+    if (this.holding?.kind === 'mob') this.holding.enemy.held = false;
     this.holding = null;
     this.heldSpherePos = null;
     this.exitLines = [];
@@ -225,21 +235,24 @@ export class Sovereign extends Caster {
 
   // ------------------------------------------------------------ W: Force of Will
 
-  /** Grab the nearest sphere of hers or basic slime in reach (a slime `slimeChance` of the time). */
+  /**
+   * Grab the nearest sphere of hers or other mob in reach (a mob `mobChance` of
+   * the time). Any mob will do but one nothing can stop.
+   */
   private beginGrab(nowMs: number, ctx: EnemyContext): boolean {
     const W = SOVEREIGN.will;
     const near = (o: { x: number; y: number }) => Math.hypot(o.x - this.x, o.y - this.y);
     const spheres = ctx.spells.spheresOf(this).filter((s) => near(s) <= W.grabRange).sort((a, b) => near(a) - near(b));
-    const slimes = ctx.allies
-      .filter((e) => e !== this && e.archetype === 'basic' && e.active && !e.held && near(e) <= W.grabRange)
+    const mobs = ctx.allies
+      .filter((e) => e !== this && e.active && !e.held && !e.unstoppable && near(e) <= W.grabRange)
       .sort((a, b) => near(a) - near(b));
-    if (spheres.length === 0 && slimes.length === 0) return false;
+    if (spheres.length === 0 && mobs.length === 0) return false;
 
-    const takeSlime = slimes.length > 0 && (spheres.length === 0 || Math.random() < W.slimeChance);
-    if (takeSlime) {
-      const enemy = slimes[0];
-      enemy.held = true;
-      this.holding = { kind: 'slime', enemy };
+    const takeMob = mobs.length > 0 && (spheres.length === 0 || Math.random() < W.mobChance);
+    if (takeMob) {
+      const enemy = mobs[0];
+      enemy.pickUp(ctx);
+      this.holding = { kind: 'mob', enemy };
       this.throwFrom = { x: enemy.x, y: enemy.y };
     } else {
       const s = spheres[0];
@@ -257,8 +270,8 @@ export class Sovereign extends Caster {
   /** The held thing rises over her head; at the end she throws it at where you're heading. */
   private updateGrab(nowMs: number, ctx: EnemyContext): void {
     const held = this.holding;
-    if (!held || (held.kind === 'slime' && !held.enemy.active)) {
-      // The slime was popped in her hands: the throw fizzles.
+    if (!held || (held.kind === 'mob' && !held.enemy.active)) {
+      // The mob was killed in her hands: the throw fizzles.
       this.holding = null;
       this.enter('reposition', nowMs, 0);
       return;
@@ -279,7 +292,7 @@ export class Sovereign extends Caster {
     this.enter('throw', nowMs, W.delayMs);
   }
 
-  /** In flight: an arc from over her head to where it lands. A slime lands live, briefly dazed. */
+  /** In flight: an arc from over her head to where it lands. A mob lands live, briefly dazed. */
   private updateThrow(nowMs: number): void {
     const t = this.castProgress(nowMs);
     const arc = Math.sin(t * Math.PI) * 60;
@@ -288,12 +301,12 @@ export class Sovereign extends Caster {
       Phaser.Math.Linear(this.throwFrom.y, this.throwTo.y, t) - arc,
     );
     if (nowMs < this.stateEndsAt) return;
-    if (this.holding?.kind === 'slime') {
+    if (this.holding?.kind === 'mob') {
       const e = this.holding.enemy;
       e.held = false;
       e.x = this.throwTo.x;
       e.y = this.throwTo.y;
-      e.dazedUntil = nowMs + SOVEREIGN.will.slimeDazedMs;
+      e.dazedUntil = Math.max(e.dazedUntil, nowMs + SOVEREIGN.will.mobDazedMs);
     }
     this.holding = null;
     this.heldSpherePos = null;
@@ -302,7 +315,7 @@ export class Sovereign extends Caster {
 
   private moveHeld(x: number, y: number): void {
     if (!this.holding) return;
-    if (this.holding.kind === 'slime') {
+    if (this.holding.kind === 'mob') {
       if (this.holding.enemy.active) {
         this.holding.enemy.x = x;
         this.holding.enemy.y = y;

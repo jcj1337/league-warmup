@@ -81,7 +81,6 @@ export class MagicBoyKit implements Kit {
       // Relocate first, THEN acquire, so the bolt is chosen from the new position.
       this.ctx.blink.blinkTo(aim);
       this.fireBolt();
-      this.ctx.combat.bonus(BLINK_E.scoreBonus);
     } else if (slot === 'r') {
       this.rFired++;
       let struck = 0;
@@ -186,10 +185,12 @@ export class MagicBoyKit implements Kit {
     );
   }
 
+  /** The bolt lands: a pip, a stack, and E's score (the blink alone pays nothing). */
   private onBoltImpact(target: Enemy): void {
     if (!target.active) return;
     this.ctx.combat.hit(target, target.takeHit());
     this.grantPassiveStack();
+    this.ctx.combat.bonus(BLINK_E.scoreBonus);
   }
 
   update(deltaSeconds: number, nowMs: number): void {

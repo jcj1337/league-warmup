@@ -385,7 +385,7 @@ export const THEME = {
     burst: [P.sov, P.silver, P.voidGlow],
     /** Two small dark orbs circling her head: one turn per `spinMs`, `castSpin` times faster while she casts, eased. */
     orbs: { count: 2, orbitPx: 24, liftPx: 6, spinMs: 2000, castSpin: 3.5, spinEase: 6, radius: 6 },
-    /** A grabbed sphere or slime floats this far over her head before the throw. */
+    /** A grabbed sphere or mob floats this far over her head before the throw. */
     holdLiftPx: 38,
     /** The pull on what she holds: a thin line from her diadem to it. */
     tether: { color: P.voidGlow, alpha: 0.55, width: 2 },
@@ -789,17 +789,10 @@ export const THEME = {
     sources: {
       basic: P.red, pursuer: P.purpleLight, magus: P.magusLight, sovereign: P.silver, bulwark: P.sand, edgeFire: P.fireOrange,
     } as Record<string, number>,
-    /** The score bar's segments, by RoundResult.scoreFrom key. */
-    scoreFrom: { kills: P.gold, speed: P.auto, hp: P.hpGreen, clear: P.w, kit: P.e },
     /** Most damage rows shown; smaller sources fold into OTHER. */
     damageRows: 3,
     /** Widest gap between two stage nodes on the progress track; a long run packs them closer. */
     trackMaxPitch: 72,
-    /**
-     * The reveal: each block fades in `stepMs` after the one before, the score
-     * counts up and the NEW BEST stamp punches in last. A click or key skips it.
-     */
-    reveal: { stepMs: 220, fadeMs: 180, scoreCountMs: 700, stampMs: 240, stampFromScale: 2.2 },
   },
 
   /** Title card before the first run of a page load. Presentation only. */

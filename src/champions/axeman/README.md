@@ -37,7 +37,8 @@ counts. Once the circle is on the ground, nothing he does moves it.
 
 **Catching.** The circle is a little larger than his body (36px). If his centre is inside it
 as the axe comes down to him (from 120ms before it would touch the ground, which is when
-the falling axe reaches his body), he catches it: the axe is back in his hand, the 6s hold timer starts over, **W is ready again**, and he
+the falling axe reaches his body), he catches it: the axe is back in his hand, the 6s hold timer starts over, **W is ready again**, he
+**scores** 10 × the stage multiplier (`Q.catchScoreBonus`, a gold `+N` over him) and he
 **heals**. The heal grows with a streak: 5 HP for the first catch, 5 more for each catch in
 a row (10, 15), up to 20, never past full (a catch that fills him up reads **MAX**). Missing a single axe ends the streak, and
 the next catch heals 5 again.

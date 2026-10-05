@@ -120,7 +120,11 @@ export const BLINK_E = {
   boltAcquisitionRange: 380,
   boltSpeed: 1050,
   boltRadius: 7,
-  /** Score for each blink, × the stage multiplier: a kill is worth 100, so this is a nudge to use it. */
+  /**
+   * Score for each bolt that lands, × the stage multiplier: a kill is worth
+   * 100, so this is a nudge to blink in on something. The blink alone pays
+   * nothing, so there is no farming it off a mob you keep alive.
+   */
   scoreBonus: 10,
 };
 

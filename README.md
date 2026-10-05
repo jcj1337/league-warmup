@@ -144,13 +144,13 @@ When you die, the end screen answers four questions, one block each. **What kill
 the killer's portrait and name, beside the HP you lost in the stage that ended the run, per
 source (the top three; a mob's body contact counts as that mob). **How far did I get:** a
 track of stages with the one you died on in red under your slime and your earlier best in
-gold, stamped **NEW BEST!** when the run beats your logged runs as this champion in this
-mode, on this growth setting and balance version. **How did I score:** the score over one
-bar split into kills, clear speed bonus, HP bonus and stage clear bonus (plus an ability
-bonus when the champion's kit earned one). **What did I do:**
+gold, marked **NEW BEST** in green when the run beats your logged runs as this champion in this
+mode, on this growth setting and balance version. **How did I score:** the score, and how
+much of it came from kills, the clear speed bonus, the HP bonus and the stage clear bonus
+(plus an ability bonus when the champion's kit earned one). **What did I do:**
 kills by mob and the champion's own lines (Q accuracy). A line under DEFEATED says how qwer
-would have done (`deathTaunt` in `missionMessages.ts`: per mode, by stage reached). The
-blocks arrive one after another; a click or any key shows the rest at once. Tuning data —
+would have done (`deathTaunt` in `missionMessages.ts`: he would've won that, except on Hard from Stage 9,
+where he only probably would have). Tuning data —
 whole-run damage by source, the raw attack metrics — stays in the round result and the run
 log, off the screen. `R` restarts at Stage 1 Wave 1.
 
@@ -165,8 +165,9 @@ nothing. Every award is × a stage multiplier (×1 at Stage 1, ×2 at Stage 5, �
   the stage cost you no damage at all (**flawless**).
 - **Clear:** clearing a stage also pays the mode's flat bonus: 500 on Normal, 1500 on
   Hard, none on Easy (`stageClearBonus` in `MODES`).
-- **Ability:** a champion's kit can pay a small award of its own. Magic Boy's E pays 10
-  per blink (`BLINK_E.scoreBonus`), popping a gold `+N` over him.
+- **Ability:** a champion's kit can pay a small award of its own, popping a gold `+N` over
+  you: Magic Boy's E pays 10 when its bolt lands (`BLINK_E.scoreBonus`), Axe Man 10 per axe caught
+  (`Q.catchScoreBonus`), Snake Lady 10 per kill with E (`E.killScoreBonus`).
 
 Every kill pops its points over your slime in gold with a coin, like League's last-hit
 gold (`+100`), and the popup rides along on your slime's head as you move until it fades;
@@ -321,7 +322,8 @@ palette characters a motion's `glow` lights (her eyes, his gauntlet).
    numbers), `kit.ts` (a `Kit`: what each slot does when its cast resolves, its passive,
    its end-screen lines) and `index.ts` (the `Champion`: stats, attack pacing, level
    perks, a `slots` entry per ability saying how it is aimed, its cast time, cooldown,
-   icon, cast look and `motion`, an `autoMotion`, and `createKit`), with `motions.ts` and
+   icon, cast look and `motion`, an `autoMotion`, its `notes` for the start screen's
+   tooltip, and `createKit`), with `motions.ts` and
    `art.ts` beside it.
 2. One line in `CHAMPIONS` in [src/champions/index.ts](src/champions/index.ts).
 3. Any enemy status it applies (a poison, a mark): apply it with
@@ -441,7 +443,7 @@ where you're heading (like the Magus) at a random spot within 40px.
 | Spell | Telegraph | Hit |
 | --- | --- | --- |
 | Dark Sphere (Q) | a void-edged circle on where you're heading, landing after 600ms | 12; then a **Dark Sphere** sits there for 6s (at most 3 of hers at once, 4 from Stage 14, 5 from 19; a new one replaces her oldest) |
-| Force of Will (W) | she lifts one of her spheres — or **one of her basic slimes** — within 280px over her head (300ms), then throws it at where you're heading: a circle that lands 500ms later | 12 + 30% slow for 1s. A thrown slime lands **live** where it hits, dazed for 400ms. Pop it in her hands and the throw fizzles |
+| Force of Will (W) | she lifts one of her spheres — or **any other mob of her wave** (a slime, a Pursuer, a Magus, the Bulwark, another Sovereign) — within 280px over her head (300ms), then throws it at where you're heading: a circle that lands 500ms later | 12 + 30% slow for 1s. A thrown mob drops whatever it was winding up and lands **live** where it hits, dazed for 400ms. Kill it in her hands and the throw fizzles. A Bulwark is never lifted while it is unstoppable |
 | Scatter (E) | a short cone in front of her fills for 350ms; every sphere inside it shows the **exit line** it will fly along, outward from her through the sphere | cone 10; each flung sphere 8 + a **600ms stun** |
 
 She casts Scatter when a sphere lines up with you, or when you're inside the cone. With
@@ -489,7 +491,9 @@ the press counts as the gesture a non-1.0 Mouse Speed needs for its pointer lock
 (`R`, Restart Round) skip it and go straight into play. The card also carries the
 **champion row**: click a tile or use Left / Right to pick who you play, and the
 **difficulty row** under it: click Easy, Normal or Hard, or use Up / Down (see
-Difficulty under The run). Both are saved to your profile and neither starts the run;
+Difficulty under The run). Hovering a difficulty hangs a tooltip under it listing what it
+changes against Normal (`modeChanges` in `missionMessages.ts`, read off `MODES`); hovering a
+champion lists the rules that are this trainer's own (its `notes`). Both are saved to your profile and neither starts the run;
 **Return to Select** in the pause menu or on the end screen brings the card back with a
 fresh run.
 
@@ -499,16 +503,15 @@ fresh run.
 timers, cast windows, cooldowns, mark durations, projectiles, wave breathers and the run
 clock. Nothing fast-forwards on resume.
 
-The menu has Resume, Restart Round, Return to Select, a **Mouse Speed** slider, **Range Indicator**
-(contextual / always / off), **Damage Numbers** (the "-1" pip-loss pops) and **Pause on
+The menu has Resume, Restart Round, Return to Select, a **Mouse Speed** slider, **Damage Numbers** (the "-1" pip-loss pops) and **Pause on
 Focus Loss** (on by default: alt-tabbing, clicking another window or switching tabs
 opens this menu, so the run never plays on without you). Below them are the controls,
 with every key rebindable (see [Controls](#controls)).
 
 Every setting and key binding is **saved in this browser** (localStorage), so it's
-still there next visit, on this device. Range Indicator and Damage Numbers write into
+still there next visit, on this device. Damage Numbers writes into
 the `DEBUG` config that gameplay reads; [Settings.ts](src/game/Settings.ts) loads and
-saves them, and `PREFERENCES` in [balance.ts](src/config/balance.ts) holds the
+saves it, and `PREFERENCES` in [balance.ts](src/config/balance.ts) holds the
 focus-loss default. From the console: `__settings.all()`,
 `__settings.pauseOnFocusLoss = false`.
 

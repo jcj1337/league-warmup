@@ -58,5 +58,10 @@ export const MAGIC_BOY: Champion = {
       icon: TEX.icons.r, accent: THEME.ability.accents.r, castStyle: 'orb', fx: 'r', motion: R_MOTION,
     },
   },
+  notes: () => [
+    `E's bolt scores +${BLINK_E.scoreBonus} when it hits`,
+    `Q removes ${LEVELS.qRankUp.pips} pips from level ${LEVELS.qRankUp.level}`,
+    `R: ${ULT_R.firstPips} pips to the first enemy, ${ULT_R.pips} to the rest`,
+  ],
   createKit: (ctx) => new MagicBoyKit(ctx),
 };

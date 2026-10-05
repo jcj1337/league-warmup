@@ -20,8 +20,9 @@ see the main README's [Controls](../../../README.md#controls).
 Q / W / E cast windows shrink with haste at half that rate (×0.70 at 18); R's charge
 follows attack speed instead.
 
-Every E also pays a little score: 10 × the stage multiplier (`BLINK_E.scoreBonus`),
-bolt or no bolt.
+An E whose bolt lands also pays a little score: 10 × the stage multiplier
+(`BLINK_E.scoreBonus`). The blink alone pays nothing, so there is nothing to farm by
+keeping a mob alive and blinking around it.
 
 **Cast windows.** Q/W/E commit for a short window anchored to the auto windup
 (auto 175 ≈ Q 165 < W 185 < E 210). The aim (Q/W) or destination (E) is frozen at

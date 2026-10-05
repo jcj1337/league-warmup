@@ -206,10 +206,11 @@ export const PREFERENCES = {
  */
 export const DEBUG = {
   /**
-   * When the player's attack-range ring is drawn:
+   * When the player's attack-range ring is drawn. Not a player setting: the
+   * game always plays on 'contextual'; the others are for tuning, from the console.
    *   'contextual' — only while an Attack Move command is being used (A mode,
-   *                  or briefly after T). This is the default: the ring is a
-   *                  targeting aid, not permanent furniture.
+   *                  or briefly after T): the ring is a targeting aid, not
+   *                  permanent furniture.
    *   'always'     — the old behaviour, useful when tuning range itself
    *   'off'        — never
    * Changing this never changes the attack range calculation.
@@ -462,7 +463,7 @@ export const MAGUS = {
 /**
  * The Sovereign: a mid-range sphere mage with a Syndra-style kit. She litters
  * the arena with Dark Spheres that stay put, then uses them: Force of Will
- * throws one (or one of her own basic slimes) at you, and Scatter flings every
+ * throws one (or any other mob of her wave) at you, and Scatter flings every
  * sphere in a short cone outward along the line from her — a sphere that hits
  * you stuns. The skill it drills is reading the board: never stand behind a
  * sphere on her line. Killing her deletes all her spheres.
@@ -491,13 +492,14 @@ export const SOVEREIGN = {
   /** Q — Dark Sphere: a led circle that lands after `delayMs`, then leaves a sphere. */
   sphere: { castMs: 250, delayMs: 600, range: 520, radius: 55, damage: 12, cooldownMs: 2500 },
   /**
-   * W — Force of Will: she grabs one of her spheres or one of her basic slimes
-   * within `grabRange` (a slime `slimeChance` of the time when both are there)
+   * W — Force of Will: she grabs one of her spheres or any other mob of her
+   * wave within `grabRange` (a mob `mobChance` of the time when both are there)
    * and throws it at a led spot. It lands `delayMs` later: damage + slow. A
-   * thrown slime lands live, dazed for `slimeDazedMs`.
+   * thrown mob drops what it was winding up and lands live, dazed for
+   * `mobDazedMs`. A mob nothing can stop (a Bulwark mid Path Maker) is never grabbed.
    */
   will: {
-    grabMs: 300, grabRange: 280, slimeChance: 0.5, slimeDazedMs: 400,
+    grabMs: 300, grabRange: 280, mobChance: 0.5, mobDazedMs: 400,
     delayMs: 500, range: 480, radius: 70, damage: 12, slowFraction: 0.3, slowMs: 1000, cooldownMs: 6000,
   },
   /**

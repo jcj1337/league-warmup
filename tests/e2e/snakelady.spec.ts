@@ -21,6 +21,8 @@ test('snakelady: picked from the profile, slow autos, Q blast + poison ticks, W 
       clouds: g.kit.zones.clouds.length as number,
       bolts: g.kit.bolts.length as number,
       stats: g.kit.stats() as Record<string, number>,
+      kitScore: g.scoring.scoreFrom.kit as number,
+      stage: g.director.stage as number,
       enemies: g.director.enemies.map((e) => ({
         type: e.archetype, x: e.x, y: e.y, hp: e.hp, active: e.active, heading: e.heading, slow: e.slowFactor, dazed: g.clock.now < e.dazedUntil,
         poisoned: e.hasStatus('snakelady.poison', g.clock.now), petrified: e.hasStatus('snakelady.petrify', g.clock.now),
@@ -250,6 +252,19 @@ test('snakelady: picked from the profile, slow autos, Q blast + poison ticks, W 
   fang2.enemies[0].hp === 1 && fang2.stats.fangsOnPoisoned === 1
     ? pass('on a poisoned target E takes two pips')
     : fail(`poisoned E: ${JSON.stringify({ e: fang2.enemies[0], stats: fang2.stats })}`);
+  // A fang that kills pays a little score; the ones that didn't paid nothing.
+  fang2.kitScore === 0 ? pass('fangs that leave the target alive pay no score') : fail(`kit score after two non-lethal fangs: ${fang2.kitScore}`);
+  await page.evaluate(() => { window.__warmup.scene.getScene('GameScene').cooldowns.reset(); });
+  await page.keyboard.press('e');
+  await page.waitForFunction(() => !window.__warmup.scene.getScene('GameScene').director.enemies[0]?.active, null, { timeout: 2000 });
+  {
+    const killed = await G();
+    const SC = await page.evaluate(() => window.__balance.SCORE);
+    const want = Math.round(cfg.E.killScoreBonus * (1 + SC.stageMultiplierPerStage * (killed.stage - 1)));
+    killed.kitScore === want
+      ? pass(`a kill with E scores +${want} (E.killScoreBonus ${cfg.E.killScoreBonus} × the Stage ${killed.stage} multiplier)`)
+      : fail(`kit score after an E kill: ${killed.kitScore}, expected ${want}`);
+  }
   // Out of range: the cursor is on an enemy, but too far away, so no cast and no cooldown.
   await stage(1200, 360, 3);
   await page.mouse.move(1200, 360);

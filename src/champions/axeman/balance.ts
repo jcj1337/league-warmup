@@ -69,6 +69,8 @@ export const Q = {
    * axe ends the streak, and the next catch heals `base` again.
    */
   catchHeal: { base: 5, perCatch: 5, max: 20 },
+  /** Score for each catch, × the stage multiplier: a kill is worth 100, so this is a nudge to go get it. */
+  catchScoreBonus: 10,
 };
 
 /**

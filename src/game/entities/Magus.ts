@@ -199,6 +199,13 @@ export class Magus extends Caster {
     this.pose.windup = this.castProgress(nowMs);
   }
 
+  /** Picked up: the spell it was charging is lost (one already placed still lands). */
+  protected override onPickedUp(): void {
+    this.state = 'reposition';
+    this.eyeTarget = null;
+    this.riteShotsLeft = 0;
+  }
+
   // ------------------------------------------------------------ spells
 
   /**

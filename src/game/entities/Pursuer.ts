@@ -141,6 +141,11 @@ export class Pursuer extends Enemy {
     }
   }
 
+  /** Picked up: a swing or a dash in progress is lost; its cooldown is still spent. */
+  protected override onPickedUp(): void {
+    this.state = 'chase';
+  }
+
   /** 0..1 through the dash windup, or -1 when not crouched. Read by the view. */
   dashWindupProgress(nowMs: number): number {
     if (this.state !== 'dashWindup') return -1;

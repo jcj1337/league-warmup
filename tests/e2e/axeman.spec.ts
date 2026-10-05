@@ -25,6 +25,7 @@ test('axeman: picked from the profile, Q axes on autos, where the axe lands, cat
       drops: g.kit.drops.map((d) => ({ x: d.x, y: d.y, state: d.state, landsAt: d.landsAt })),
       whirls: g.kit.whirls.length as number,
       stats: g.kit.stats() as Record<string, number>,
+      kitScore: g.scoring.scoreFrom.kit as number,
       rows: g.kit.statRows().length as number,
       gems: { stacks: hud.passiveStacks as number, max: hud.passiveMaxStacks as number },
       enemies: g.director.enemies.map((e) => ({ x: e.x, y: e.y, hp: e.hp, active: e.active, slow: e.slowFactor })),
@@ -142,6 +143,9 @@ test('axeman: picked from the profile, Q axes on autos, where the axe lands, cat
     s.held === 1 && s.stats.axesCaught === 1 && s.stats.axesMissed === 0
       ? pass('standing in the circle as it lands catches it: the axe is back in his hand')
       : fail(`catch: ${JSON.stringify({ held: s.held, stats: s.stats })}`);
+    s.kitScore === cfg.Q.catchScoreBonus
+      ? pass(`the catch scores +${s.kitScore} (Q.catchScoreBonus, Stage 1)`)
+      : fail(`kit score after a catch: ${s.kitScore}, expected ${cfg.Q.catchScoreBonus}`);
     // Caught as the drawn axe reaches him, not a beat later: by its landing time it is already in his hand.
     s.now <= landsAt + 60 && cfg.Q.catchEarlyMs > 0
       ? pass(`he has it as it reaches him, up to ${cfg.Q.catchEarlyMs}ms before it would touch the ground (${Math.round(landsAt - s.now)}ms to spare when checked)`)

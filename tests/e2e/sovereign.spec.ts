@@ -152,15 +152,15 @@ test('sovereign: unlock, Dark Sphere + cap + cleanup, Force of Will (sphere and 
   }
   // Throwing one of her slimes.
   await calm();
-  await page.evaluate(() => { window.__balance.SOVEREIGN.will.slimeChance = 1; });
+  await page.evaluate(() => { window.__balance.SOVEREIGN.will.mobChance = 1; });
   await place(940, 360, [{ x: 900, y: 420 }]);
   await castNow('will');
-  const slimeThrow = await watch(cfg.S.will.grabMs + cfg.S.will.delayMs + cfg.S.will.slimeDazedMs + 400);
+  const slimeThrow = await watch(cfg.S.will.grabMs + cfg.S.will.delayMs + cfg.S.will.mobDazedMs + 400);
   {
     const held = slimeThrow.filter((f) => f.basics[0]?.held);
     const landed = slimeThrow.find((f, i) => i > 0 && slimeThrow[i - 1].basics[0]?.held && !f.basics[0].held);
     held.length > 0 && landed && Math.hypot(landed.basics[0].x - 640, landed.basics[0].y - 360) < 10 && landed.basics[0].dazed
-      ? pass(`with a slime in reach she grabs it and throws it onto you; it lands dazed for ${cfg.S.will.slimeDazedMs}ms`)
+      ? pass(`with a slime in reach she grabs it and throws it onto you; it lands dazed for ${cfg.S.will.mobDazedMs}ms`)
       : fail(`slime throw: ${JSON.stringify({ held: held.length, landed: landed?.basics })}`);
     slimeThrow.at(-1).basics[0].dazed === false && !slimeThrow.at(-1).basics[0].held
       ? pass('then it is a live slime again')
@@ -180,7 +180,55 @@ test('sovereign: unlock, Dark Sphere + cap + cleanup, Force of Will (sphere and 
   fizzled.every((f) => f.zones.length === 0) && fizzled.at(-1).hp === 100
     ? pass('pop the slime in her hands and the throw fizzles')
     : fail('a popped slime was still thrown');
-  await page.evaluate(() => { window.__balance.SOVEREIGN.will.slimeChance = 0.5; });
+  // Any other mob of her wave can be thrown, and it drops what it was winding up.
+  const other = (id, set = {}) => page.evaluate(({ id, set }) => {
+    const g = window.__warmup.scene.getScene('GameScene');
+    const e = g.director.spawnEnemy(id);
+    e.x = 900; e.y = 420; e.hp = 99;
+    Object.assign(e, set);
+    g.director.enemies.push(e);
+    g.enemies = g.director.enemies;
+  }, { id, set });
+  const watchMob = (id, ms) => page.evaluate(({ id, ms }) => new Promise<any[]>((res) => {
+    const g = window.__warmup.scene.getScene('GameScene');
+    const t0 = g.clock.now;
+    const out = [];
+    const tick = () => {
+      const e = g.director.enemies.find((x) => x.archetype === id);
+      out.push({ x: e.x, y: e.y, held: e.held, dazed: e.dazedUntil > g.clock.now, state: e.state, windup: e.pose.windup });
+      if (g.clock.now - t0 >= ms) res(out); else requestAnimationFrame(tick);
+    };
+    tick();
+  }), { id, ms });
+  const windingUp = { windupEndsAt: Number.POSITIVE_INFINITY, stateEndsAt: Number.POSITIVE_INFINITY };
+  for (const [id, set, idle] of [
+    ['pursuer', { state: 'windup', ...windingUp }, 'chase'],
+    ['magus', { state: 'lance', ...windingUp }, 'reposition'],
+    ['bulwark', { state: 'strike', ...windingUp }, 'chase'],
+  ] as const) {
+    await calm();
+    await place(940, 360);
+    await other(id, set);
+    await castNow('will');
+    const f = await watchMob(id, cfg.S.will.grabMs + cfg.S.will.delayMs + 150);
+    const held = f.filter((x) => x.held);
+    const landed = f.find((x, i) => i > 0 && f[i - 1].held && !x.held);
+    held.length > 0 && landed && Math.hypot(landed.x - 640, landed.y - 360) < 10 && landed.dazed
+      ? pass(`she grabs a ${id} and throws it onto you; it lands dazed`)
+      : fail(`${id} throw: ${JSON.stringify({ held: held.length, landed })}`);
+    held.length > 0 && held.every((x) => x.state === idle && x.windup < 0)
+      ? pass(`a ${id} lifted mid-windup drops what it was winding up`)
+      : fail(`${id} kept its windup: ${JSON.stringify(held[0])}`);
+  }
+  // A mob nothing can stop is left alone.
+  await calm();
+  await place(940, 360);
+  await other('bulwark', { state: 'flare', unstoppable: true, stateEndsAt: Number.POSITIVE_INFINITY });
+  await castNow('will');
+  (await watchMob('bulwark', 400)).every((x) => !x.held)
+    ? pass('an unstoppable Bulwark is never lifted')
+    : fail('she lifted an unstoppable Bulwark');
+  await page.evaluate(() => { window.__balance.SOVEREIGN.will.mobChance = 0.5; });
 
   // === 4. Scatter =============================================================
   section('4. Scatter');

@@ -110,6 +110,13 @@ export class Target extends Enemy {
     this.y = Phaser.Math.Clamp(this.y, m, ARENA.height - m);
   }
 
+  /** Picked up mid-windup: the spit is lost and its token goes back to the crowd. */
+  protected override onPickedUp(ctx: EnemyContext): void {
+    if (!this.spitting) return;
+    this.spitting = false;
+    ctx.attackTokens.release(this);
+  }
+
   /**
    * The spit cycle: wait out the cooldown, take a token, wind up rooted, fire
    * at where the player is now, hand the token back.

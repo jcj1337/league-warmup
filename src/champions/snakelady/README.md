@@ -67,7 +67,8 @@ is its own: autos never reset it and it never resets autos.
 **E bites.** She rears back with her jaws opening, then lunges as two fangs leave her. They
 weave apart in a shallow arc and meet again in the target, snapping shut across it in a
 burst of venom puffs. A poisoned target takes a second, wider bite that closes a beat
-later, a bigger burst, and a short screen shake: that's the two pips.
+later, a bigger burst, and a short screen shake: that's the two pips. A fang that **kills**
+pays 10 × the stage multiplier in score (`E.killScoreBonus`, a gold `+N` over her).
 
 **W-Flash and R-Flash.** Flash during either cast and the spell comes out of her where
 she lands, aimed the same way: W's bolts leave from the Flash destination and the wall lands

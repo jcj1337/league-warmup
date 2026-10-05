@@ -111,6 +111,11 @@ export class Bulwark extends Enemy {
     return took;
   }
 
+  /** Picked up: a Strike it is winding up never lands. (Unstoppable, it is never picked up.) */
+  protected override onPickedUp(): void {
+    if (this.state === 'strike') this.state = 'chase';
+  }
+
   protected override updateAi(deltaSeconds: number, nowMs: number, ctx: EnemyContext): void {
     const dx = ctx.player.x - this.x;
     const dy = ctx.player.y - this.y;

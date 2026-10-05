@@ -109,6 +109,8 @@ export const E = {
   pipsOnPoisoned: 2,
   /** League's 2500 is ~1180 here. */
   boltSpeed: 1150,
+  /** Score for a fang that kills, × the stage multiplier: a kill is worth 100, so this is a nudge to finish with E. */
+  killScoreBonus: 10,
 };
 
 /**

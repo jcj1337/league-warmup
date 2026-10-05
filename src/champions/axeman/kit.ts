@@ -176,12 +176,13 @@ export class AxeManKit implements Kit {
     return Math.hypot(player.x - drop.x, player.y - drop.y) <= drop.radius;
   }
 
-  /** Back in his hand: an axe ready for the next auto, the hold timer fresh, W off cooldown, and some HP back. */
+  /** Back in his hand: an axe ready for the next auto, the hold timer fresh, W off cooldown, some HP back, and a little score. */
   private catchAxe(drop: AxeDrop): void {
     drop.finish(true);
     this.axesCaught++;
     this.takeAxe();
     this.ctx.cooldowns.reduce(Number.POSITIVE_INFINITY, ['w']);
+    this.ctx.combat.bonus(Q.catchScoreBonus);
     const offered = this.nextCatchHeal;
     const healed = this.ctx.player.heal(offered);
     this.catchStreak++;
