@@ -39,7 +39,10 @@ export class RunFeedback {
 
     events.on('stageCleared', ({ points, flawless, healed }) => {
       if (points > 0) this.scorePopup(`+${points} ${flawless ? 'FLAWLESS' : 'HP'}`, 2);
-      if (healed > 0) this.fx.popup(this.player.x, this.overHead(1), `+${healed}`, THEME.ui.good, 800, 26);
+      // Damage is scaled, so HP can be fractional; the HUD shows it rounded up, so the
+      // heal shows rounded down: exactly the jump the HP readout makes.
+      const shown = Math.floor(healed);
+      if (shown > 0) this.fx.popup(this.player.x, this.overHead(1), `+${shown}`, THEME.ui.good, 800, 26);
     });
 
     // A hit registers even when your eyes are on the enemy: a shake and a red rim flash.

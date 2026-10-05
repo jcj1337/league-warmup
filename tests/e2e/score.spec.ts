@@ -159,6 +159,21 @@ test('score: no points for time alive, kills × stage, wave speed bonus vs par, 
     : fail(`hp bonus ${hpBonus}`);
   const hpAfterHeal = await page.evaluate(() => window.__warmup.scene.getScene('GameScene').player.hp);
   hpAfterHeal === 100 ? pass('the bonus counts the HP before the full heal') : fail(`hp after clear ${hpAfterHeal}`);
+  // Scaled damage leaves HP fractional; the heal popup still reads as a whole number,
+  // the jump the HUD makes (it shows HP rounded up): 79.37 shows 80, so +20.
+  await jumpTo(4, 2);
+  await page.evaluate(() => {
+    const g = window.__warmup.scene.getScene('GameScene');
+    g.player.lastHitAt = Number.NEGATIVE_INFINITY;
+    g.onPlayerHit(20.63, 'edgeFire');
+  });
+  await clearWave(0);
+  const healTexts = await page.evaluate(() => window.__warmup.scene.getScene('GameScene').children.list
+    .filter((o: { text?: unknown }) => typeof o.text === 'string' && (o.text as string).startsWith('+') && !/[A-Z]/.test(o.text as string))
+    .map((o: { text: string }) => o.text));
+  healTexts.includes('+20') && healTexts.every((t) => /^\+\d+$/.test(t))
+    ? pass(`a fractional heal pops as a whole number: ${healTexts.join(' ')}`)
+    : fail(`heal popup: ${JSON.stringify(healTexts)}`);
   await jumpTo(4, 2);
   const beforeFlawless = await score();
   const afterFlawless = await clearWave(0);
