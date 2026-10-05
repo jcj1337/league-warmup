@@ -29,9 +29,9 @@ export class AxeDrop {
     private readonly scene: Phaser.Scene,
     private readonly fromX: number,
     private readonly fromY: number,
-    /** Where it lands. The kit may still move it for a moment after the throw (moveTo). */
-    public x: number,
-    public y: number,
+    /** Where it lands. */
+    readonly x: number,
+    readonly y: number,
     private readonly thrownAt: number,
     /** Clock time it lands. */
     readonly landsAt: number,
@@ -39,12 +39,6 @@ export class AxeDrop {
   ) {
     this.ring = scene.add.graphics().setDepth(THEME.depth.groundFx);
     this.axe = scene.add.image(fromX, fromY, TEX.proj.spinAxe).setScale(THEME.art.scale).setDepth(THEME.depth.fx);
-  }
-
-  /** Steer the landing spot (only while the kit still allows it). */
-  moveTo(x: number, y: number): void {
-    this.x = x;
-    this.y = y;
   }
 
   /** 0..1 through the fall. */

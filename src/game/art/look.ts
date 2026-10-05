@@ -10,8 +10,9 @@ import { addPixelTexture, type PixelColor, type PixelSprite } from './pixel';
  *
  * A champion authors only its body (idle, squash, stretch, charge, cast, and
  * any extra poses its motions use). A
- * hat is a small pixel map stacked on the body's top row, so it squashes and
- * stretches with the hop; a skin is a palette override on the body. Layers
+ * hat is a small pixel map worn on the body's top row (its last row sits over
+ * that row, not above it), so it rides the hop with the head; a skin is a
+ * palette override on the body. Layers
  * are composed here, once per look, so no champion frame is ever hand-merged
  * with a cosmetic. Texture keys carry the look, so changing it rebuilds only
  * the player's frames.
@@ -94,9 +95,12 @@ export function ensurePlayerFrames(scene: Phaser.Scene, champion: Champion, look
   };
 }
 
+/** How many of a hat's rows sit over the body's top rows instead of above them: it is worn, not balanced. */
+const HAT_SINK = 1;
+
 /**
  * One composed frame: the body (skinned) bottom-aligned into `frameHeight`,
- * with the hat's rows directly above the body's top row, centred. Layer
+ * with the hat centred on its top row, sunk HAT_SINK rows into it. Layer
  * characters are moved to private codes so they can never collide with the
  * body's. `hatPal` recolours the hat by its own characters (a champion's take on it).
  */
@@ -128,8 +132,16 @@ export function compose(
     }
   }
 
-  const padding = Math.max(0, frameHeight - body.length);
-  const rows = [...hat, ...Array.from({ length: padding }, () => blank), ...body];
+  // The frame is the hat's height plus the body's box, whatever the pose; the hat goes down with the head.
+  const total = hat.length + frameHeight;
+  const rows = Array.from({ length: total }, () => blank);
+  const bodyTop = total - body.length;
+  body.forEach((row, i) => { rows[bodyTop + i] = row; });
+  const hatTop = bodyTop - hat.length + Math.min(HAT_SINK, hat.length);
+  hat.forEach((row, i) => {
+    const under = [...rows[hatTop + i]];
+    rows[hatTop + i] = [...row].map((ch, x) => (ch === '.' ? (under[x] ?? '.') : ch)).join('');
+  });
   return { rows, pal: merged };
 }
 

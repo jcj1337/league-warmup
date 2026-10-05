@@ -335,7 +335,9 @@ export class GameScene extends Phaser.Scene {
    */
   private castSlot(slot: Slot, x: number, y: number): void {
     const def = this.champion.slots[slot];
-    if (!def || !this.canAct || !this.cooldowns.isReady(slot)) return;
+    if (!def || !this.canAct) return;
+    if (this.kit.recast?.(slot)) return;
+    if (!this.cooldowns.isReady(slot)) return;
     const aim = this.resolveAim(def, x, y);
     if (!aim || !this.kit.canCast(slot, aim)) return;
     if (!def.quick) this.attacks.onMoveOrder();

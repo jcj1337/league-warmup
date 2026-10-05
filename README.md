@@ -280,7 +280,7 @@ nothing in it switches on who is being played.
 | --- | --- |
 | **Magic Boy** (default) | [src/champions/magicboy/README.md](src/champions/magicboy/README.md): linear poke, a mark to cash in, a committed blink, a global wave that pierces (R), attack-speed passive |
 | **Snake Lady** | [src/champions/snakelady/README.md](src/champions/snakelady/README.md): ground spells that poison (Q, W), a fast point-and-click fang that bites poisoned targets twice (E), a cone that petrifies enemies facing you (R, sooner with every poisoned fang), move speed per level |
-| **Axe Man** | [src/champions/axeman/README.md](src/champions/axeman/README.md): Q readies a spinning axe for the next auto (2 pips), which then comes down near him, further out the further he is walking; catching it keeps it and resets W (a burst of speed); a line that shoves enemies aside (E); axes across the arena and back (R) |
+| **Axe Man** | [src/champions/axeman/README.md](src/champions/axeman/README.md): Q readies a spinning axe for the next auto (2 pips), which then comes down near him, further out the further he is walking; catching it keeps it and resets W (a burst of speed); a short, wide throw that shoves enemies aside (E); axes down a line and back, recalled early by pressing R again (R) |
 
 Keys are bound **per slot** (Q / W / E / R, plus Flash) and shared across champions, as in
 League; the pause menu lists them as Q / W / E ability and R ultimate. Your best runs are
@@ -321,7 +321,8 @@ The engine resolves the aim from the slot's `targeting` (toward the cursor, a gr
 point within range, the enemy nearest the cursor, or self), checks the cooldown, cancels
 an uncommitted auto (unless the slot is `quick`), runs the cast window and hands the kit the committed aim. A kit
 can also change an auto as it leaves (`autoShot`: Axe Man's axe) and scale move speed
-(`moveSpeedMultiplier`); a champion's art can recolour the worn hat (`hatPal`). A slot
+(`moveSpeedMultiplier`), or take a second press of a slot that is still in play (`recast`: his R);
+a champion's art can recolour the worn hat (`hatPal`). A slot
 can also carry a `telegraph` (a cone, for now) drawn on the ground through its cast window.
 
 **Flash mid-cast.** You're rooted through a cast window, and other abilities are ignored,
@@ -401,7 +402,7 @@ you're heading**: where you'd be when the spell lands at your current velocity
 walks you into it; change direction or stop to dodge. The Eye and the Orb are built to be
 **reacted to**: each shows you where it will land with enough time to step out once you
 see it, so you don't have to dodge pre-emptively. Each cast also aims at a **random spot near** that point
-(within 50px, or 20px for the Orb; `MAGUS.aimSpreadPx`), rolled once per cast so the
+(within 50px, 20px for the Orb, 15px for the Eye; `MAGUS.aimSpreadPx`), rolled once per cast so the
 Lance strip and the Eye circle still show exactly where it will land. While a spell
 tracks, its indicator is the spell's own shape at full size: it only travels, at the
 Magus's aim speed (see Enemy aim), and brightens as the cast runs.

@@ -13,7 +13,7 @@ test('magus: roster + pips, spacing, Lance / Eye / Orb / Rite, stun rules, zones
   // Most checks below need exact aim: switch the random spread off, and back on in 4c.
   const spread = { ...cfg.magus.aimSpreadPx };
   const setSpread = (s) => page.evaluate((s) => { Object.assign(window.__balance.MAGUS.aimSpreadPx, s); }, s);
-  await setSpread({ spell: 0, orb: 0 });
+  await setSpread({ spell: 0, orb: 0, eye: 0 });
 
   /** Quiet arena: no edge fire, player parked at (px, py), healthy, free of crowd control. */
   const calm = (px = 640, py = 360, hp = 100) => page.evaluate(({ px, py, hp }) => {
@@ -389,8 +389,8 @@ test('magus: roster + pips, spacing, Lance / Eye / Orb / Rite, stun rules, zones
   }
   {
     const off = eyeSpots.map((p) => Math.hypot(p.x - 640, p.y - 360));
-    off.every((d) => d <= spread.spell + 0.5) && new Set(eyeSpots.map((p) => `${Math.round(p.x)},${Math.round(p.y)}`)).size === 3
-      ? pass(`three Eyes on a standing player land at different spots within ${spread.spell}px (${off.map((d) => Math.round(d)).join(', ')}px off)`)
+    off.every((d) => d <= spread.eye + 0.5) && spread.eye < cfg.magus.eye.centreRadius && new Set(eyeSpots.map((p) => `${p.x.toFixed(1)},${p.y.toFixed(1)}`)).size === 3
+      ? pass(`three Eyes on a standing player land at different spots within ${spread.eye}px, so its ${cfg.magus.eye.centreRadius}px centre is on them (${off.map((d) => Math.round(d)).join(', ')}px off)`)
       : fail(`eye spots: ${JSON.stringify(eyeSpots)}`);
   }
   // The reticle travels to its offset spot and holds it: it never jumps and doesn't jitter frame to frame.
@@ -415,7 +415,7 @@ test('magus: roster + pips, spacing, Lance / Eye / Orb / Rite, stun rules, zones
       ? pass(`the reticle travels to its spot at no more than its aim speed (${Math.round(top)}px/s) and holds there on a standing player`)
       : fail(`reticle: ${f.length} frames, top ${Math.round(top)}px/s of ${Math.round(steady.speed)}, settled ${settled}`);
   }
-  await setSpread({ spell: 0, orb: 0 });
+  await setSpread({ spell: 0, orb: 0, eye: 0 });
 
   section('5. Orb and the stun');
   await calm();

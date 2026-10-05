@@ -266,6 +266,12 @@ export interface Kit {
   commit(slot: Slot, aim: Aim): Aim;
   /** The cast window elapsed (or the slot is instant): do the thing. */
   cast(slot: Slot, aim: Aim): void;
+  /**
+   * The slot's key went down while the kit may still have something of it in
+   * play (axes still flying out). Asked before the cooldown is checked.
+   * @returns true if the press was used; false lets it be an ordinary cast.
+   */
+  recast?(slot: Slot): boolean;
   update(deltaSeconds: number, nowMs: number): void;
   /** Multiplies the auto cycle (a passive's attack speed). 1 when none. */
   readonly attackSpeedMultiplier: number;

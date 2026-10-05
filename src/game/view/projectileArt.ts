@@ -19,7 +19,7 @@ export const PROJECTILE_ART = {
   fang: { frames: [TEX.proj.fang], rotate: true, trail: T.fang, depth: D.projectiles },
   axe: { frames: [TEX.proj.axe], rotate: false, spin: 2.5, trail: T.axe, depth: D.projectiles },
   spinAxe: { frames: [TEX.proj.spinAxe], rotate: false, spin: 4, trail: T.spinAxe, depth: D.projectiles },
-  cleave: { frames: [TEX.proj.cleave], rotate: false, spin: 3, trail: T.spinAxe, depth: D.projectiles },
+  cleave: { frames: [TEX.proj.cleave], rotate: false, spin: 3, scale: THEME.axeman.cleaveScale, trail: T.spinAxe, depth: D.projectiles },
   hostile: { frames: TEX.proj.hostile, frameMs: 110, rotate: false, trail: T.hostile, depth: D.hostileProjectiles },
   glob: { frames: [TEX.proj.glob], rotate: false, trail: T.glob, depth: D.hostileProjectiles },
   sphere: { frames: [TEX.proj.sphere], rotate: false, trail: T.sphere, depth: D.hostileProjectiles },

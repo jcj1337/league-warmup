@@ -230,7 +230,7 @@ export class Magus extends Caster {
     this.nextCastAt = nowMs + this.spellGapMs;
 
     // A cast starts from where its cursor is, and travels to its aim from there.
-    this.rollAimOffset(id === 'orb' ? MAGUS.aimSpreadPx.orb : MAGUS.aimSpreadPx.spell);
+    this.rollAimOffset(id === 'lance' ? MAGUS.aimSpreadPx.spell : MAGUS.aimSpreadPx[id]);
     this.aimAngle = Math.atan2(this.aim.y - this.y, this.aim.x - this.x);
 
     if (id === 'lance') {

@@ -19,6 +19,8 @@ export interface ProjectileArt {
   rotate: boolean;
   /** Turns per second, end over end (a thrown axe). Overrides `rotate`. */
   spin?: number;
+  /** World px per art px, when it isn't the usual THEME.art.scale (a big axe). */
+  scale?: number;
   trail?: TrailStyle;
   depth: number;
 }
@@ -37,7 +39,7 @@ export class ProjectileView {
     x: number,
     y: number,
     angle: number,
-    scale: number = THEME.art.scale,
+    scale: number = art.scale ?? THEME.art.scale,
   ) {
     this.lastX = x;
     this.lastY = y;

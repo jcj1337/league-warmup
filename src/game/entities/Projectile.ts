@@ -51,7 +51,7 @@ export class Projectile {
     this.vx = Math.cos(cfg.angle) * cfg.speed;
     this.vy = Math.sin(cfg.angle) * cfg.speed;
     this.maxRange = cfg.maxRange ?? Number.POSITIVE_INFINITY;
-    this.view = new ProjectileView(scene, cfg.art, cfg.x, cfg.y, cfg.angle, cfg.artScale ?? THEME.art.scale);
+    this.view = new ProjectileView(scene, cfg.art, cfg.x, cfg.y, cfg.angle, cfg.artScale ?? cfg.art.scale ?? THEME.art.scale);
   }
 
   /** How far it has flown so far. */

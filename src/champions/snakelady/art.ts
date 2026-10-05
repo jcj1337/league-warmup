@@ -4,7 +4,7 @@ import type { ChampionArt } from '../types';
 /**
  * Snake Lady's slime: the same friendly dome as Magic Boy's, in venom green,
  * but the bottom of the body is a coiled snake tail sweeping out to the
- * facing side instead of a flat base. Same face, same crown on top.
+ * facing side instead of a flat base. Same face; her crown is amethyst (`hatPal`).
  *   m body · L light · w shine · d dark · D deepest · k ink · e eye (ink; lights with a motion's glow)
  *   c cheek · s scale · F fang · t tongue
  */
@@ -79,6 +79,8 @@ export const SNAKE_LADY_ART: ChampionArt = {
   },
   glow: 'e',
   pal: PAL,
+  /** An amethyst crown: the violet of her spells, opposite her green; lilac tips, and gems in her own green. */
+  hatPal: { W: P.toxinCore, g: P.toxin, o: P.toxinDeep, r: P.venomLight },
   frameHeight: 16,
   originY: 0.52,
 };

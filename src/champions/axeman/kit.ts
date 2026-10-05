@@ -20,10 +20,11 @@ const SPIN_LOOK: AutoLook = { missile: 'spinAxe', fx: 'axe', muzzle: TEX.player.
  *   Q  readies a spinning axe (he holds up to two). The next auto throws it
  *      for an extra pip; it bounces off and comes down near him, further out
  *      the further he is walking. Standing in its circle as it lands catches it:
- *      the axe is back in his hand and W is ready again
+ *      the axe is back in his hand, W is ready again, and he heals a little
  *   W  a burst of move speed that decays, and attack speed for a while
- *   E  axes in a line through everything: a pip, a slow, a shove aside
- *   R  two great axes across the arena and back to him: a pip each way
+ *   E  a great axe a short way through everything: a pip, a slow, a shove aside
+ *   R  two great axes down a line and back to him, turning just past the first
+ *      enemy they hit or when he presses R again: a pip each way
  *
  * The engine owns the autos; through `autoShot` this changes the one that
  * leaves while he holds an axe. Everything about the falling axe (where, when,
@@ -37,10 +38,11 @@ export class AxeManKit implements Kit {
   readonly drops: AxeDrop[] = [];
   /** R axes in flight. */
   readonly whirls: WhirlingAxes[] = [];
-  /** Drops whose landing spot still follows his move orders, with where he stood when each was thrown. */
-  private readonly steering = new Map<AxeDrop, { x: number; y: number }>();
   /** When W last started. */
   rushStartedAt = Number.NEGATIVE_INFINITY;
+
+  /** Axes caught in a row since the last miss: each one makes the next catch heal more. */
+  catchStreak = 0;
 
   axesThrown = 0;
   axesCaught = 0;
@@ -75,6 +77,14 @@ export class AxeManKit implements Kit {
 
   commit(_slot: Slot, aim: Aim): Aim {
     return aim;
+  }
+
+  /** R again while the axes are still going out: they turn for home now. */
+  recast(slot: Slot): boolean {
+    if (slot !== 'r') return false;
+    const outbound = this.whirls.filter((w) => w.leg === 'out');
+    for (const whirl of outbound) whirl.recall();
+    return outbound.length > 0;
   }
 
   cast(slot: Slot, aim: Aim): void {
@@ -123,36 +133,42 @@ export class AxeManKit implements Kit {
   }
 
   /**
-   * Where a thrown axe comes down, measured from `origin` (where he stood as
-   * it hit): toward where he is walking, as far as that walk reaches from
-   * there up to Q.dropMaxPx. Null when he isn't walking anywhere.
+   * Where a thrown axe comes down, from where he stands as it hits: toward
+   * where he is walking, as far as the rest of that walk up to Q.dropMaxPx,
+   * or right by him when he isn't walking anywhere. Decided once.
    */
-  steeredSpot(origin: { x: number; y: number }): { x: number; y: number } | null {
-    const dest = this.ctx.player.destination;
-    if (!dest) return null;
-    const dx = dest.x - origin.x;
-    const dy = dest.y - origin.y;
+  dropSpot(): { x: number; y: number } {
+    const { player } = this.ctx;
+    const dest = player.destination;
+    const dx = dest ? dest.x - player.x : 0;
+    const dy = dest ? dest.y - player.y : 0;
     const dist = Math.hypot(dx, dy);
-    if (dist <= 1) return null;
-    const reach = Math.min(dist, Q.dropMaxPx);
-    return this.inArena(origin.x + (dx / dist) * reach, origin.y + (dy / dist) * reach);
-  }
-
-  private inArena(x: number, y: number): { x: number; y: number } {
-    const m = ARENA.padding + this.ctx.player.radius;
+    let x = player.x;
+    let y = player.y;
+    if (dist > 1) {
+      const reach = Math.min(dist, Q.dropMaxPx);
+      x += (dx / dist) * reach;
+      y += (dy / dist) * reach;
+    } else {
+      const r = Q.dropIdlePx * Math.sqrt(Math.random());
+      const a = Math.random() * Math.PI * 2;
+      x += Math.cos(a) * r;
+      y += Math.sin(a) * r;
+    }
+    const m = ARENA.padding + player.radius;
     return { x: Phaser.Math.Clamp(x, m, ARENA.width - m), y: Phaser.Math.Clamp(y, m, ARENA.height - m) };
   }
 
-  /** The axe bounces off its target: it will land by him, or out along his walk (see steeredSpot). */
+  /** The axe bounces off its target; where it will land is fixed from this moment. */
   private dropAxe(fromX: number, fromY: number): void {
-    const { player } = this.ctx;
-    const origin = { x: player.x, y: player.y };
-    const r = Q.dropIdlePx * Math.sqrt(Math.random());
-    const a = Math.random() * Math.PI * 2;
-    const spot = this.steeredSpot(origin) ?? this.inArena(origin.x + Math.cos(a) * r, origin.y + Math.sin(a) * r);
-    const drop = new AxeDrop(this.ctx.scene, fromX, fromY, spot.x, spot.y, this.now, this.now + Q.airMs, Q.catchRadius);
-    this.drops.push(drop);
-    this.steering.set(drop, origin);
+    const spot = this.dropSpot();
+    this.drops.push(new AxeDrop(this.ctx.scene, fromX, fromY, spot.x, spot.y, this.now, this.now + Q.airMs, Q.catchRadius));
+  }
+
+  /** What the next catch heals: more for every catch in a row, to a cap. */
+  get nextCatchHeal(): number {
+    const H = Q.catchHeal;
+    return Math.min(H.max, H.base + H.perCatch * this.catchStreak);
   }
 
   private underIt(drop: AxeDrop): boolean {
@@ -160,12 +176,15 @@ export class AxeManKit implements Kit {
     return Math.hypot(player.x - drop.x, player.y - drop.y) <= drop.radius;
   }
 
-  /** Back in his hand: an axe ready for the next auto, the hold timer fresh, W off cooldown. */
+  /** Back in his hand: an axe ready for the next auto, the hold timer fresh, W off cooldown, and some HP back. */
   private catchAxe(drop: AxeDrop): void {
     drop.finish(true);
     this.axesCaught++;
     this.takeAxe();
     this.ctx.cooldowns.reduce(Number.POSITIVE_INFINITY, ['w']);
+    const healed = this.ctx.player.heal(this.nextCatchHeal);
+    this.catchStreak++;
+    if (healed > 0) Fx.of(this.ctx.scene).popup(drop.x, drop.y - this.ctx.player.radius - 12, `+${healed}`, THEME.ui.good);
     this.ctx.player.playPassivePulse(this.held >= Q.maxHeld);
   }
 
@@ -198,31 +217,22 @@ export class AxeManKit implements Kit {
     if (this.held > 0 && nowMs >= this.holdUntil) this.held = 0;
 
     for (const drop of this.drops) {
-      const origin = this.steering.get(drop);
-      if (origin) {
-        if (nowMs - (drop.landsAt - Q.airMs) >= Q.steerMs) this.steering.delete(drop);
-        else {
-          const spot = this.steeredSpot(origin);
-          if (spot) drop.moveTo(spot.x, spot.y);
-        }
-      }
-      if (drop.state === 'air' && nowMs >= drop.landsAt) {
-        if (this.underIt(drop)) this.catchAxe(drop);
-        else drop.land(nowMs, Q.groundMs);
+      if (drop.state === 'air') {
+        // In reach from the moment it comes down to him, a beat before it would hit the ground.
+        if (nowMs >= drop.landsAt - Q.catchEarlyMs && this.underIt(drop)) this.catchAxe(drop);
+        else if (nowMs >= drop.landsAt) drop.land(nowMs, Q.groundMs);
       } else if (drop.state === 'ground') {
         if (this.underIt(drop)) this.catchAxe(drop);
         else if (nowMs >= drop.goneAt) {
           this.axesMissed++;
+          this.catchStreak = 0;
           drop.finish(false);
         }
       }
       drop.sync(nowMs, deltaSeconds);
     }
     for (let i = this.drops.length - 1; i >= 0; i--) {
-      if (this.drops[i].state === 'done') {
-        this.steering.delete(this.drops[i]);
-        this.drops.splice(i, 1);
-      }
+      if (this.drops[i].state === 'done') this.drops.splice(i, 1);
     }
 
     for (const whirl of this.whirls) whirl.update(deltaSeconds, this.ctx.enemies(), player);
@@ -256,10 +266,10 @@ export class AxeManKit implements Kit {
   clear(): void {
     for (const drop of this.drops) drop.destroy();
     this.drops.length = 0;
-    this.steering.clear();
     for (const whirl of this.whirls) whirl.kill();
     this.whirls.length = 0;
     this.held = 0;
+    this.catchStreak = 0;
     this.rushStartedAt = Number.NEGATIVE_INFINITY;
     this.heldView.hide();
   }

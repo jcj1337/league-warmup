@@ -20,6 +20,7 @@ test('axeman: picked from the profile, Q axes on autos, where the axe lands, cat
       lastCancelAt: g.attacks.lastCancelAt as number,
       cd: { q: g.cooldowns.remainingMs('q'), w: g.cooldowns.remainingMs('w'), e: g.cooldowns.remainingMs('e'), r: g.cooldowns.remainingMs('r') },
       held: g.kit.held as number,
+      streak: g.kit.catchStreak as number,
       shown: g.kit.heldView.shown as number,
       drops: g.kit.drops.map((d) => ({ x: d.x, y: d.y, state: d.state, landsAt: d.landsAt })),
       whirls: g.kit.whirls.length as number,
@@ -27,7 +28,7 @@ test('axeman: picked from the profile, Q axes on autos, where the axe lands, cat
       rows: g.kit.statRows().length as number,
       gems: { stacks: hud.passiveStacks as number, max: hud.passiveMaxStacks as number },
       enemies: g.director.enemies.map((e) => ({ x: e.x, y: e.y, hp: e.hp, active: e.active, slow: e.slowFactor })),
-      player: { x: g.player.x, y: g.player.y, speed: g.player.moveSpeed },
+      player: { x: g.player.x, y: g.player.y, speed: g.player.moveSpeed, hp: g.player.hp as number },
       slots: window.__warmup.scene.getScene('UIScene').abilityBar.slots.map((s) => s.keyText.text),
       names: window.__warmup.scene.getScene('UIScene').championRow.container.list.filter((o) => typeof o.text === 'string').map((o) => o.text),
     };
@@ -56,15 +57,25 @@ test('axeman: picked from the profile, Q axes on autos, where the axe lands, cat
     const g = window.__warmup.scene.getScene('GameScene');
     g.attacks.commandAttack(g.director.enemies[0]);
   });
-  /** Wait for the thrown axe to bounce (a drop exists) and, in that same frame, issue a move order `dx` px to the side. */
-  const dropThenWalk = (dx: number | null) => page.waitForFunction((dx) => {
-    const g = window.__warmup.scene.getScene('GameScene');
-    if (g.kit.drops.length === 0) return false;
-    g.attacks.onStop();
-    const origin = { x: g.player.x, y: g.player.y };
-    if (dx !== null) g.player.moveTo(g.player.x + dx, g.player.y);
-    return origin;
-  }, dx, { timeout: 4000 }).then((h) => h.jsonValue() as Promise<{ x: number; y: number }>);
+  /**
+   * Throw the axe in hand at the first enemy. Once it is in the air the attack order is dropped and, with `dx`,
+   * he is sent walking `dx` px to the side, so that is his move order as the axe hits.
+   * @returns where he stood in the frame the axe bounced.
+   */
+  const throwAxe = async (dx: number | null) => {
+    await attack();
+    await page.waitForFunction(() => window.__warmup.scene.getScene('GameScene').attacks.missilesInFlight > 0, null, { timeout: 3000 });
+    await page.evaluate((dx) => {
+      const g = window.__warmup.scene.getScene('GameScene');
+      g.attacks.onStop();
+      if (dx !== null) g.player.moveTo(640 + dx, 360);
+    }, dx);
+    const h = await page.waitForFunction(() => {
+      const g = window.__warmup.scene.getScene('GameScene');
+      return g.kit.drops.length > 0 ? { x: g.player.x, y: g.player.y } : false;
+    }, null, { timeout: 4000 });
+    return h.jsonValue() as Promise<{ x: number; y: number }>;
+  };
   const settle = (ms: number) => page.waitForTimeout(ms);
 
   // === 1. Who =================================================================
@@ -99,13 +110,15 @@ test('axeman: picked from the profile, Q axes on autos, where the axe lands, cat
   {
     const m = await page.evaluate(() => {
       const g = window.__warmup.scene.getScene('GameScene');
+      g.attacks.onStop();
       return { key: g.attacks.missiles[0].view.textureKey as string, held: g.kit.held as number };
     });
     m.key === 'proj_spin_axe' && m.held === 0
       ? pass('the next auto throws it: the missile is the spinning axe, and his hand is empty')
       : fail(`thrown: ${JSON.stringify(m)}`);
   }
-  const origin = await dropThenWalk(null);
+  await page.waitForFunction(() => window.__warmup.scene.getScene('GameScene').kit.drops.length > 0, null, { timeout: 4000 });
+  const origin = { x: 640, y: 360 };
   {
     const s = await G();
     const d = s.drops[0];
@@ -113,59 +126,94 @@ test('axeman: picked from the profile, Q axes on autos, where the axe lands, cat
     s.enemies[0].hp === 9 - 1 - cfg.Q.bonusPips && s.stats.axesThrown === 1
       ? pass(`it hits for ${1 + cfg.Q.bonusPips} pips (9 -> ${s.enemies[0].hp})`)
       : fail(`axe hit: hp ${s.enemies[0].hp}, stats ${JSON.stringify(s.stats)}`);
-    s.drops.length === 1 && d.state === 'air' && off <= cfg.Q.dropIdlePx + 1
-      ? pass(`and bounces up: standing still, it will land ${Math.round(off)}px from him (within ${cfg.Q.dropIdlePx})`)
+    s.drops.length === 1 && d.state === 'air' && off <= cfg.Q.dropIdlePx + 1 && cfg.Q.dropIdlePx < cfg.Q.catchRadius
+      ? pass(`and bounces up: standing still, it will land ${Math.round(off)}px from him (within ${cfg.Q.dropIdlePx}, inside the ${cfg.Q.catchRadius}px circle)`)
       : fail(`idle drop: ${JSON.stringify({ drops: s.drops, origin })}`);
   }
-  // He is under it when it lands: caught. W, on cooldown, is ready again.
+  // He is under it when it lands: caught. W, on cooldown, is ready again, and he heals.
+  await page.evaluate(() => { window.__warmup.scene.getScene('GameScene').player.hp = 50; });
   await page.keyboard.press('KeyW');
   await settle(40);
   const wBefore = (await G()).cd.w;
+  const landsAt = (await G()).drops[0].landsAt;
   await page.waitForFunction(() => window.__warmup.scene.getScene('GameScene').kit.drops.length === 0, null, { timeout: 4000 });
   {
     const s = await G();
     s.held === 1 && s.stats.axesCaught === 1 && s.stats.axesMissed === 0
       ? pass('standing in the circle as it lands catches it: the axe is back in his hand')
       : fail(`catch: ${JSON.stringify({ held: s.held, stats: s.stats })}`);
+    // Caught as the drawn axe reaches him, not a beat later: by its landing time it is already in his hand.
+    s.now <= landsAt + 60 && cfg.Q.catchEarlyMs > 0
+      ? pass(`he has it as it reaches him, up to ${cfg.Q.catchEarlyMs}ms before it would touch the ground (${Math.round(landsAt - s.now)}ms to spare when checked)`)
+      : fail(`catch timing: checked ${Math.round(s.now - landsAt)}ms after landing`);
     wBefore > cfg.W.cooldownMs - 2000 && s.cd.w === 0
       ? pass(`catching resets W (${Math.round(wBefore)}ms left -> ready)`)
       : fail(`W reset: ${wBefore} -> ${s.cd.w}`);
+    s.player.hp === 50 + cfg.Q.catchHeal.base && s.streak === 1
+      ? pass(`and heals ${cfg.Q.catchHeal.base} HP, the first of a streak (50 -> ${s.player.hp})`)
+      : fail(`catch heal: hp ${s.player.hp}, streak ${s.streak}`);
+    // Each catch in a row heals more, to a cap.
+    const heals = await page.evaluate(() => {
+      const k = window.__warmup.scene.getScene('GameScene').kit;
+      const out = [];
+      const keep = k.catchStreak;
+      for (k.catchStreak = 0; k.catchStreak < 7; k.catchStreak++) out.push(k.nextCatchHeal);
+      k.catchStreak = keep;
+      return out as number[];
+    });
+    heals.join(',') === '5,10,15,20,25,25,25'
+      ? pass(`a streak of catches heals ${heals.slice(0, 5).join(', ')}, then stays at ${cfg.Q.catchHeal.max}`)
+      : fail(`streak heals: ${heals.join(',')}`);
   }
 
   // === 3. Where it lands ========================================================
   section('3. Where the axe lands');
-  for (const [dx, label] of [[-400, 'a long click left'], [60, 'a short click right']] as Array<[number, string]>) {
-    await stage([{ x: 800, y: 360, hp: 9 }]);
-    await page.evaluate(() => { const k = window.__warmup.scene.getScene('GameScene').kit; k.held = 1; k.holdUntil = Number.POSITIVE_INFINITY; });
-    await attack();
-    const from = await dropThenWalk(dx);
-    await settle(cfg.Q.steerMs + 80);
-    const s = await G();
-    const d = s.drops[0];
-    const want = Math.sign(dx) * Math.min(Math.abs(dx), cfg.Q.dropMaxPx);
-    d && Math.abs(d.x - from.x - want) <= 2 && Math.abs(d.y - from.y) <= 2
-      ? pass(`${label} (${dx}px): it comes down ${Math.round(d.x - from.x)}px that way${Math.abs(dx) > cfg.Q.dropMaxPx ? `, the furthest it goes (${cfg.Q.dropMaxPx})` : ', as far as the click'}`)
-      : fail(`${label}: drop ${JSON.stringify(d)} from ${JSON.stringify(from)}, wanted dx ${want}`);
-  }
-  // A click that comes after the steer window doesn't move it.
+  // Walking far to the left as it hits: it lands the furthest it goes that way, from where he stood then.
   await stage([{ x: 800, y: 360, hp: 9 }]);
   await page.evaluate(() => { const k = window.__warmup.scene.getScene('GameScene').kit; k.held = 1; k.holdUntil = Number.POSITIVE_INFINITY; });
-  await attack();
   {
-    await dropThenWalk(null);
-    await settle(cfg.Q.steerMs + 80);
-    const before = (await G()).drops[0];
+    const from = await throwAxe(-400);
+    const d = (await G()).drops[0];
+    // `from` is read a frame after the bounce at most, so allow that much walking.
+    d && Math.abs(d.x - (from.x - cfg.Q.dropMaxPx)) <= 10 && Math.abs(d.y - 360) <= 1
+      ? pass(`walking far to the left as it hits: it comes down ${Math.round(from.x - d.x)}px to his left, the furthest it goes (${cfg.Q.dropMaxPx})`)
+      : fail(`long click: drop ${JSON.stringify(d)} from ${JSON.stringify(from)}`);
+  }
+  // A short click: it lands on the click, and he walks onto it and catches it.
+  await stage([{ x: 800, y: 360, hp: 9 }]);
+  await page.evaluate(() => { const k = window.__warmup.scene.getScene('GameScene').kit; k.held = 1; k.holdUntil = Number.POSITIVE_INFINITY; });
+  {
+    await throwAxe(60);
+    const first = await G();
+    const d = first.drops[0];
+    d && Math.abs(d.x - 700) <= 1 && Math.abs(d.y - 360) <= 1
+      ? pass('a short click 60px to the right: it comes down on the click, 60px away')
+      : fail(`short click: drop ${JSON.stringify(d)}`);
+    await page.waitForFunction(() => window.__warmup.scene.getScene('GameScene').kit.drops.length === 0, null, { timeout: 4000 });
+    const s = await G();
+    s.stats.axesCaught === first.stats.axesCaught + 1 && s.held === 1
+      ? pass('he walks onto the spot and catches it')
+      : fail(`walk-on catch: ${JSON.stringify({ held: s.held, stats: s.stats })}`);
+  }
+  // Once the circle is shown, that is where it lands: no later click moves it.
+  await stage([{ x: 800, y: 360, hp: 9 }]);
+  await page.evaluate(() => { const k = window.__warmup.scene.getScene('GameScene').kit; k.held = 1; k.holdUntil = Number.POSITIVE_INFINITY; });
+  {
+    await page.evaluate(() => { window.__warmup.scene.getScene('GameScene').kit.catchStreak = 3; });
+    await throwAxe(null);
+    const start = await G();
+    const before = start.drops[0];
     await page.evaluate(() => { const g = window.__warmup.scene.getScene('GameScene'); g.player.moveTo(g.player.x, g.player.y + 300); });
     await settle(150);
     const after = (await G()).drops[0];
     before && after && before.x === after.x && before.y === after.y
-      ? pass(`after ${cfg.Q.steerMs}ms the spot is fixed: a later click no longer moves it`)
+      ? pass('once its circle is shown the spot is fixed: a click right after the hit does not move it')
       : fail(`late click: ${JSON.stringify({ before, after })}`);
     // He walked away from it: it lands, lies there a moment, and is gone.
     await page.waitForFunction(() => window.__warmup.scene.getScene('GameScene').kit.drops.length === 0, null, { timeout: 4000 });
     const s = await G();
-    s.held === 0 && s.stats.axesMissed === 1 && s.stats.axesCaught === 1
-      ? pass('not under it when it lands: the axe is lost (one caught, one missed so far)')
+    s.held === 0 && s.stats.axesMissed === start.stats.axesMissed + 1 && s.streak === 0
+      ? pass('not under it when it lands: the axe is lost, and the heal streak with it')
       : fail(`miss: ${JSON.stringify({ held: s.held, stats: s.stats })}`);
   }
 
@@ -230,22 +278,24 @@ test('axeman: picked from the profile, Q axes on autos, where the axe lands, cat
 
   // === 6. E ======================================================================
   section('6. E');
-  // Two in the line to his right, one just above it and one just below: both hit, slowed, shoved off it.
-  await stage([{ x: 800, y: 340, hp: 5 }, { x: 900, y: 385, hp: 5 }, { x: 800, y: 560, hp: 5 }]);
+  // Two in the line to his right, one above it and one below: both hit, slowed, shoved off it. One past its reach.
+  await stage([{ x: 760, y: 320, hp: 5 }, { x: 850, y: 400, hp: 5 }, { x: 1040, y: 360, hp: 5 }]);
   await page.mouse.move(1000, 360);
   await page.keyboard.press('KeyE');
   await page.waitForFunction(() => window.__warmup.scene.getScene('GameScene').kit.eHits >= 2, null, { timeout: 4000 });
   {
     const s = await G();
     const [a, b, far] = s.enemies;
-    a.hp === 4 && b.hp === 4 && far.hp === 5 && s.stats.eHits === 2
-      ? pass('E passes through the line: a pip from each enemy in it, none from the one out of it')
+    await settle(400);
+    const late = await G();
+    a.hp === 4 && b.hp === 4 && late.enemies[2].hp === 5 && late.stats.eHits === 2 && cfg.E.maxRange <= cfg.AUTO.range
+      ? pass(`E is wide (${cfg.E.radius}px either side) and short (${cfg.E.maxRange}px, about his auto range): a pip from each enemy in it, none from one 400px away`)
       : fail(`E pips: ${JSON.stringify(s.enemies.map((e) => e.hp))}`);
     Math.abs(a.slow - (1 - cfg.E.slowFraction)) < 0.01 && Math.abs(b.slow - (1 - cfg.E.slowFraction)) < 0.01 && far.slow === 1
       ? pass(`and slows them ${cfg.E.slowFraction * 100}%`)
       : fail(`E slow: ${JSON.stringify(s.enemies.map((e) => e.slow))}`);
-    Math.abs(a.y - (340 - cfg.E.knockPx)) < 3 && Math.abs(b.y - (385 + cfg.E.knockPx)) < 3 && Math.abs(a.x - 800) < 3 && far.y === 560
-      ? pass(`and shoves each ${cfg.E.knockPx}px off the line, to the side it was on (y 340 -> ${Math.round(a.y)}, 385 -> ${Math.round(b.y)})`)
+    Math.abs(a.y - (320 - cfg.E.knockPx)) < 3 && Math.abs(b.y - (400 + cfg.E.knockPx)) < 3 && Math.abs(a.x - 760) < 3 && far.y === 360
+      ? pass(`and shoves each ${cfg.E.knockPx}px off the line, to the side it was on (y 320 -> ${Math.round(a.y)}, 400 -> ${Math.round(b.y)})`)
       : fail(`E shove: ${JSON.stringify(s.enemies.map((e) => [e.x, e.y]))}`);
   }
 
@@ -258,15 +308,53 @@ test('axeman: picked from the profile, Q axes on autos, where the axe lands, cat
   {
     const out = await G();
     out.enemies[0].hp === 5 - cfg.R.pips && out.whirls === 1
-      ? pass(`R crosses the arena through everything: ${cfg.R.pips} pip on the way out`)
+      ? pass(`R flies down its line through everything: ${cfg.R.pips} pip on the way out`)
       : fail(`R out: hp ${out.enemies[0].hp}, whirls ${out.whirls}`);
-    // He walks off the line; the axes still come home to him, and hit again on the way.
+    // It carries on a little past the first enemy, then turns. He walks off the line; it still comes home, hitting again.
     await page.evaluate(() => { const g = window.__warmup.scene.getScene('GameScene'); g.player.moveTo(g.player.x - 60, g.player.y); });
-    await page.waitForFunction(() => window.__warmup.scene.getScene('GameScene').kit.whirls.length === 0, null, { timeout: 6000 });
+    const furthest = await page.evaluate(() => new Promise<number>((res) => {
+      const g = window.__warmup.scene.getScene('GameScene');
+      let far = 0;
+      const tick = () => {
+        const w = g.kit.whirls[0];
+        if (!w) return res(far);
+        far = Math.max(far, w.x);
+        requestAnimationFrame(tick);
+      };
+      tick();
+    }));
     const back = await G();
+    const hitAt = 900 - cfg.R.radius - 28;
+    furthest > 900 && furthest <= hitAt + cfg.R.overshootPx + 40
+      ? pass(`it turns ~${cfg.R.overshootPx}px past the first enemy it hits (reached x ${Math.round(furthest)}, the enemy at 900), not at the arena's edge`)
+      : fail(`R turn: furthest x ${furthest}, hit near ${hitAt}`);
     back.enemies[0].hp === 5 - cfg.R.pips - cfg.R.returnPips && back.stats.rHits === 2
-      ? pass(`it turns at the edge and flies back to him, wherever he went: ${cfg.R.returnPips} pip again on the way home`)
+      ? pass(`and flies back to him, wherever he went: ${cfg.R.returnPips} pip again on the way home`)
       : fail(`R back: hp ${back.enemies[0].hp}, stats ${JSON.stringify(back.stats)}`);
+  }
+  // R again while it is still going out: it turns at once. The second press is not a new cast.
+  await stage([{ x: 300, y: 620, hp: 5 }]);
+  await page.mouse.move(1100, 360);
+  await page.keyboard.press('KeyR');
+  await page.waitForFunction(() => window.__warmup.scene.getScene('GameScene').kit.whirls.length === 1, null, { timeout: 4000 });
+  await settle(120);
+  {
+    const cdBefore = (await G()).cd.r;
+    await page.keyboard.press('KeyR');
+    const r = await page.evaluate(() => {
+      const g = window.__warmup.scene.getScene('GameScene');
+      const w = g.kit.whirls[0];
+      return { leg: w?.leg, x: w?.x, count: g.kit.whirls.length, cd: g.cooldowns.remainingMs('r') };
+    });
+    r.leg === 'back' && r.count === 1 && r.x < 1000 && r.cd > 0 && r.cd <= cdBefore
+      ? pass(`pressing R again recalls it early (turned at x ${Math.round(r.x)}, well short of the edge); the cooldown carries on`)
+      : fail(`recast: ${JSON.stringify({ r, cdBefore })}`);
+    await page.waitForFunction(() => window.__warmup.scene.getScene('GameScene').kit.whirls.length === 0, null, { timeout: 6000 });
+    await page.keyboard.press('KeyR');
+    const s = await G();
+    s.whirls === 0 && s.cd.r > 0
+      ? pass('with nothing out, R on cooldown does nothing')
+      : fail(`R on cooldown: ${JSON.stringify({ whirls: s.whirls, cd: s.cd.r })}`);
   }
 
   await finish();

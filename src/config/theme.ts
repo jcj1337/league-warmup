@@ -184,14 +184,14 @@ export const PALETTE = {
   stoneDeep: 0x5c6270,
 
   // ---- axeman: a white slime with a brown beard, a black crown and steel axes ----
-  snowDeep: 0x8f8a9c,
-  snowShade: 0xc3bfcc,
-  snow: 0xeeebe6,
-  snowShine: 0xffffff,
+  snowDeep: 0x6f6a66,
+  snowShade: 0x9b958e,
+  snow: 0xcbc5bb,
+  snowShine: 0xece7dd,
   beardDark: 0x4a2a12,
   beard: 0x7a4a22,
   beardLight: 0xa66c38,
-  crownBlack: 0x413c4a,
+  crownBlack: 0x4f4a5a,
   crownBlackDeep: 0x121016,
   steelDeep: 0x5a6172,
   steel: 0xaab3c4,
@@ -590,8 +590,9 @@ export const THEME = {
       catchSparks: 9,
       missColor: P.creamFaint,
     },
-    /** R is the E sprite at this scale, as wide as its hitbox. */
-    whirlScale: 6,
+    /** E's axe at this scale (an 11px sprite), near as wide as its hitbox; R is the same sprite, a little larger still. */
+    cleaveScale: 9,
+    whirlScale: 7,
     /** W: a ring off his feet as the rush starts. */
     rushRingPx: 40,
     rushRingMs: 240,
