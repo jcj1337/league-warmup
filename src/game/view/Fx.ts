@@ -4,7 +4,7 @@ import { THEME } from '../../config/theme';
 import { mulberry32 } from '../art/pixel';
 import { pixelText } from '../art/font';
 import { TEX } from '../art/textures';
-import { dottedRing } from './pixelDraw';
+import { dottedRing, easeOut, smoothRing, stripPoints, wedgePoints } from './pixelDraw';
 
 interface Particle {
   img: Phaser.GameObjects.Image;
@@ -36,6 +36,29 @@ interface Ring {
   dot: number;
   from: number;
   to: number;
+}
+
+/**
+ * A smooth shape that plays once and fades: a ring running outward (a
+ * shockwave), or a flash on the ground where something landed (disc, strip,
+ * wedge). The hostile spells' and the Bulwark's impacts are made of these.
+ */
+interface Shape {
+  active: boolean;
+  kind: 'wave' | 'disc' | 'strip' | 'wedge';
+  x: number;
+  y: number;
+  /** wave: start and end radius. disc / wedge: `r1` is the radius. strip: `r1` is the length. */
+  r0: number;
+  r1: number;
+  angle: number;
+  /** strip: half width. wedge: half angle. wave: half the arc drawn (PI = a full ring). */
+  half: number;
+  age: number;
+  life: number;
+  color: number;
+  alpha: number;
+  width: number;
 }
 
 interface Popup {
@@ -97,12 +120,16 @@ export class Fx {
   private readonly golds: GoldPopup[] = [];
   /** The newest kill-gold popup, which kills inside THEME.killGold.mergeMs add into. */
   private lastGold: GoldPopup | null = null;
+  private readonly shapes: Shape[] = [];
   private readonly ringGfx: Phaser.GameObjects.Graphics;
+  /** Ground flashes: above the telegraphs, below every unit. */
+  private readonly groundGfx: Phaser.GameObjects.Graphics;
   /** Decorative RNG, never shared with gameplay. */
   private readonly rand = mulberry32(0xf00d);
 
   constructor(private readonly scene: Phaser.Scene) {
     this.ringGfx = scene.add.graphics().setDepth(THEME.depth.fx);
+    this.groundGfx = scene.add.graphics().setDepth(THEME.depth.groundFx + 0.6);
     REGISTRY.set(scene, this);
   }
 
@@ -191,6 +218,35 @@ export class Fx {
       this.rings.push(ring);
     }
     Object.assign(ring, { active: true, x, y, r0, r1, age: 0, life: Math.max(1, life), color, alpha, dot, from, to });
+  }
+
+  private shape(s: Omit<Shape, 'active' | 'age'>): void {
+    let shape = this.shapes.find((q) => !q.active);
+    if (!shape) {
+      shape = { active: false, kind: 'wave', x: 0, y: 0, r0: 0, r1: 0, angle: 0, half: Math.PI, age: 0, life: 1, color: 0, alpha: 1, width: 2 };
+      this.shapes.push(shape);
+    }
+    Object.assign(shape, s, { active: true, age: 0, life: Math.max(1, s.life) });
+  }
+
+  /** A smooth ring (or an arc `half` either side of `angle`) running out from r0 to r1 and fading. */
+  wave(x: number, y: number, r0: number, r1: number, life: number, color: number, alpha = 1, width = 2, angle = 0, half = Math.PI): void {
+    this.shape({ kind: 'wave', x, y, r0, r1, angle, half, life, color, alpha, width });
+  }
+
+  /** A disc of light on the ground that swells a little and fades. */
+  flashDisc(x: number, y: number, radius: number, life: number, color: number, alpha = 0.6): void {
+    this.shape({ kind: 'disc', x, y, r0: 0, r1: radius, angle: 0, half: 0, life, color, alpha, width: 0 });
+  }
+
+  /** A strip of light on the ground from (x, y) along `angle`, narrowing onto its centre line as it fades. */
+  flashStrip(x: number, y: number, angle: number, length: number, halfWidth: number, life: number, color: number, alpha = 0.6): void {
+    this.shape({ kind: 'strip', x, y, r0: 0, r1: length, angle, half: halfWidth, life, color, alpha, width: 0 });
+  }
+
+  /** A wedge of light on the ground, fading. */
+  flashWedge(x: number, y: number, angle: number, halfAngle: number, radius: number, life: number, color: number, alpha = 0.6): void {
+    this.shape({ kind: 'wedge', x, y, r0: 0, r1: radius, angle, half: halfAngle, life, color, alpha, width: 0 });
   }
 
   /** Floating pixel text: damage numbers, the CANCEL tag. */
@@ -437,6 +493,28 @@ export class Fx {
       dottedRing(g, r.x, r.y, r.r0 + (r.r1 - r.r0) * eased, r.color, r.alpha * (1 - t), r.dot, r.from, r.to);
     }
 
+    const ground = this.groundGfx;
+    ground.clear();
+    for (const s of this.shapes) {
+      if (!s.active) continue;
+      s.age += ms;
+      if (s.age >= s.life) {
+        s.active = false;
+        continue;
+      }
+      const t = s.age / s.life;
+      const out = easeOut(t);
+      const fade = (1 - t) * (1 - t);
+      if (s.kind === 'wave') {
+        smoothRing(g, s.x, s.y, s.r0 + (s.r1 - s.r0) * out, s.color, s.alpha * (1 - t), s.width, s.angle - s.half, s.angle + s.half);
+        continue;
+      }
+      ground.fillStyle(s.color, Math.min(1, s.alpha * fade));
+      if (s.kind === 'disc') ground.fillCircle(s.x, s.y, s.r1 * (0.85 + 0.15 * out));
+      else if (s.kind === 'strip') ground.fillPoints(stripPoints(s.x, s.y, s.angle, s.r1, s.half * (1 - 0.7 * out)), true);
+      else ground.fillPoints(wedgePoints(s.x, s.y, s.angle, s.half, s.r1 * (0.85 + 0.15 * out), 16), true);
+    }
+
     for (const p of this.popups) {
       if (!p.active) continue;
       p.age += ms;
@@ -476,6 +554,8 @@ export class Fx {
       }
     }
     for (const r of this.rings) r.active = false;
+    for (const s of this.shapes) s.active = false;
+    this.groundGfx.clear();
     for (const p of this.popups) {
       p.active = false;
       p.text.setVisible(false);

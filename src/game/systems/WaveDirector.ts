@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import {
   ARENA,
+  BULWARK,
   ENDLESS,
   ENEMIES,
   MAGUS,
@@ -19,6 +20,7 @@ import { Target } from '../entities/Target';
 import { Pursuer } from '../entities/Pursuer';
 import { Magus } from '../entities/Magus';
 import { Sovereign } from '../entities/Sovereign';
+import { Bulwark } from '../entities/Bulwark';
 import { mulberry32 } from '../art/pixel';
 import type { GameClock } from './GameClock';
 import type { EnemyFirePressure } from './EnemyProjectileSystem';
@@ -60,6 +62,12 @@ const ARCHETYPES: Record<EnemyArchetype, ArchetypeSpec> = {
     create: (scene, clock, x, y, pips, stage) => new Sovereign(scene, clock, x, y, pips, stage),
     radius: SOVEREIGN.radius,
     minSpawnDistance: TARGETS.minSpawnDistanceFromPlayer + 120,
+  },
+  bulwark: {
+    create: (scene, clock, x, y, pips, stage) => new Bulwark(scene, clock, x, y, pips, stage),
+    radius: BULWARK.radius,
+    // It walks you down like the Pursuer, and it is the biggest body on the field.
+    minSpawnDistance: TARGETS.minSpawnDistanceFromPlayer + 160,
   },
 };
 
@@ -324,9 +332,12 @@ export class WaveDirector implements EnemyFirePressure {
    * A generated wave, bought from a budget of DIFFICULTY.waveSize points:
    *   1. a mob's first appearance — Wave 1 of its unlockStage — fields exactly
    *      one of it, first;
-   *   2. then mobs are drawn by weight among those unlocked whose cost still
+   *   2. the stage's last wave fields every unlocked capstone (as many as its
+   *      maxPerWave allows), first;
+   *   3. then mobs are drawn by weight among those unlocked whose cost still
    *      fits the budget, each held to its maxShare of the budget and its
-   *      maxPerWave, until nothing fits.
+   *      maxPerWave, until nothing fits. A mob that a fielded one crowds out
+   *      (ENEMIES[id].crowdsOut) is never drawn.
    * Heavier mobs cost more, so a wave of them fields fewer bodies. Seeded per
    * run and wave, so the roster is fixed once rolled.
    */
@@ -340,11 +351,19 @@ export class WaveDirector implements EnemyFirePressure {
     let budget = stageDifficulty(stage).waveSize;
     const roster = Object.fromEntries(IDS.map((id) => [id, 0])) as ScaledRoster;
 
-    const debuts = waveIndex === 0 ? this.unlocksOn(stage) : [];
+    const debuts = waveIndex === 0 ? this.unlocksOn(stage).filter((id) => !entry(id).capstone) : [];
     for (const id of debuts) {
       roster[id] = 1;
       budget -= entry(id).cost;
     }
+    const capstones = waveIndex === this.wavesIn(stageIndex) - 1
+      ? IDS.filter((id) => entry(id).capstone && entry(id).unlockStage <= stage)
+      : [];
+    for (const id of capstones) {
+      roster[id] = entry(id).maxPerWave ? Math.max(1, this.perWaveCap(id, stage)) : 1;
+      budget -= entry(id).cost * roster[id];
+    }
+    const crowdedOut = (id: EnemyArchetype) => IDS.some((other) => roster[other] > 0 && entry(other).crowdsOut?.includes(id));
     const cap = (id: EnemyArchetype) => Math.min(
       Math.max(1, Math.floor(entry(id).maxShare * stageDifficulty(stage).waveSize / entry(id).cost)),
       this.perWaveCap(id, stage),
@@ -352,7 +371,7 @@ export class WaveDirector implements EnemyFirePressure {
 
     for (;;) {
       const options = IDS.filter((id) => !debuts.includes(id) && entry(id).unlockStage <= stage
-        && entry(id).weight > 0 && entry(id).cost <= budget + 1e-9 && roster[id] < cap(id));
+        && entry(id).weight > 0 && entry(id).cost <= budget + 1e-9 && roster[id] < cap(id) && !crowdedOut(id));
       if (options.length === 0) break;
       const total = options.reduce((n, id) => n + entry(id).weight, 0);
       let pick = rand() * total;

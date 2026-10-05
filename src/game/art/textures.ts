@@ -9,7 +9,7 @@ import { SPRITES } from './sprites';
  */
 export const TEX = {
   px: 'px',
-  shadow: { s: 'shadow_s', m: 'shadow_m', l: 'shadow_l' },
+  shadow: { s: 'shadow_s', m: 'shadow_m', l: 'shadow_l', xl: 'shadow_xl' },
   /** The player's body frames are composed per champion and look (src/game/art/look.ts); only this is static. */
   player: { muzzle: 'fx_muzzle', muzzleVenom: 'fx_muzzle_venom' },
   basic: { frames: ['basic_0', 'basic_1'], spit: 'basic_spit' },
@@ -19,6 +19,17 @@ export const TEX = {
     crouch: 'pursuer_crouch',
     slam: 'pursuer_slam',
     alert: 'fx_alert',
+  },
+  bulwark: {
+    walk: ['bulwark_walk_0', 'bulwark_walk_1'],
+    windup: 'bulwark_windup',
+    winded: 'bulwark_winded',
+    bareWalk: ['bulwark_bare_0', 'bulwark_bare_1'],
+    bareWindup: 'bulwark_bare_windup',
+    bareWinded: 'bulwark_bare_winded',
+    club: 'bulwark_club',
+    blade: 'bulwark_blade',
+    plate: 'bulwark_plate',
   },
   sovereign: {
     idle: ['sovereign_0', 'sovereign_1'],

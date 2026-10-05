@@ -654,6 +654,8 @@ export class GameScene extends Phaser.Scene {
         stunned: this.player.isStunned,
       },
       damagePlayer: (amount, source, kind) => this.combat.enemyHit(amount, source, kind),
+      stunPlayer: (ms) => this.stunPlayer(ms),
+      slowPlayer: (fraction, ms) => this.player.slow(this.clock.now, fraction, ms),
       spells: this.hostileSpells,
       attackTokens: this.attackTokens,
       enemiesRemaining: this.director.enemiesRemaining,

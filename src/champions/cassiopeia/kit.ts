@@ -172,7 +172,8 @@ export class CassiopeiaKit implements Kit {
       this.pip(e);
       if (!e.active) continue;
       if (facing) {
-        e.stun(now, R.stunMs);
+        // An unstoppable enemy takes the pip and shrugs off the stone.
+        if (!e.stun(now, R.stunMs)) continue;
         e.applyStatus(PETRIFY_STATUS, now, R.stunMs);
         this.gazeStuns++;
       } else {

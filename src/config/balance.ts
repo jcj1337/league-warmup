@@ -515,6 +515,71 @@ export const SOVEREIGN = {
   },
 } as const;
 
+/**
+ * The Bulwark: a big, slow, many-pipped tank with a K'Sante-style kit, and the
+ * capstone of a stage (ENEMIES.bulwark.capstone): one in the last wave. It
+ * walks you down and never keeps its distance. Everything it does is a
+ * telegraph, and it loses pips like anything else while it does it: the drill
+ * is staying on one target for seconds without tunnelling. Damage is flat,
+ * stage-scaled like every enemy attack (DIFFICULTY.damage).
+ */
+export const BULWARK = {
+  radius: 34,
+  /** Kill score relative to a basic target. */
+  scoreMultiplier: 5,
+  /** Fraction of PLAYER.referenceMoveSpeed: slower than the Pursuer (0.55). */
+  moveSpeedFraction: 0.4,
+  /** However fast stages and All Out make it, it stays slower than you. */
+  maxSpeedFraction: 0.8,
+  /** It stops walking this far short of touching you: its body is not its attack. */
+  standOffPx: 10,
+  /** Per-stage scaling of its own stats (see DIFFICULTY). Movement speed scales globally. */
+  scaling: {
+    strikeCooldownMs: { k: -0.15, min: 1100 } as Curve,
+    pathMakerCooldownMs: { k: -0.2, min: 4000 } as Curve,
+  },
+  /**
+   * Q, Strike: rooted for `windupMs` with a line LOCKED toward where you stood
+   * and drawn on the ground, then it slams. On the line when it lands: damage
+   * and a slow. It starts one when you are within `length` of its centre, then
+   * holds the slam for `recoverMs`.
+   */
+  strike: {
+    windupMs: 450, length: 150, halfWidth: 30, damage: 14, slowFraction: 0.3, slowMs: 800,
+    /** Measured from the start of one Strike (Heavy or not) to the next. */
+    cooldownMs: 1800,
+    recoverMs: 260,
+    /** Every this-many-th Strike is a Heavy Strike. */
+    heavyEvery: 3,
+  },
+  /**
+   * The Heavy Strike: twice as long, a longer windup, and it stuns. It is
+   * started from up to `triggerRange` away, so the Bulwark threatens you at
+   * your own range.
+   */
+  heavy: { windupMs: 600, length: 300, halfWidth: 26, triggerRange: 280, damage: 14, stunMs: 400 },
+  /**
+   * W, Path Maker: from `minRange`..`maxRange` it braces for `braceMs` with
+   * its whole path LOCKED and drawn, then rams `distance` px down it in
+   * `durationMs`. Its body touching you during the ram: damage and a stun, and
+   * it stops there. Unstoppable (no stun or slow takes) from the brace to the
+   * end of the ram, then winded, standing still, for `windedMs`.
+   */
+  pathMaker: {
+    minRange: 180, maxRange: 380, braceMs: 700, distance: 300, durationMs: 350,
+    damage: 20, stunMs: 500, windedMs: 700,
+    /** Measured from the start of one brace to the next. */
+    cooldownMs: 8000,
+  },
+  /**
+   * R, All Out: at or below `atPipsFraction` of its pips it sheds its plates
+   * in a `flareMs` flare (unstoppable), then for the rest of its life it is
+   * faster, its cooldowns are multiplied by `cooldownMultiplier`, and every
+   * `heavyEvery`-th Strike is Heavy. Windups never change.
+   */
+  allOut: { atPipsFraction: 2 / 3, flareMs: 400, speedMultiplier: 1.5, cooldownMultiplier: 0.6, heavyEvery: 2 },
+} as const;
+
 // ============================================================================
 // RUN — breathers and arrivals.
 // ============================================================================
@@ -599,7 +664,7 @@ export const DIFFICULTY = {
  * Bumped whenever tuning changes how hard a run is. The run log tags each run
  * with it, and its summary only compares runs from the same version.
  */
-export const BALANCE_VERSION = 10;
+export const BALANCE_VERSION = 11;
 
 /**
  * The player's level, League style: kills give XP (ENEMIES[id].xp). This is
@@ -662,6 +727,15 @@ export interface EnemyEntry {
    * poisoned at one pip, the poison may kill.
    */
   spellcaster?: boolean;
+  /**
+   * A stage's capstone: never drawn by weight. From its unlockStage on, the
+   * LAST wave of every generated stage fields it first (as many as its
+   * maxPerWave allows, one without it), and the rest of the wave is bought
+   * with what is left of the budget.
+   */
+  capstone?: boolean;
+  /** Mob ids a generated wave never draws once it fields this one. */
+  crowdsOut?: readonly string[];
 }
 
 export const ENEMIES = {
@@ -695,6 +769,18 @@ export const ENEMIES = {
     contactDamage: 6,
     xp: 3,
     spellcaster: true,
+  },
+  bulwark: {
+    // The capstone: it takes about half of an early last wave's budget, and
+    // Pursuers (the other melee chaser) stay out of its wave.
+    name: 'Bulwark', cost: 6, unlockStage: 8, weight: 0, maxShare: 1,
+    capstone: true,
+    crowdsOut: ['pursuer'],
+    maxPerWave: { base: 1, k: 0.3, max: 2 },
+    // 14 at its Stage 8 debut, 16 from Stage 14, 18 from Stage 20.
+    pips: { start: 12, every: 3, max: 18 },
+    contactDamage: 12,
+    xp: 6,
   },
 } satisfies Record<string, EnemyEntry>;
 

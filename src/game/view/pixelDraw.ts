@@ -73,6 +73,67 @@ export function smoothRing(
   g.strokePath();
 }
 
+/** The four corners of a strip from (x, y) along `angle`: `length` long, `halfWidth` either side. For fillPoints. */
+export function stripPoints(x: number, y: number, angle: number, length: number, halfWidth: number): { x: number; y: number }[] {
+  const dx = Math.cos(angle);
+  const dy = Math.sin(angle);
+  const nx = -dy * halfWidth;
+  const ny = dx * halfWidth;
+  return [
+    { x: x + nx, y: y + ny },
+    { x: x + dx * length + nx, y: y + dy * length + ny },
+    { x: x + dx * length - nx, y: y + dy * length - ny },
+    { x: x - nx, y: y - ny },
+  ];
+}
+
+/** A strip's solid, smooth outline. */
+export function smoothStrip(
+  g: Phaser.GameObjects.Graphics,
+  x: number,
+  y: number,
+  angle: number,
+  length: number,
+  halfWidth: number,
+  color: number,
+  alpha: number,
+  width = 2,
+): void {
+  if (length <= 0 || alpha <= 0) return;
+  g.lineStyle(width, color, Math.min(1, alpha));
+  g.strokePoints(stripPoints(x, y, angle, length, halfWidth), true, true);
+}
+
+/** A solid, smooth line. */
+export function smoothLine(
+  g: Phaser.GameObjects.Graphics,
+  x1: number,
+  y1: number,
+  x2: number,
+  y2: number,
+  color: number,
+  alpha: number,
+  width = 2,
+): void {
+  if (alpha <= 0) return;
+  g.lineStyle(width, color, Math.min(1, alpha));
+  g.lineBetween(x1, y1, x2, y2);
+}
+
+/** 0 → 1 with a little overshoot: something bursts open past its size and settles. */
+export function popEase(t: number): number {
+  if (t <= 0) return 0;
+  if (t >= 1) return 1;
+  const c = 1.7;
+  return 1 + (c + 1) * (t - 1) ** 3 + c * (t - 1) ** 2;
+}
+
+/** 0 → 1, fast then settling. */
+export function easeOut(t: number): number {
+  const u = Math.min(1, Math.max(0, t));
+  return 1 - (1 - u) * (1 - u);
+}
+
 /** A cone's solid, smooth outline: both sides and the arc. */
 export function smoothWedge(
   g: Phaser.GameObjects.Graphics,

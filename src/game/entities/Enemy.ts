@@ -46,6 +46,10 @@ export interface EnemyContext {
    * i-frame logic and its stage damage scaling.
    */
   damagePlayer(amount: number, source: EnemyArchetype, kind?: DamageKind): void;
+  /** Stun the player for `ms`, by the hostile spells' rules (what they were committing to is interrupted). */
+  stunPlayer(ms: number): void;
+  /** Slow the player by `fraction` for `ms`. */
+  slowPlayer(fraction: number, ms: number): void;
   /**
    * Cast hostile spells (ground zones, the Magus orb). The spell system owns
    * them, so a spell already placed still lands after its caster dies.
@@ -166,6 +170,11 @@ export abstract class Enemy {
   held = false;
   /** After being thrown: no AI and no contact until this clock time. */
   dazedUntil = 0;
+  /**
+   * Shrugging off crowd control (the Bulwark's Path Maker): no stun takes and
+   * no slow counts while this is set. It still loses pips like anything else.
+   */
+  unstoppable = false;
 
   constructor(scene: Phaser.Scene, clock: GameClock, x: number, y: number, opts: EnemyOptions) {
     this.scene = scene;
@@ -272,6 +281,7 @@ export abstract class Enemy {
 
   /** 1 unslowed; 0.65 under a 35% slow. */
   get slowFactor(): number {
+    if (this.unstoppable) return 1;
     let strongest = 0;
     for (const { fraction, until } of this.slows.values()) {
       if (this.now < until) strongest = Math.max(strongest, fraction);
@@ -285,9 +295,14 @@ export abstract class Enemy {
     this.slows.set(id, { fraction, until: nowMs + ms });
   }
 
-  /** No AI and no contact for `ms` (a petrify, a throw). Overlapping stuns never shorten one another. */
-  stun(nowMs: number, ms: number): void {
+  /**
+   * No AI and no contact for `ms` (a petrify, a throw). Overlapping stuns never shorten one another.
+   * @returns whether it took: an unstoppable enemy shrugs it off.
+   */
+  stun(nowMs: number, ms: number): boolean {
+    if (this.unstoppable) return false;
     this.dazedUntil = Math.max(this.dazedUntil, nowMs + ms);
+    return true;
   }
 
   update(deltaSeconds: number, nowMs: number, ctx: EnemyContext): void {

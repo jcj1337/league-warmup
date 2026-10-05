@@ -79,13 +79,13 @@ full**: every stage starts from 100 HP, so the run ends at the first stage you c
 survive. You stay in control during the breather.
 
 **Contact damage.** An active enemy whose body touches yours bumps you: basic 6, Pursuer
-10, Magus 6 at Stage 1, scaled by `DIFFICULTY.contactDamage` (×1.88 at Stage 10, ×3.77 at
+10, Magus 6, Bulwark 12 at Stage 1, scaled by `DIFFICULTY.contactDamage` (×1.88 at Stage 10, ×3.77 at
 20). Each enemy can bump you at most once per 800ms (`CONTACT.cooldownMs`), on top of the
 usual 250ms invulnerability after any hit. Enemies don't walk into you on purpose:
 contact comes from pathing through the crowd or getting boxed in. Arriving enemies are
 inert and never bump.
 
-**Levels.** Kills give XP (basic 1, Pursuer 2, Magus 3); 10 XP reaches level 2, and each
+**Levels.** Kills give XP (basic 1, Pursuer 2, Magus 3, Bulwark 6); 10 XP reaches level 2, and each
 later level needs 20% more, up to level 18. Each level gives **+5 ability haste** (Q / W
 / E / R cooldowns ÷ (1 + haste/100): ×0.69 at level 10, ×0.54 at 18; Flash is a summoner
 and never changes; cast windows shrink at half that rate, ×0.82 at 10, ×0.70 at 18, so
@@ -161,7 +161,8 @@ holds.
 
 **Health pips** stay low: basics are **1 pip forever**; Pursuers 2 and the Magus 1, each
 +1 from Stage 11 (3 and 2) and no more. Later stages get harder through numbers, speed
-and damage — never through enemies that take forever to kill.
+and damage — never through enemies that take forever to kill. The one exception is the
+**Bulwark**, a stage's capstone (below): 14 pips at its Stage 8 debut, up to 18.
 
 **Hand-written stages** keep their authored mix and grow it to the stage's budget, shared
 out by largest remainder (`WaveDirector.rosterFor`). B = basic, P = Pursuer, M = Magus, S = Sovereign;
@@ -181,17 +182,23 @@ bodies) and held to its share of the budget and its per-wave cap (Magi: 1 per wa
 about Stage 17, then more). A mob's first stage fields exactly one of it in Wave 1, so you
 meet it alone. Rosters are rolled once per run, so a wave never changes under you.
 
+A **capstone** (`ENEMIES[id].capstone`: the Bulwark) is never drawn by weight. From its
+unlock stage, the **last wave of every stage** fields it first (one; two from about Stage
+18), and the rest of that wave is bought with what is left of the budget. It costs 6, about
+half of an early wave, and its wave draws no Pursuers (`crowdsOut`).
+
 Tuning lives in [balance.ts](src/config/balance.ts): `RUN` (breathers, arrival window,
 pack spacing), `DIFFICULTY` (the curve), `ENEMIES` (the mob registry: cost, unlock stage,
-weight, share, per-wave cap, pips), `TARGETS` / `PURSUER` / `MAGUS` (behaviour and
-per-mob scaling), `STAGES` (the hand-written intro), `ENDLESS` (waves per generated stage)
+weight, share, per-wave cap, pips), `TARGETS` / `PURSUER` / `MAGUS` / `SOVEREIGN` /
+`BULWARK` (behaviour and per-mob scaling), `STAGES` (the hand-written intro), `ENDLESS` (waves per generated stage)
 and `STAGE_RAMPS` (your base auto cycle and edge fire per stage).
 
 ### Adding a mob
 
 1. Its config block in `balance.ts` (radius, speeds, attacks, an optional `scaling` block).
 2. An `ENEMIES` entry: `name`, `cost`, `unlockStage`, `weight`, `maxShare`, optional
-   `maxPerWave`, `pips`. Its id becomes a valid `EnemyArchetype` everywhere.
+   `maxPerWave`, `pips`; optionally `capstone` and `crowdsOut`. Its id becomes a valid
+   `EnemyArchetype` everywhere.
 3. Its entity (`extends Enemy`) and view, and one line in `WaveDirector`'s `ARCHETYPES`
    saying how to build it.
 
@@ -307,6 +314,7 @@ Orbwalk loop: `T` (or `A` + click) → auto fires → right-click away → repea
 | Pursuer | larger purple slime with devil horns | basic + 1 | walks you down at 55% of your speed; melee swing for **25** (a quarter of your HP) after a 400ms telegraph. From Stage 4 it **dashes** (below) |
 | Magus | tall slate slime in a brass crest and mask, rune tablets floating at its sides | same as basic | artillery caster with a Xerath-style kit (below); holds 360–480px from you, backs off at 60% of your speed, never moves while casting |
 | Sovereign | indigo slime under a silver diadem, two dark orbs circling her head | 2 (3 from Stage 11) | sphere mage with a Syndra-style kit (below); holds 280–380px from you, at most one per wave, from Stage 5 |
+| Bulwark | wide sand slime under iron plates, a club in each hand; the biggest body on the field | 14 (16 from Stage 14, 18 from 20) | tank with a K'Sante-style kit (below); walks you down at 40% of your speed; the capstone of every stage from Stage 8, in its last wave |
 
 The Magus and the Sovereign are **spellcasters** (`ENEMIES[id].spellcaster`): damage over time
 can't finish one from above one pip, so the last pip is yours to land.
@@ -379,6 +387,28 @@ both ready, 60% of the time she plays **Q→E**: a sphere dropped between you an
 Scattered into you. The sphere landing on that line is your warning. Her spells use the
 same red ground, edged in void lavender instead of the Magus's gold. Tuned in
 `SOVEREIGN`. Pursuers became rarer when she joined (weight 1.5, at most half a wave).
+
+### The Bulwark
+
+A stage's capstone: big, slow and many-pipped, with every move a telegraph. It is the one
+enemy that lives long enough for sustained damage on a single target to matter, so the
+drill is **staying on it for seconds without tunnelling**. It loses a pip to every hit
+whatever it is doing; nothing it does reduces damage.
+
+| Move | Telegraph | Hit |
+| --- | --- | --- |
+| Strike (Q) | within 150px it roots for 450ms with a red line **locked** toward where you stood (150 long, 30 either side), then slams | 14 + 30% slow for 800ms. At most once per 1.8s |
+| Heavy Strike | every **third** Strike: a 300px line with a white-hot outline and a `!`, 600ms. Started from up to 280px away | 14 + a **400ms stun** |
+| Path Maker (W) | from 180–380px, every 8s: it braces for 700ms behind crossed clubs, its whole path (300px, as wide as its body) drawn with chevrons running down it, then rams down it in 350ms | its body catching you: 20 + a **500ms stun**, and it stops there |
+| All Out (R) | at two thirds of its pips, a 400ms flare: its plates fly off | for the rest of its life: 1.5× speed (never above 0.8× yours), cooldowns ×0.6, every **second** Strike Heavy. Windups never change |
+
+**Unstoppable** from the start of the brace to the end of the ram, and through the All Out
+flare (a pale ring around it): no stun takes and no slow counts, so Cassiopeia's R and W
+still deal their pip and poison but neither holds it. After a ram it stands **winded** for
+700ms, stoppable again: the window to punish it. A stun that takes (Cassiopeia's R: it
+always walks at you, so it is always facing you) **breaks a Strike** it is winding up. Like
+the Pursuer, it starts nothing while you are stunned. Tuned in `BULWARK`; its Strike and
+Path Maker cooldowns shorten with the stage (min 1.1s / 4s).
 
 **Stunned** means: no movement, no autos, no Q/W/E, and no Flash. An uncommitted
 auto windup is cancelled and a Q/W/E cast window is interrupted, both with their
@@ -454,6 +484,9 @@ stay out of the HUD strips and always draw beneath combatants.
 | Sovereign | indigo slime, silver diadem with a tall spike, pale lavender eyes, two dark orbs circling; casting, she draws up tall and the orbs spin fast |
 | Dark Sphere | a near-black orb with a pale rim on the ground, gently pulsing; it flickers through its last second |
 | Scatter | a red wedge from her edged in lavender, plus a red strip from each sphere it will fling |
+| Bulwark | wide sand slime, iron helm and flank plates, two tusks, a club in each hand, eased from pose to pose: raised overhead through a Strike, brought down along the line, crossed ahead through the brace, hanging while winded. A pale ring while unstoppable |
+| Bulwark telegraphs | red ground under a smooth outline, filling outward from its body; white-hot outline and a `!` for the Heavy Strike; chevrons running down Path Maker's path |
+| Bulwark, All Out | its plates fly off in an ember flare; after it, a narrower, hotter body split by ember seams, blades for clubs, sparks drifting up |
 | Stunned / slowed | gold stars circling over your head / a gold dotted ring at your feet |
 | W-marked enemy | violet rune bobbing overhead + magenta dotted ring at its feet (blinks as it lapses) |
 | Your auto | small cyan bolt with a short trail, homes |
@@ -475,10 +508,10 @@ is armed and flashes briefly after `T`.
 - `src/config/balance.ts` — gameplay tuning: the run (`RUN`, `DIFFICULTY`, `ENEMIES`, `STAGES`, `ENDLESS`, `STAGE_RAMPS`), ranges, timings, damage, keybinds, debug flags.
 - `src/config/theme.ts` — **the look**: `PALETTE` (raw colours) and `THEME` (sprite scale, depth bands, effect timings, HUD styling). Nothing in it affects gameplay.
 - `src/game/art/` — original pixel sprites as text pixel maps (`sprites.ts`), the 5×7 HUD font (`glyphs.ts`, `font.ts`), and `textures.ts`, which rasterises them once and owns every texture key. Real PNG art can later replace a sprite key-for-key.
-- `src/game/view/` — the read-only view layer: `PlayerView`, `EnemyView` / `PursuerView`, `MagusView`, `HostileSpellView` (Magus zones), `ProjectileView` + `projectileArt`, `Fx` (pooled particles, dotted rings, damage numbers), `PixelBar` (health bars), `Battlefield` (painted ground + props) and `pixelDraw` helpers.
+- `src/game/view/` — the read-only view layer: `PlayerView`, `EnemyView` / `PursuerView`, `MagusView`, `SovereignView`, `BulwarkView`, `HostileSpellView` (Magus zones), `ProjectileView` + `projectileArt`, `Fx` (pooled particles, dotted rings, damage numbers), `PixelBar` (health bars), `Battlefield` (painted ground + props) and `pixelDraw` helpers.
 - `src/game/scenes/GameScene.ts` — input wiring, per-frame orchestration, round lifecycle.
 - `src/game/scenes/UIScene.ts` — HUD, ability bar, pause menu, end screen (polls GameScene).
-- `src/game/entities/` — `Player` (incl. stun / slow status), `Enemy` (abstract base), `Target`, `Pursuer`, `Magus`, `Projectile`, `AutoAttackMissile`.
+- `src/game/entities/` — `Player` (incl. stun / slow status), `Enemy` (abstract base), `Target`, `Pursuer`, `Magus`, `Sovereign`, `Bulwark`, `Projectile`, `AutoAttackMissile`.
 - `src/game/systems/` — `GameClock`, `Difficulty` (the curve), `InputController`, `AttackSystem`, `CastSystem`, `AttackTokens` (enemy turn-taking),
   `AbilityCooldowns`, `SkillshotSystem` (Q+W), `BlinkSystem` (E+Flash), `PassiveSystem`,
   `WaveDirector` (stages, waves, breathers), `EnemyProjectileSystem`, `HostileSpellSystem`

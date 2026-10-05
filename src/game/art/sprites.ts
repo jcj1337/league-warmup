@@ -138,6 +138,62 @@ const SOV_BODY = [
 ];
 const SOV_H = 16;
 
+// ---- bulwark: a wide sand slime under iron plates ------------------------------------
+// The tank of the family: half again as wide as the Pursuer, an iron helm over
+// its brow and plates on its flanks, two tusks. Its two clubs (bulwark_club)
+// are drawn and swung by BulwarkView. All Out, the plates are gone: a
+// narrower, hotter body split by ember seams, and the clubs are blades.
+//   I iron · J iron light · i iron dark · c ember seam
+
+const SAND_PAL = {
+  k: P.ink, m: P.sand, L: P.sandLight, w: P.sandShine, d: P.sandDark, D: P.sandDeep,
+  I: P.iron, J: P.ironLight, i: P.ironDark, y: P.eyeGlow, f: P.fang,
+};
+
+const SAND_BODY = [
+  '......kkkkkkkkkkkk......',
+  '....kkJJIIIIIIIIiikk....',
+  '...kJJIIIIIIIIIIIIiik...',
+  '..kJIIIIkkkkkkkkIIIIik..',
+  '.kiIIkkkmmmmmmmmkkkIIik.',
+  '.kiikmwwLmmmmmmmmmmkiik.',
+  'kmkkmwwLmmmmmmmmmmmmkkmk',
+  'kmmmLmmkkmmmmmmkkmmmmmmk',
+  'kmmmmmmmykmmmmkymmmmmmmk',
+  'kmmmmmmmmmmmmmmmmmmmmmmk',
+  'kdmmmmmmkkkkkkkkmmmmmmdk',
+  'kdmmmmmkfkkkkkkfkmmmmmdk',
+  'kiIIimmmmkkkkkkmmmmiIIik',
+  'kiIIiddmmmmmmmmmmddiIIik',
+  'kDiiidddddddddddddiiiDDk',
+  '.kDDDDddddddddddddDDDDk.',
+  '..kkkkkkkkkkkkkkkkkkkk..',
+];
+
+const BARE_PAL = {
+  k: P.ink, m: P.sandLight, L: P.sandShine, w: P.white, d: P.sand, D: P.sandDark,
+  c: P.ember, y: P.fireCore, f: P.fang,
+};
+
+const BARE_BODY = [
+  '........kkkkkkkk........',
+  '......kkmmmmmmmmkk......',
+  '....kkmwwLmmmmmmmmkk....',
+  '...kmwwLmmmmmmmmmmmmk...',
+  '..kmmwLmmmmmmmmmmmmmmk..',
+  '..kmmLmmkkmmmmmmkkmmmk..',
+  '..kmmmmmmykmmmmkymmmmk..',
+  '..kmmcmmmmmmmmmmmmcmmk..',
+  '..kdmcmmmkkkkkkmmmcmdk..',
+  '..kdmmcmkfkkkkfkmcmmdk..',
+  '..kdmmmmmmkkkkmmmmmmdk..',
+  '..kddmmmmmmmmmmmmmmddk..',
+  '..kDdddmmmmmmmmmmdddDk..',
+  '...kDDddddddddddddDDk...',
+  '....kkkkkkkkkkkkkkkk....',
+];
+const BULWARK_H = 18;
+
 export const SPRITES: Record<string, PixelSprite> = {
   // ---- utility -------------------------------------------------------------
   px: { rows: ['w'], pal: { w: P.white } },
@@ -149,6 +205,18 @@ export const SPRITES: Record<string, PixelSprite> = {
   },
   shadow_l: {
     rows: ['...ssssssssss...', '.ssssssssssssss.', 'ssssssssssssssss', '.ssssssssssssss.', '...ssssssssss...'],
+    pal: { s: SHADOW },
+  },
+
+  shadow_xl: {
+    rows: [
+      '....ssssssssssssss....',
+      '..ssssssssssssssssss..',
+      'ssssssssssssssssssssss',
+      'ssssssssssssssssssssss',
+      '..ssssssssssssssssss..',
+      '....ssssssssssssss....',
+    ],
     pal: { s: SHADOW },
   },
 
@@ -209,6 +277,41 @@ export const SPRITES: Record<string, PixelSprite> = {
   sovereign_1: { rows: frame(without(SOV_BODY, 9), SOV_H), pal: SOV_PAL },
   /** Casting: drawn up tall, eyes white-hot. */
   sovereign_cast: { rows: frame(doubled(SOV_BODY, 5), SOV_H), pal: { ...SOV_PAL, y: P.white } },
+  // ---- bulwark ---------------------------------------------------------------
+  bulwark_walk_0: { rows: frame(SAND_BODY, BULWARK_H), pal: SAND_PAL },
+  bulwark_walk_1: { rows: frame(without(SAND_BODY, 9), BULWARK_H), pal: SAND_PAL },
+  /** Strike windup and the brace: eyes white-hot (the view rears it up or hunkers it down). */
+  bulwark_windup: { rows: frame(SAND_BODY, BULWARK_H), pal: { ...SAND_PAL, y: P.eyeHot } },
+  /** Winded after Path Maker: eyes shut. */
+  bulwark_winded: { rows: frame(without(SAND_BODY, 9), BULWARK_H), pal: { ...SAND_PAL, y: P.sandDark } },
+  bulwark_bare_0: { rows: frame(BARE_BODY, BULWARK_H), pal: BARE_PAL },
+  bulwark_bare_1: { rows: frame(without(BARE_BODY, 7), BULWARK_H), pal: BARE_PAL },
+  bulwark_bare_windup: { rows: frame(BARE_BODY, BULWARK_H), pal: { ...BARE_PAL, y: P.white, c: P.fireCore } },
+  bulwark_bare_winded: { rows: frame(without(BARE_BODY, 7), BULWARK_H), pal: { ...BARE_PAL, y: P.sand } },
+  /** One of its two clubs, head pointing right (rotated to where it is held). */
+  bulwark_club: {
+    rows: [
+      '....kkkkkkkk',
+      'kkkkIIIIIJJk',
+      'kHHkIIIIIJJk',
+      'kkkkiiiiiIIk',
+      '....kkkkkkkk',
+    ],
+    pal: { k: P.ink, I: P.iron, J: P.ironLight, i: P.ironDark, H: P.twig },
+  },
+  /** All Out: the clubs are blades. */
+  bulwark_blade: {
+    rows: [
+      '....kkkkkkk.',
+      'kkkkWWWWWWWk',
+      'kHHkSSSSSSWk',
+      'kkkksssssSk.',
+      '....kkkkkk..',
+    ],
+    pal: { k: P.ink, S: P.silver, W: P.white, s: P.silverDark, H: P.twig },
+  },
+  /** A plate thrown off as it goes All Out. */
+  bulwark_plate: { rows: ['.kkk.', 'kJIIk', 'kIIik', '.kkk.'], pal: { k: P.ink, I: P.iron, J: P.ironLight, i: P.ironDark } },
   magus_rune: {
     rows: ['.kkk.', 'kBGgk', 'kGygk', 'kGGgk', 'kGygk', 'kgggk', '.kkk.'],
     pal: { k: P.ink, B: P.brassLight, G: P.brass, g: P.brassDark, y: P.arcane },

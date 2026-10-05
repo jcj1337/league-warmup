@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import { THEME } from '../../config/theme';
 import type { BurstStyle, PlacedCloud, PlacedZone } from '../systems/PlayerZoneSystem';
-import { pixelDisc, smoothRing, smoothWedge, wedgePoints } from './pixelDraw';
+import { pixelDisc, popEase, smoothRing, smoothWedge, wedgePoints } from './pixelDraw';
 
 type Point = { x: number; y: number };
 
@@ -280,8 +280,3 @@ export class PlayerZoneView {
   }
 }
 
-/** 0 → 1 with a little overshoot: the puff bursts open past its size and settles. */
-function popEase(t: number): number {
-  const c = 1.7;
-  return 1 + (c + 1) * (t - 1) ** 3 + c * (t - 1) ** 2;
-}

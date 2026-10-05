@@ -10,7 +10,7 @@ this file is for working on the code.
 - `npm run typecheck` — `tsc --noEmit` for src and tests. Run it before any test run.
 - `npm test` — the Playwright suites in `tests/e2e/`, one at a time in headless Edge
   (~5 min). They start their own Vite server on :5173 or reuse one.
-- `npx playwright test <name>` — one suite (`kit`, `waves`, `cassiopeia`, ...).
+- `npx playwright test <name>` — one suite (`kit`, `waves`, `cassiopeia`, `bulwark`, ...).
 - **Never run `mouse-speed.spec.ts` on a machine someone is using**: it takes a real
   pointer lock, which on Windows grabs the OS cursor even headless. It is skipped
   unless `PW_POINTER_LOCK=1`.

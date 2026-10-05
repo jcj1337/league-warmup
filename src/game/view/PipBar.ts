@@ -27,7 +27,7 @@ export class PipBar {
   /** Readouts for inspection: segments drawn, how many are filled, total inner width and each segment. */
   segments = 0;
   filled = 0;
-  width: number = THEME.pipBar.width;
+  width: number;
   cells: PipCell[] = [];
 
   private readonly g: Phaser.GameObjects.Graphics;
@@ -35,8 +35,10 @@ export class PipBar {
   private lostAt: number[] = [];
   private visualMs = 0;
 
-  constructor(scene: Phaser.Scene, depth: number = THEME.depth.bars) {
+  /** `width` is the total inner width: THEME.pipBar.width unless a many-pipped mob asks for a wider bar. */
+  constructor(scene: Phaser.Scene, depth: number = THEME.depth.bars, width: number = THEME.pipBar.width) {
     this.g = scene.add.graphics().setDepth(depth);
+    this.width = width;
   }
 
   /**
@@ -52,21 +54,20 @@ export class PipBar {
 
     if (segments !== this.segments) {
       this.lostAt = new Array(segments).fill(Number.NEGATIVE_INFINITY);
-      this.cells = PipBar.layout(B.width, B.gap, segments);
+      this.cells = PipBar.layout(this.width, B.gap, segments);
     } else {
       for (let i = filled; i < this.filled; i++) this.lostAt[i] = this.visualMs;
     }
     this.segments = segments;
     this.filled = filled;
-    this.width = B.width;
 
-    const left = Math.round(cx - B.width / 2);
+    const left = Math.round(cx - this.width / 2);
     const top = Math.round(y);
     const half = Math.floor(B.cellH / 2);
 
     const g = this.g.clear();
     g.fillStyle(B.back, 1);
-    g.fillRect(left - B.border, top - B.border, B.width + B.border * 2, B.cellH + B.border * 2);
+    g.fillRect(left - B.border, top - B.border, this.width + B.border * 2, B.cellH + B.border * 2);
 
     for (let i = 0; i < segments; i++) {
       const cell = this.cells[i];

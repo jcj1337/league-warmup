@@ -6,7 +6,8 @@
  * Style target: a top-down pixel-art slime skirmish on a dark, quiet volcanic
  * waste. Chunky 3× pixels and dark ink outlines. The ground stays low-contrast
  * ash so everything that matters pops: a friendly blue slime hero, a hostile
- * slime family (red basic, horned purple Pursuer, brass-masked Magus),
+ * slime family (red basic, horned purple Pursuer, brass-masked Magus, indigo
+ * Sovereign, the wide sand Bulwark under its iron plates),
  * orange-red enemy fire, pale arcane-gold Magus spells, and
  * one strong colour identity per ability:
  *   auto = sky cyan · Q = teal · W = violet/magenta · E = pink/blue · F = gold
@@ -99,6 +100,16 @@ export const PALETTE = {
   voidCore: 0x0b0910,
   voidRim: 0xe6defc,
   voidGlow: 0xa894e6,
+
+  // ---- bulwark: a wide sand slime under iron plates ------------------------------
+  sandDeep: 0x4e4030,
+  sandDark: 0x7d6a50,
+  sand: 0xb59e7c,
+  sandLight: 0xd8c6a4,
+  sandShine: 0xf6ecd6,
+  ironDark: 0x2c3039,
+  iron: 0x4b515e,
+  ironLight: 0x8a93a4,
 
   // ---- player combat colours ----------------------------------------------
   autoDeep: 0x2f8fd8,
@@ -352,6 +363,50 @@ export const THEME = {
     holdLiftPx: 38,
     /** Scatter's exit lines: where each sphere will fly. */
     exitLine: { color: P.voidGlow, fill: P.warning, fillAlphaStart: 0.08, fillAlphaEnd: 0.24 },
+  },
+
+  bulwark: {
+    originY: 0.6,
+    shadowOffsetY: 21,
+    frameMs: 240,
+    hpBarOffsetY: 32,
+    /** Too many pips for the shared bar: 58px is 3px a segment at 12 pips, 2px at 18. */
+    hpBarWidth: 58,
+    burst: [P.sand, P.sandLight, P.iron],
+    bareBurst: [P.sandLight, P.ember, P.fireCore],
+    /**
+     * Its telegraphs: the red ground of every melee threat, under a smooth
+     * outline. The Heavy Strike's outline is white-hot, so the one that stuns
+     * reads apart.
+     */
+    telegraph: {
+      fill: P.warning, fillAlphaStart: 0.08, fillAlphaEnd: 0.26, sweepAlpha: 0.2,
+      edge: P.warning, heavyEdge: P.eyeHot, edgeAlphaStart: 0.45, edgeAlphaEnd: 1, edgeWidth: 2,
+      /** Path Maker: chevrons running down the locked path, this far apart, one crossing in `chevronMs`. */
+      chevronGapPx: 54, chevronMs: 380,
+    },
+    /** While nothing can stop it: a pale ring around the body, breathing. */
+    unstoppable: { color: P.eyeHot, padPx: 7, pulseMs: 260, width: 2 },
+    /**
+     * Its two clubs, held at its sides and eased from pose to pose: raised
+     * overhead through a Strike windup, brought down along the line, crossed
+     * ahead of it through a brace, hanging while it is winded. `follow` is how
+     * fast they chase a pose (per second); `slamFollow` is the downswing.
+     */
+    clubs: { sidePx: 40, liftPx: 6, raisePx: 44, reachPx: 46, bracePx: 30, follow: 14, slamFollow: 48 },
+    /** How its body moves, as fractions of its size (see BulwarkView.animate). */
+    motion: {
+      waddleMs: 520, waddle: 0.045, swayPx: 2,
+      rear: 0.16, slamSquash: 0.24, slamLungePx: 9,
+      hunker: 0.2, tremblePx: 1.5, ramStretch: 0.14,
+      heaveMs: 620, heave: 0.05, flareSwell: 0.18,
+    },
+    /** A Strike landing: a strip of light down its line, dust, and a short arc of shockwave at its end. */
+    slam: { color: P.sandShine, heavyColor: P.eyeHot, dust: [P.sandDark, P.sand, P.pebble], ms: 260, shakeMs: 90, shakeIntensity: 0.004 },
+    /** The ram: afterimages behind it, and a burst where it catches you. */
+    ram: { trail: P.sandLight, hit: P.eyeHot },
+    /** All Out: rings off the body and its plates flying. */
+    flare: { color: P.ember, core: P.fireCore, plates: 7, ms: 420, emberMs: 150 },
   },
 
   /** A Dark Sphere on the ground. It flickers through its last `warnMs`. */

@@ -21,6 +21,8 @@ export interface EnemyArt {
   shadow: string;
   shadowOffsetY: number;
   hpBarOffsetY: number;
+  /** Pip bar width, for a mob with too many pips for the shared one (THEME.pipBar.width). */
+  hpBarWidth?: number;
   burst: readonly number[];
 }
 
@@ -44,19 +46,25 @@ export class EnemyView {
   dying = false;
 
   protected visualMs = 0;
+  /**
+   * How the body is squashed, stretched and nudged this frame, on top of its
+   * frame: reset every frame, then set by `animate()`. Scaling keeps the feet
+   * planted. Pure presentation.
+   */
+  protected readonly body = { sx: 1, sy: 1, dx: 0, dy: 0 };
   private hitAge = Number.POSITIVE_INFINITY;
   private deathAge = 0;
 
   constructor(
     protected readonly scene: Phaser.Scene,
     protected readonly enemy: Enemy,
-    protected readonly art: EnemyArt,
+    protected art: EnemyArt,
   ) {
     const S = THEME.art.scale;
     this.shadow = scene.add.image(enemy.x, enemy.y, art.shadow).setScale(S).setDepth(THEME.depth.shadow);
     this.overlay = scene.add.graphics().setDepth(THEME.depth.groundFx);
     this.sprite = scene.add.image(enemy.x, enemy.y, art.idle[0]).setOrigin(0.5, art.originY).setScale(S);
-    this.hpBar = new PipBar(scene);
+    this.hpBar = new PipBar(scene, THEME.depth.bars, art.hpBarWidth);
   }
 
   /** The enemy lost a pip (lethal or not). */
@@ -136,13 +144,22 @@ export class EnemyView {
     const frame = pose.windup >= 0 && this.art.windup ? this.art.windup : frames[Math.floor(this.visualMs / frameMs) % frames.length];
 
     const flash = Math.max(0, 1 - this.hitAge / THEME.enemy.hitFlashMs);
+    const body = this.body;
+    body.sx = 1;
+    body.sy = 1;
+    body.dx = 0;
+    body.dy = 0;
+    this.animate(nowMs, deltaSeconds);
+    const pop = S * (1 + 0.12 * flash);
+    this.sprite.setTexture(frame);
+    // Feet planted: a squashed body sinks onto them, a stretched one rises from them.
+    const plant = this.sprite.height * (1 - this.art.originY) * S * (1 - body.sy);
     this.sprite
       .setVisible(true)
-      .setTexture(frame)
       .setFlipX(pose.facing < 0)
-      .setPosition(bx, by)
+      .setPosition(bx + Math.round(body.dx), by + Math.round(body.dy + plant))
       .setAlpha(1)
-      .setScale(S * (1 + 0.12 * flash))
+      .setScale(pop * body.sx, pop * body.sy)
       .setDepth(actorDepth(e.y));
     if (flash > 0.45) this.sprite.setTintFill(THEME.fx.hit.color);
     else this.sprite.clearTint();
@@ -189,6 +206,9 @@ export class EnemyView {
   private hideStatusIcons(): void {
     for (const icon of this.statusIcons.values()) icon.setVisible(false);
   }
+
+  /** Archetype-specific body motion: write `this.body` (squash, stretch, nudge). Default: none. */
+  protected animate(_nowMs: number, _deltaSeconds: number): void {}
 
   /** Archetype-specific layers (weapon, telegraph). */
   protected drawExtras(_nowMs: number, _bx: number, _by: number, _deltaSeconds: number): void {}
