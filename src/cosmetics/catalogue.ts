@@ -7,8 +7,8 @@ import type { ProfileData } from '../profile/Profile';
  * to a look. A hat is a pixel layer stacked on the slime's head; a skin is a
  * palette override on its body. Nothing here touches gameplay.
  *
- * The crown is worn by default: it is the player's signature in qwer's
- * backyard. Equipping 'none' in a slot takes it off.
+ * The crown is worn by default: it is qwer's signature, as the game's
+ * designer. Equipping 'none' in a slot takes it off.
  */
 export type CosmeticSlot = 'hat' | 'skin';
 

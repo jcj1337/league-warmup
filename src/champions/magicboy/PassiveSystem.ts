@@ -1,7 +1,7 @@
 import { PASSIVE } from './balance';
 
 /**
- * Ezreal's passive: landing an ability ramps his attack speed.
+ * Magic Boy's passive: landing an ability ramps his attack speed.
  *
  * Ownership is deliberately narrow:
  *   - the kit decides *when* an ability hit and calls `addStack()`

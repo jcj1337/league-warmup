@@ -21,7 +21,7 @@ import { MOUSE, PREFERENCES } from '../config/balance';
 export const PROFILE_KEY = 'warmup.profile.v1';
 const CURRENT_VERSION = 2;
 
-/** Key-binding actions renamed since they were first saved (v1 named Ezreal's abilities). */
+/** Key-binding actions renamed since they were first saved (v1 named Magic Boy's abilities). */
 const KEYBIND_RENAMES: Record<string, string> = { skillshotQ: 'abilityQ', skillshotW: 'abilityW', blinkE: 'abilityE' };
 
 /** Saved bindings under their current action names. */
@@ -29,6 +29,13 @@ function upgradeKeybinds(raw: Record<string, string>): Record<string, string> {
   const out: Record<string, string> = {};
   for (const [action, code] of Object.entries(raw)) out[KEYBIND_RENAMES[action] ?? action] = code;
   return out;
+}
+
+/** Champion ids renamed since they were first saved. */
+const CHAMPION_RENAMES: Record<string, string> = { ezreal: 'magicboy', cassiopeia: 'snakelady' };
+
+function upgradeChampion(id: string): string {
+  return CHAMPION_RENAMES[id] ?? id;
 }
 
 /** Keys the stores used before the profile existed; read once and removed by `migrate`. */
@@ -53,7 +60,7 @@ export interface RunRecord {
   killedBy: string | null;
   damageTaken: Record<string, number>;
   stageDamage?: Record<string, number>;
-  /** Who was played (absent on runs logged before champions existed: Ezreal). */
+  /** Who was played (absent on runs logged before champions existed: Magic Boy). */
   champion?: string;
   /** The difficulty mode it was played on (absent on runs logged before modes existed: Normal). */
   mode?: string;
@@ -67,7 +74,7 @@ export interface ProfileSettings {
 
 export interface ProfileData {
   version: typeof CURRENT_VERSION;
-  /** The champion the next run uses. Only Ezreal exists until champions arrive. */
+  /** The champion the next run uses. Only Magic Boy exists until champions arrive. */
   champion: string;
   /** The difficulty mode the next run uses (a key of MODES). */
   mode: string;
@@ -93,7 +100,7 @@ const RANGE_MODES = ['contextual', 'always', 'off'] as const;
 export function defaultProfile(): ProfileData {
   return {
     version: CURRENT_VERSION,
-    champion: 'ezreal',
+    champion: 'magicboy',
     mode: 'normal',
     keybinds: {},
     mouseSpeed: MOUSE.defaultSpeed,
@@ -217,7 +224,7 @@ function migrate(): ProfileData {
 function sanitize(parsed: unknown): ProfileData {
   const data = defaultProfile();
   if (!isRecord(parsed)) return data;
-  if (typeof parsed.champion === 'string' && parsed.champion) data.champion = parsed.champion;
+  if (typeof parsed.champion === 'string' && parsed.champion) data.champion = upgradeChampion(parsed.champion);
   if (typeof parsed.mode === 'string' && parsed.mode) data.mode = parsed.mode;
   if (isRecord(parsed.keybinds)) data.keybinds = upgradeKeybinds(stringMap(parsed.keybinds));
   if (typeof parsed.mouseSpeed === 'number' && Number.isFinite(parsed.mouseSpeed)) data.mouseSpeed = parsed.mouseSpeed;
@@ -227,7 +234,10 @@ function sanitize(parsed: unknown): ProfileData {
   }
   if (Array.isArray(parsed.unlocked)) data.unlocked = parsed.unlocked.filter((id): id is string => typeof id === 'string');
   if (isRecord(parsed.equipped)) data.equipped = stringMap(parsed.equipped);
-  if (Array.isArray(parsed.runs)) data.runs = parsed.runs.filter(isRun).slice(-MAX_RUNS);
+  if (Array.isArray(parsed.runs)) {
+    data.runs = parsed.runs.filter(isRun).slice(-MAX_RUNS)
+      .map((run) => (typeof run.champion === 'string' ? { ...run, champion: upgradeChampion(run.champion) } : run));
+  }
   return data;
 }
 

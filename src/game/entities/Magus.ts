@@ -14,7 +14,7 @@ import type { GameClock } from '../systems/GameClock';
  * while casting — those windows are when you close the gap.
  *
  *   reposition — hold the spacing band; start a spell when the gap allows
- *   lance      — charging: the line tracks you
+ *   lance      — charging: the line sweeps after you at its aim speed (Enemy.aim)
  *   lock       — the line is placed and about to land; still rooted
  *   eye        — targeting: a reticle tracks where the circle will land, then it goes down
  *   orb        — windup: an aim line tracks you, locks for the last MAGUS.orb.lockMs, then the orb leaves
@@ -107,8 +107,9 @@ export class Magus extends Caster {
         break;
 
       case 'lance': {
-        // The line tracks where you're heading through the charge, then locks.
-        const aim = this.aimPoint(ctx, MAGUS.lance.lockMs);
+        // The line sweeps after where you're heading through the charge, then locks.
+        const want = this.wantedAim(ctx, MAGUS.lance.lockMs);
+        const aim = this.trackAim(want.x, want.y, deltaSeconds, ctx);
         this.aimAngle = Math.atan2(aim.y - this.y, aim.x - this.x);
         if (nowMs >= this.stateEndsAt) {
           const L = MAGUS.lance;
@@ -122,11 +123,12 @@ export class Magus extends Caster {
       }
 
       case 'orb': {
-        // The aim tracks where you're heading, then holds still for the lock.
+        // The aim sweeps after where you're heading, then holds still for the lock.
         // It leads by the time to impact: the rest of the windup plus the flight.
         if (!this.orbLocked(nowMs)) {
           const untilFire = Math.max(0, this.stateEndsAt - nowMs);
-          const aim = this.aimPoint(ctx, untilFire + this.orbFlightMs(ctx, untilFire), MAGUS.orb.aimLead);
+          const want = this.wantedAim(ctx, untilFire + this.orbFlightMs(ctx, untilFire), MAGUS.orb.aimLead);
+          const aim = this.trackAim(want.x, want.y, deltaSeconds, ctx);
           this.aimAngle = Math.atan2(aim.y - this.y, aim.x - this.x);
         }
         if (nowMs >= this.stateEndsAt) {
@@ -165,8 +167,9 @@ export class Magus extends Caster {
         break;
 
       case 'eye': {
-        // Targeting: the reticle follows where you'll be when it lands, then it goes down.
-        this.eyeTarget = this.eyeSpot(ctx);
+        // Targeting: the reticle travels after where you'll be when it lands, then it goes down.
+        const want = this.eyeSpot(this.wantedAim(ctx, MAGUS.eye.delayMs));
+        this.eyeTarget = this.eyeSpot(this.trackAim(want.x, want.y, deltaSeconds, ctx));
         this.aimAngle = Math.atan2(this.eyeTarget.y - this.y, this.eyeTarget.x - this.x);
         if (nowMs >= this.stateEndsAt) {
           const E = MAGUS.eye;
@@ -212,23 +215,23 @@ export class Magus extends Caster {
     }
 
     const ready = (id: SpellId) => nowMs >= this.readyAt[id];
-    if (ready('orb') && dist <= MAGUS.orb.triggerRange) return this.begin('orb', nowMs, ctx);
+    if (ready('orb') && dist <= MAGUS.orb.triggerRange) return this.begin('orb', nowMs);
 
     const options: SpellId[] = [];
     if (ready('lance') && dist <= MAGUS.lance.length - ctx.player.radius) options.push('lance');
     if (ready('eye') && dist <= MAGUS.eye.range) options.push('eye');
     if (ready('orb') && dist <= MAGUS.orb.range) options.push('orb');
     if (options.length === 0) return false;
-    return this.begin(Phaser.Utils.Array.GetRandom(options), nowMs, ctx);
+    return this.begin(Phaser.Utils.Array.GetRandom(options), nowMs);
   }
 
-  private begin(id: SpellId, nowMs: number, ctx: EnemyContext): boolean {
+  private begin(id: SpellId, nowMs: number): boolean {
     this.readyAt[id] = nowMs + MAGUS[id].cooldownMs;
     this.nextCastAt = nowMs + this.spellGapMs;
 
+    // A cast starts from where its cursor is, and travels to its aim from there.
     this.rollAimOffset(id === 'orb' ? MAGUS.aimSpreadPx.orb : MAGUS.aimSpreadPx.spell);
-    const aim = this.aimPoint(ctx, 0);
-    this.aimAngle = Math.atan2(aim.y - this.y, aim.x - this.x);
+    this.aimAngle = Math.atan2(this.aim.y - this.y, this.aim.x - this.x);
 
     if (id === 'lance') {
       this.enter('lance', nowMs, MAGUS.lance.chargeMs);
@@ -236,7 +239,7 @@ export class Magus extends Caster {
       this.enter('orb', nowMs, MAGUS.orb.windupMs);
     } else {
       // Targeting first: the circle goes down when the cast ends (see 'eye').
-      this.eyeTarget = this.eyeSpot(ctx);
+      this.eyeTarget = this.eyeSpot(this.aim);
       this.enter('eye', nowMs, MAGUS.eye.castMs);
     }
     return true;
@@ -262,10 +265,9 @@ export class Magus extends Caster {
     return this.state === 'orb' && this.stateEndsAt - nowMs <= MAGUS.orb.lockMs;
   }
 
-  /** Where the Eye would go down now: led by its delay, clamped to its reach. */
-  private eyeSpot(ctx: EnemyContext): { x: number; y: number } {
+  /** `aim`, pulled in to the Eye's reach. */
+  private eyeSpot(aim: { x: number; y: number }): { x: number; y: number } {
     const E = MAGUS.eye;
-    const aim = this.aimPoint(ctx, E.delayMs);
     const angle = Math.atan2(aim.y - this.y, aim.x - this.x);
     const reach = Math.min(E.range, Math.hypot(aim.x - this.x, aim.y - this.y));
     return { x: this.x + Math.cos(angle) * reach, y: this.y + Math.sin(angle) * reach };
@@ -277,7 +279,7 @@ export class Magus extends Caster {
    */
   private orbFlightMs(ctx: EnemyContext, afterMs = 0): number {
     const first = (Math.hypot(ctx.player.x - this.x, ctx.player.y - this.y) / this.orbSpeed) * 1000;
-    const ahead = this.aimPoint(ctx, afterMs + first, MAGUS.orb.aimLead);
+    const ahead = this.wantedAim(ctx, afterMs + first, MAGUS.orb.aimLead);
     return (Math.hypot(ahead.x - this.x, ahead.y - this.y) / this.orbSpeed) * 1000;
   }
 }

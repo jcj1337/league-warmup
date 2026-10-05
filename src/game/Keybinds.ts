@@ -17,15 +17,14 @@ import { Profile } from '../profile/Profile';
  */
 
 /**
- * The rebindable actions, in the order the pause menu lists them. A slot's
- * label here is the fallback; the menu names it after the active champion's
- * ability ("Q: Mystic Shot").
+ * The rebindable actions, in the order the pause menu lists them. A slot the
+ * active champion doesn't have is relabelled by the menu ("R: no ultimate").
  */
 export const BINDABLE = [
-  { action: 'abilityQ', label: 'Q' },
-  { action: 'abilityW', label: 'W' },
-  { action: 'abilityE', label: 'E' },
-  { action: 'abilityR', label: 'R' },
+  { action: 'abilityQ', label: 'Q ability' },
+  { action: 'abilityW', label: 'W ability' },
+  { action: 'abilityE', label: 'E ability' },
+  { action: 'abilityR', label: 'R ultimate' },
   { action: 'flash', label: 'Flash' },
   { action: 'attackMoveClick', label: 'Attack-move at cursor' },
   { action: 'attackMove', label: 'Attack-move (then LMB)' },

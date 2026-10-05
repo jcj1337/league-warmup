@@ -7,7 +7,7 @@ import { PROJECTILE_ART } from '../../game/view/projectileArt';
 import { ProjectileView } from '../../game/view/ProjectileView';
 
 /**
- * Twin Fang in flight: two fangs that leave her together, weave apart, and
+ * Her E in flight: two fangs that leave her together, weave apart, and
  * meet again in the target, where they snap shut in a bite. It homes, like a
  * League point-and-click, and fizzles if the target dies first.
  *
@@ -16,7 +16,7 @@ import { ProjectileView } from '../../game/view/ProjectileView';
  * together, and lifted into a shallow arc (`arcPx` at mid-flight), like the
  * venom she lobs with Q and W.
  */
-export class TwinFang {
+export class FangBolt {
   alive = true;
   private x: number;
   private y: number;
@@ -64,12 +64,12 @@ export class TwinFang {
     this.y += (dy / dist) * step;
 
     const travelled = Math.min(1, 1 - (dist - step - this.target.radius) / this.startDist);
-    const spread = THEME.twinFang.weavePx * Math.sin(Math.PI * Math.max(0, travelled));
+    const spread = THEME.fangBolt.weavePx * Math.sin(Math.PI * Math.max(0, travelled));
     const nx = -Math.sin(angle);
     const ny = Math.cos(angle);
     // Each fang angles out, then back in, along with its weave.
     const lean = Math.cos(Math.PI * travelled) * 0.35;
-    const lift = 4 * THEME.twinFang.arcPx * Math.max(0, travelled) * (1 - Math.max(0, travelled));
+    const lift = 4 * THEME.fangBolt.arcPx * Math.max(0, travelled) * (1 - Math.max(0, travelled));
     this.fangs[0].sync(this.x + nx * spread, this.y + ny * spread - lift, deltaSeconds, angle + lean);
     this.fangs[1].sync(this.x - nx * spread, this.y - ny * spread - lift, deltaSeconds, angle - lean);
   }
@@ -87,7 +87,7 @@ export class TwinFang {
  * screen gives a short shake.
  */
 export function playBite(scene: Phaser.Scene, target: Enemy, angle: number, poisoned: boolean): void {
-  const T = THEME.twinFang;
+  const T = THEME.fangBolt;
   const f = THEME.fx.fang;
   const fx = Fx.of(scene);
   const { x, y, radius } = target;

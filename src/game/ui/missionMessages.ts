@@ -1,7 +1,7 @@
 import { ENEMIES, PURSUER, TARGETS, enemyEntry, type EnemyId, type Mode } from '../../config/balance';
 
 /** The game's name as players see it. */
-export const GAME_TITLE = "qwer's Backyard";
+export const GAME_TITLE = 'hands diff';
 
 /**
  * System-message wording for the chat feed. A gameplay stage is presented to

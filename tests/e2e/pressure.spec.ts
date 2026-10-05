@@ -16,7 +16,7 @@ test('pressure: wave sizes, staggered arrival + activation window, no premature 
     fire: window.__balance.ENEMY_PROJECTILES,
     pursuer: window.__balance.PURSUER,
     targets: window.__balance.TARGETS,
-    playerRadius: window.__ezreal.STATS.radius,
+    playerRadius: window.__magicBoy.STATS.radius,
   }));
   // Every mob type counts, so a new mob never silently drops out of these totals.
   const sizeOf = (w): number => Object.values(w).reduce((n: number, c) => n + ((c as number) ?? 0), 0) as number;
@@ -267,8 +267,8 @@ test('pressure: wave sizes, staggered arrival + activation window, no premature 
     const hpBefore = e.hp;
     const hit = e.takeHit();
     g.kit.mark(e);
-    const marked = e.hasStatus('ezreal.mark', g.clock.now);
-    e.clearStatus('ezreal.mark');
+    const marked = e.hasStatus('magicboy.mark', g.clock.now);
+    e.clearStatus('magicboy.mark');
     g.attacks.commandAttack(e);
     return {
       type: e.archetype, life: e.lifecycle, hit, hpBefore, hpAfter: e.hp, marked,

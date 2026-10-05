@@ -4,8 +4,8 @@ import { TEX } from '../../game/art/textures';
 import { registerStatusLook } from '../../game/view/statusLooks';
 import type { Champion } from '../types';
 import { BLINK_E, LEVELS, MARK_STATUS, SKILLSHOT_Q, SKILLSHOT_W, STATS, ULT_R } from './balance';
-import { EZREAL_ART } from './art';
-import { EzrealKit } from './kit';
+import { MAGIC_BOY_ART } from './art';
+import { MagicBoyKit } from './kit';
 import { autoMotion, E_MOTION, Q_MOTION, R_MOTION, W_MOTION } from './motions';
 
 /** The W mark, as the enemy wears it: a violet rune overhead and a ring at the feet. */
@@ -17,13 +17,13 @@ registerStatusLook(MARK_STATUS, {
 });
 
 /**
- * Ezreal: the ADC the trainer was built around. Autos, a linear poke (Q), a
+ * Magic Boy: the ADC the trainer was built around. Autos, a linear poke (Q), a
  * mark to cash in (W), a committed blink (E) and a global wave (R). See README.md here for the
  * kit as a player reads it; balance.ts for every number.
  */
-export const EZREAL: Champion = {
-  id: 'ezreal',
-  name: 'Ezreal',
+export const MAGIC_BOY: Champion = {
+  id: 'magicboy',
+  name: 'Magic Boy',
   stats: STATS,
   attack: {
     get baseCooldownMs() { return LEVELS.baseAttackCooldownMs; },
@@ -31,26 +31,26 @@ export const EZREAL: Champion = {
     get range() { return ATTACK.range; },
   },
   levels: LEVELS,
-  art: EZREAL_ART,
+  art: MAGIC_BOY_ART,
   autoMotion: autoMotion(),
   slots: {
     q: {
-      label: 'Mystic Shot', targeting: 'direction',
+      targeting: 'direction',
       castTimeMs: ({ castSpeed }) => SKILLSHOT_Q.castTimeMs / castSpeed, cooldownMs: () => SKILLSHOT_Q.cooldownMs,
       icon: TEX.icons.q, accent: THEME.ability.accents.q, castStyle: 'bolt', fx: 'q', motion: Q_MOTION,
     },
     w: {
-      label: 'Essence Flux', targeting: 'direction',
+      targeting: 'direction',
       castTimeMs: ({ castSpeed }) => SKILLSHOT_W.castTimeMs / castSpeed, cooldownMs: () => SKILLSHOT_W.cooldownMs,
       icon: TEX.icons.w, accent: THEME.ability.accents.w, castStyle: 'orb', fx: 'w', motion: W_MOTION,
     },
     e: {
-      label: 'Arcane Shift', targeting: 'direction',
+      targeting: 'direction',
       castTimeMs: ({ castSpeed }) => BLINK_E.castTimeMs / castSpeed, cooldownMs: () => BLINK_E.cooldownMs,
       icon: TEX.icons.e, accent: THEME.ability.accents.e, castStyle: 'blink', fx: 'e', motion: E_MOTION,
     },
     r: {
-      label: 'Trueshot Barrage', targeting: 'direction',
+      targeting: 'direction',
       // The charge speeds up with his attack speed, level and passive alike.
       castTimeMs: ({ attackSpeed }) => ULT_R.castTimeMs / attackSpeed, cooldownMs: () => ULT_R.cooldownMs,
       // As in League, Flash mid-charge doesn't take the wave along: it leaves from where he began.
@@ -58,5 +58,5 @@ export const EZREAL: Champion = {
       icon: TEX.icons.r, accent: THEME.ability.accents.r, castStyle: 'orb', fx: 'r', motion: R_MOTION,
     },
   },
-  createKit: (ctx) => new EzrealKit(ctx),
+  createKit: (ctx) => new MagicBoyKit(ctx),
 };

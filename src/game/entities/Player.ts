@@ -79,6 +79,11 @@ export class Player {
     return this.view.hatPx;
   }
 
+  /** Where the current move order is headed, or null when there is none. */
+  get destination(): { x: number; y: number } | null {
+    return this.destX !== null && this.destY !== null ? { x: this.destX, y: this.destY } : null;
+  }
+
   get isRooted(): boolean {
     return this.rootCount > 0;
   }

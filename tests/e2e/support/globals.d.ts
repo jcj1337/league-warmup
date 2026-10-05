@@ -16,12 +16,14 @@ declare global {
     __settings: any;
     /** The player's profile store (data / update / reset): everything saved, exposed by src/main.ts. */
     __profile: any;
-    /** Ezreal's live balance (SKILLSHOT_Q, SKILLSHOT_W, BLINK_E, PASSIVE, LEVELS, STATS), exposed by src/main.ts. */
-    __ezreal: any;
+    /** Magic Boy's live balance (SKILLSHOT_Q, SKILLSHOT_W, BLINK_E, PASSIVE, LEVELS, STATS), exposed by src/main.ts. */
+    __magicBoy: any;
     /** Every playable champion by id, exposed by src/main.ts. */
     __champions: any;
-    /** Cassiopeia's live balance (Q, W, E, R, POISON, LEVELS, STATS), exposed by src/main.ts. */
-    __cassiopeia: any;
+    /** Snake Lady's live balance (Q, W, E, R, POISON, LEVELS, STATS), exposed by src/main.ts. */
+    __snakeLady: any;
+    /** Axe Man's live balance (Q, W, E, R, AUTO, LEVELS, STATS), exposed by src/main.ts. */
+    __axeMan: any;
     /** Not exposed by the game; the hud suite falls back when it is absent. */
     __theme?: any;
   }

@@ -2,7 +2,7 @@ import { PALETTE as P } from '../../config/theme';
 import type { Motion } from '../types';
 
 /**
- * What Cassiopeia's body does for her auto and each cast (src/game/view/motion.ts).
+ * What Snake Lady's body does for her auto and each cast (src/game/view/motion.ts).
  * Windup keys are fractions of the real window; follow-through keys are ms at
  * level-1 tempo. Offsets are screen px, scale is about her feet.
  *
@@ -24,7 +24,7 @@ export const AUTO_MOTION: Motion = {
   ],
 };
 
-/** Q, Noxious Blast: rears up tall on her coil, then nods down hard at the spot as it wells up. */
+/** Q: rears up tall on her coil, then nods down hard at the spot as it wells up. */
 export const Q_MOTION: Motion = {
   windup: [
     { at: 0, frame: 'cast' },
@@ -38,7 +38,7 @@ export const Q_MOTION: Motion = {
   ],
 };
 
-/** E, Twin Fang: rears back with her jaws open on the fangs, and lunges as they leave. */
+/** E: rears back with her jaws open on the fangs, and lunges as they leave. */
 export const E_MOTION: Motion = {
   windup: [
     { at: 0, frame: 'fangs' },
@@ -52,7 +52,7 @@ export const E_MOTION: Motion = {
 };
 
 /**
- * R, Petrifying Gaze: a deep breath in (she swells, eyes squeezed shut), a hard
+ * R: a deep breath in (she swells, eyes squeezed shut), a hard
  * gulp, a trembling hold, the hood flares, and on the frame the cone strikes her
  * eyes snap open, blazing. Then she lets the breath go. The trembling hold drops
  * out of a window under 300ms, so a hasted R still reads inhale, gulp, glare.

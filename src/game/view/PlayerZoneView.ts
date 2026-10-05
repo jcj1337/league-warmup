@@ -20,7 +20,7 @@ interface Burst {
  * bursts open where it lands into soft, opaque, blotchy puffs that overshoot
  * a little, splatter droplets, and shrink away.
  *
- *   circle         (Cassiopeia's Q) venom welling up in place: the ring fills
+ *   circle         (Snake Lady's Q) venom welling up in place: the ring fills
  *                  from its centre while puffs bubble up inside it, then it
  *                  bursts into a cluster of puffs
  *   cone           a telegraph, then a wave of puffs sweeping out to its edge

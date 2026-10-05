@@ -50,6 +50,8 @@ export class AutoAttackMissile {
     private readonly targetSpawnId: number,
     private readonly onHit: (target: Enemy) => void,
     private readonly spec: HomingMissileSpec = AUTO_MISSILE_SPEC(),
+    /** The target died mid-flight and the missile was dropped. */
+    private readonly onFizzle?: () => void,
   ) {
     this.x = startX;
     this.y = startY;
@@ -62,6 +64,7 @@ export class AutoAttackMissile {
     // The target may have died mid-flight — fizzle quietly.
     if (!this.target.active || this.target.spawnId !== this.targetSpawnId) {
       this.kill();
+      this.onFizzle?.();
       return;
     }
 

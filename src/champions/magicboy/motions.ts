@@ -2,7 +2,7 @@ import { THEME } from '../../config/theme';
 import type { Motion } from '../types';
 
 /**
- * What Ezreal's body does for his auto and each cast (src/game/view/motion.ts).
+ * What Magic Boy's body does for his auto and each cast (src/game/view/motion.ts).
  * Windup keys are fractions of the real window; follow-through keys are ms at
  * level-1 tempo. Offsets are screen px, scale is about his feet.
  *
@@ -25,7 +25,7 @@ export function autoMotion(): Motion {
   };
 }
 
-/** Q, Mystic Shot: a quick-draw. A flinch back, then he stretches at the aim; a sharp kick as it fires. */
+/** Q: a quick-draw. A flinch back, then he stretches at the aim; a sharp kick as it fires. */
 export const Q_MOTION: Motion = {
   windup: [
     { at: 0, frame: 'cast' },
@@ -38,7 +38,7 @@ export const Q_MOTION: Motion = {
   ],
 };
 
-/** W, Essence Flux: gathers low and round, bobs up, then shoves it out and stays forward a beat. A push, not a recoil. */
+/** W: gathers low and round, bobs up, then shoves it out and stays forward a beat. A push, not a recoil. */
 export const W_MOTION: Motion = {
   windup: [
     { at: 0, frame: 'cast' },
@@ -53,7 +53,7 @@ export const W_MOTION: Motion = {
   ],
 };
 
-/** E, Arcane Shift: squashes, then pulls tall and thin and vanishes; pops in squashed where he lands and settles. */
+/** E: squashes, then pulls tall and thin and vanishes; pops in squashed where he lands and settles. */
 export const E_MOTION: Motion = {
   windup: [
     { at: 0, frame: 'cast' },
@@ -68,7 +68,7 @@ export const E_MOTION: Motion = {
 };
 
 /**
- * R, Trueshot Barrage: plants wide, teeth gritted, the gem filling; a rising
+ * R: plants wide, teeth gritted, the gem filling; a rising
  * tremble as the charge builds; a pull back, and a big recoil as the wave
  * leaves. The charge quickens with attack speed, and every beat goes with it.
  */

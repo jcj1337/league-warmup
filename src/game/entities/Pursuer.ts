@@ -111,7 +111,7 @@ export class Pursuer extends Enemy {
     const D = PURSUER.dash;
     if (this.canDash && nowMs >= this.nextDashAt && !ctx.player.stunned && dist >= D.minRange && dist <= D.maxRange) {
       this.state = 'dashWindup';
-      this.dashAngle = Math.atan2(dy, dx);
+      this.dashAngle = Math.atan2(this.aim.y - this.y, this.aim.x - this.x);
       this.dashStartedAt = nowMs;
       this.dashEndsAt = nowMs + D.windupMs;
       this.nextDashAt = nowMs + this.dashCooldownMs;

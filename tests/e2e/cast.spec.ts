@@ -5,13 +5,13 @@ test('cast: Q/W/E cast windows, committed aim, buffered orders, lockout, Flash m
   const { pass, fail, section, finish } = await startSuite(page, testInfo, 400);
 
   const cfg = await page.evaluate(() => ({
-    qCast: window.__ezreal.SKILLSHOT_Q.castTimeMs,
+    qCast: window.__magicBoy.SKILLSHOT_Q.castTimeMs,
     autoWindup: window.__warmup.scene.getScene('GameScene').attacks.windupMs,
-    wCast: window.__ezreal.SKILLSHOT_W.castTimeMs,
-    eCast: window.__ezreal.BLINK_E.castTimeMs,
-    wCd: window.__ezreal.SKILLSHOT_W.cooldownMs,
-    eCd: window.__ezreal.BLINK_E.cooldownMs,
-    eRange: window.__ezreal.BLINK_E.range,
+    wCast: window.__magicBoy.SKILLSHOT_W.castTimeMs,
+    eCast: window.__magicBoy.BLINK_E.castTimeMs,
+    wCd: window.__magicBoy.SKILLSHOT_W.cooldownMs,
+    eCd: window.__magicBoy.BLINK_E.cooldownMs,
+    eRange: window.__magicBoy.BLINK_E.range,
   }));
 
   const setup = (spots = [{ type: 'basic', x: 900, y: 360 }], hp = 9999) =>
@@ -24,7 +24,7 @@ test('cast: Q/W/E cast windows, committed aim, buffered orders, lockout, Flash m
       d.enemies.length = 0;
       for (const s of spots) {
         const e = d.spawnEnemy(s.type);
-        e.x = s.x; e.y = s.y; e.hp = hp; e.clearStatus('ezreal.mark');
+        e.x = s.x; e.y = s.y; e.hp = hp; e.clearStatus('magicboy.mark');
         // Basic slimes hold their spot (they now close in on the player); Pursuers still chase.
         e.goalX = e.x; e.goalY = e.y; e.nextPlanAt = Number.POSITIVE_INFINITY;
         d.enemies.push(e);

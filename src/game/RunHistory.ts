@@ -14,7 +14,7 @@ import { Profile, type RunRecord } from '../profile/Profile';
  *   killedBy        source of the hit that took the last HP ('pursuer', 'basic', 'magus', 'edgeFire'), or null
  *   damageTaken     HP actually lost over the run, per source
  *   stageDamage     the same for the stage that ended the run (HP is restored at every stage clear)
- *   champion        who was played (absent on runs from before champions: Ezreal)
+ *   champion        who was played (absent on runs from before champions: Magic Boy)
  *   mode            the difficulty mode it was played on (absent on runs from before modes: Normal)
  */
 
@@ -60,9 +60,9 @@ export const RunHistory = {
   },
 
   /** Stats over the runs played as one champion in one mode, on one growth setting and balance version. */
-  summary(growth: number, balanceVersion: number, champion = 'ezreal', mode = 'normal', recentCount = 10): RunSummary {
+  summary(growth: number, balanceVersion: number, champion = 'magicboy', mode = 'normal', recentCount = 10): RunSummary {
     const runs = read().filter(
-      (r) => r.growth === growth && (r.balanceVersion ?? 0) === balanceVersion && (r.champion ?? 'ezreal') === champion
+      (r) => r.growth === growth && (r.balanceVersion ?? 0) === balanceVersion && (r.champion ?? 'magicboy') === champion
         && (r.mode ?? 'normal') === mode,
     );
     const stages = runs.map((r) => r.stage).sort((a, b) => a - b);

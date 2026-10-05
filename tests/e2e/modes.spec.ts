@@ -286,7 +286,7 @@ test('modes: the profile picks the mode, damage, stage-clear bonus, rosters (whe
     down.selected === 'normal' && down.playing === 'normal' && up.selected === 'hard' && up.playing === 'hard' && held(down) && held(up)
       ? pass('Down / Up step through the modes (wrapping) without starting the run')
       : fail(`arrows: ${JSON.stringify({ down, up })}`);
-    up.champion === 'ezreal' ? pass('the champion pick is untouched') : fail(`champion became ${up.champion}`);
+    up.champion === 'magicboy' ? pass('the champion pick is untouched') : fail(`champion became ${up.champion}`);
   }
   await page.keyboard.press('Space');
   await page.waitForTimeout(300);

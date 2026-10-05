@@ -253,10 +253,10 @@ test('visuals: pixel-art setup, no tether line, command markers, sprite units + 
   };
   await restartAs({ hat: 'none' });
   const bare = await lookOf();
-  /^player_ezreal_idle_crown-base$/.test(crowned.key) && crowned.rows === 18 && crowned.headPx === 12
-    ? pass(`the default look is Ezreal in the crown: ${crowned.key}, 18 rows, 12px of hat`)
+  /^player_magicboy_idle_crown-base$/.test(crowned.key) && crowned.rows === 18 && crowned.headPx === 12
+    ? pass(`the default look is Magic Boy in the crown: ${crowned.key}, 18 rows, 12px of hat`)
     : fail(`crowned: ${JSON.stringify(crowned)}`);
-  /^player_ezreal_idle_none-base$/.test(bare.key) && bare.rows === 14 && bare.headPx === 0 && bare.originY < crowned.originY
+  /^player_magicboy_idle_none-base$/.test(bare.key) && bare.rows === 14 && bare.headPx === 0 && bare.originY < crowned.originY
     ? pass(`taking the crown off composes a shorter frame under its own key: ${bare.key}, 14 rows`)
     : fail(`bare: ${JSON.stringify(bare)}`);
   await restartAs({});

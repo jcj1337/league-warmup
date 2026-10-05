@@ -150,7 +150,7 @@ export class GameScene extends Phaser.Scene {
 
   create(): void {
     this.roundId++;
-    // The first round after a page load waits on the start screen; so does one after "Change champion".
+    // The first round after a page load waits on the start screen; so does one after "Return to select".
     this.run = new Run(this.roundId === 1 || this.holdNextRound);
     this.enemies = [];
     this.lastCancelShownAt = -Infinity;
@@ -169,7 +169,7 @@ export class GameScene extends Phaser.Scene {
     const look = ensurePlayerFrames(this, this.champion, resolveLook(Profile.data));
     this.player = new Player(
       this, ARENA.width / 2, ARENA.height / 2, this.champion.stats, look,
-      () => this.progression.moveSpeedMultiplier,
+      () => this.progression.moveSpeedMultiplier * (this.kit?.moveSpeedMultiplier ?? 1),
       () => this.champion.attack.range,
     );
 
@@ -338,7 +338,7 @@ export class GameScene extends Phaser.Scene {
     if (!def || !this.canAct || !this.cooldowns.isReady(slot)) return;
     const aim = this.resolveAim(def, x, y);
     if (!aim || !this.kit.canCast(slot, aim)) return;
-    this.attacks.onMoveOrder();
+    if (!def.quick) this.attacks.onMoveOrder();
     const payload = this.kit.commit(slot, aim);
     this.cooldowns.start(slot);
     const castTimeMs = def.castTimeMs(this.castPace);
@@ -665,6 +665,7 @@ export class GameScene extends Phaser.Scene {
       slowPlayer: (fraction, ms) => this.player.slow(this.clock.now, fraction, ms),
       spells: this.hostileSpells,
       attackTokens: this.attackTokens,
+      aimSpeedScale: this.mode.aimSpeedMultiplier,
       enemiesRemaining: this.director.enemiesRemaining,
       allies: this.director.enemies,
     });
@@ -744,7 +745,7 @@ export class GameScene extends Phaser.Scene {
       round: this.roundId,
       runTime: this.run ? this.run.clock.now / 1000 : 0,
       score: this.scoring ? Math.round(this.scoring.score) : 0,
-      champion: this.champion ? this.champion.id : 'ezreal',
+      champion: this.champion ? this.champion.id : 'magicboy',
       mode: this.mode ? this.mode.id : DEFAULT_MODE,
       hp: this.player ? this.player.hp : 0,
       maxHp: this.player ? this.player.maxHp : 1,

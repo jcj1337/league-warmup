@@ -22,7 +22,7 @@ export const ARENA = {
  */
 export const PLAYER = {
   /**
-   * The pace enemy speeds are tuned against (Ezreal's), so a faster or slower
+   * The pace enemy speeds are tuned against (Magic Boy's), so a faster or slower
    * champion changes the matchup, never the enemies.
    */
   referenceMoveSpeed: 280,
@@ -59,8 +59,8 @@ export const ATTACK = {
    * The debug ring drawn around the player is exactly this radius, so a target
    * is attackable as soon as its circle touches the ring.
    *
-   * The default auto range, Ezreal's. A champion sets its own through its
-   * attack profile (Champion.attack.range): Cassiopeia's is shorter.
+   * The default auto range, Magic Boy's. A champion sets its own through its
+   * attack profile (Champion.attack.range): Snake Lady's is shorter.
    */
   range: 260,
 
@@ -247,7 +247,7 @@ export const FLASH = {
   cooldownMs: 20000,
   /**
    * League's ratio to the auto: Flash 400 against a 550 auto (~0.73x), so
-   * noticeably shorter than your attack range, and shorter than Ezreal's E. (Was 275.)
+   * noticeably shorter than your attack range, and shorter than Magic Boy's E. (Was 275.)
    */
   range: 190,
 } as const;
@@ -654,6 +654,22 @@ export const DIFFICULTY = {
   contactDamage: { base: 1, k: 0.5 } as Curve,
   /** How many basics may be winding up a spit at once (see AttackTokens). */
   attackTokens: { base: 2, k: 0.5, min: 2, max: 10 } as Curve,
+  /**
+   * How fast an enemy's aim cursor travels, in px/s (see Enemy.aim): its aim
+   * chases you at this speed instead of snapping, so a blink leaves it behind
+   * for a moment. Well above walking speed, so walking is always tracked; the
+   * cap keeps a blink worth something on any stage. × the mode's aimSpeedMultiplier.
+   */
+  aimSpeed: { base: 900, k: 0.35, max: 1800 } as Curve,
+  /**
+   * How quickly a caster picks up a change in your direction, for a spell it
+   * places in one go: the velocity it leads by turns toward your real one as
+   * if the point this many ms ahead of you moved at its aim speed. Reversing
+   * at full speed takes it about a third of a second at Stage 1.
+   */
+  aimLeadCatchUpMs: 500,
+  /** Multiplies the casters' aim spread (MAGUS / SOVEREIGN.aimSpreadPx): they get more accurate with the stage. */
+  aimSpread: { base: 1, k: -0.25, min: 0.4 } as Curve,
   /** Enemies arrive in packs of this many (rounded) at nearby spots: 1 until about Stage 8. */
   packSize: { base: 1, k: 0.4, min: 1, max: 5 } as Curve,
   /** Share of max HP restored when a stage is cleared: 1 = back to full. */
@@ -664,7 +680,7 @@ export const DIFFICULTY = {
  * Bumped whenever tuning changes how hard a run is. The run log tags each run
  * with it, and its summary only compares runs from the same version.
  */
-export const BALANCE_VERSION = 12;
+export const BALANCE_VERSION = 13;
 
 /**
  * The player's level, League style: kills give XP (ENEMIES[id].xp). This is
@@ -680,8 +696,8 @@ export const LEVELS = {
   /**
    * Ability haste shortens cast windows too, at this share of what it does to
    * cooldowns: cast = base / (1 + share × haste / 100). 85 haste at level 18
-   * is ×0.70 (Cassiopeia's R 500 → 351ms). A slot that scales with attack
-   * speed instead (Ezreal's R) ignores it.
+   * is ×0.70 (Snake Lady's R 500 → 351ms). A slot that scales with attack
+   * speed instead (Magic Boy's R) ignores it.
    */
   castHasteShare: 0.5,
 };
@@ -861,6 +877,8 @@ export interface Mode {
   stageClearBonus: number;
   /** Multiplies DIFFICULTY.waveSize: a wave's size, and a generated wave's budget. */
   waveSizeMultiplier: number;
+  /** Multiplies DIFFICULTY.aimSpeed: how fast enemy aim catches up with you. */
+  aimSpeedMultiplier: number;
   /** Per mob, the ENEMIES fields this mode overrides (unlock stage, weight, share, per-wave cap). */
   enemies: Partial<Record<EnemyId, Partial<EnemyEntry>>>;
   /** Its hand-written intro; every later stage is generated. */
@@ -869,7 +887,7 @@ export interface Mode {
 
 export const MODES = {
   easy: {
-    id: 'easy', name: 'Easy', damageMultiplier: 1, stageClearBonus: 0, waveSizeMultiplier: 0.75,
+    id: 'easy', name: 'Easy', damageMultiplier: 1, stageClearBonus: 0, waveSizeMultiplier: 0.75, aimSpeedMultiplier: 0.8,
     enemies: {
       magus: { unlockStage: 7, weight: 0.3 },
       sovereign: { unlockStage: 8, weight: 0.3 },
@@ -879,12 +897,12 @@ export const MODES = {
     stages: EASY_STAGES,
   },
   normal: {
-    id: 'normal', name: 'Normal', damageMultiplier: 1, stageClearBonus: 500, waveSizeMultiplier: 1,
+    id: 'normal', name: 'Normal', damageMultiplier: 1, stageClearBonus: 500, waveSizeMultiplier: 1, aimSpeedMultiplier: 1,
     enemies: {},
     stages: STAGES,
   },
   hard: {
-    id: 'hard', name: 'Hard', damageMultiplier: 2, stageClearBonus: 1500, waveSizeMultiplier: 1,
+    id: 'hard', name: 'Hard', damageMultiplier: 2, stageClearBonus: 1500, waveSizeMultiplier: 1, aimSpeedMultiplier: 1.25,
     enemies: {
       magus: { unlockStage: 3, weight: 1.5, maxShare: 0.5, maxPerWave: { base: 2, k: 0.3, max: 4 } },
       sovereign: { unlockStage: 4, weight: 1.5, maxShare: 0.5, maxPerWave: { base: 1, k: 0.3, max: 2 } },

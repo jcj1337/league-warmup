@@ -1,8 +1,10 @@
 import Phaser from 'phaser';
 import { THEME } from '../../config/theme';
-import { GLYPHS, GLYPH_H, GLYPH_W } from './glyphs';
+import { GLYPHS, GLYPH_H, GLYPH_W, LOWER_GLYPHS } from './glyphs';
 
 export const FONT_KEY = 'pixel-font';
+/** The same font with real lower-case letters (LOWER_GLYPHS), for the title. */
+export const CASED_FONT_KEY = 'pixel-font-cased';
 
 /** One glyph cell: the 5×7 glyph plus a pixel of spacing right and below. */
 const CELL_W = GLYPH_W + 1;
@@ -10,14 +12,17 @@ const CELL_H = GLYPH_H + 1;
 const PER_ROW = 16;
 
 /**
- * Build the bitmap font from the glyph table once per game: a white glyph
- * sheet (tinted per use) plus BitmapText font data. Lower-case letters share
- * the upper-case glyphs.
+ * Build the bitmap fonts from the glyph tables once per game: a white glyph
+ * sheet (tinted per use) plus BitmapText font data. In FONT_KEY lower-case
+ * letters share the upper-case glyphs; CASED_FONT_KEY has its own.
  */
 export function ensureFont(scene: Phaser.Scene): void {
-  if (scene.cache.bitmapFont.exists(FONT_KEY)) return;
+  if (!scene.cache.bitmapFont.exists(FONT_KEY)) buildFont(scene, FONT_KEY, GLYPHS, true);
+  if (!scene.cache.bitmapFont.exists(CASED_FONT_KEY)) buildFont(scene, CASED_FONT_KEY, { ...GLYPHS, ...LOWER_GLYPHS }, false);
+}
 
-  const chars = Object.keys(GLYPHS);
+function buildFont(scene: Phaser.Scene, key: string, glyphs: Record<string, string[]>, foldLower: boolean): void {
+  const chars = Object.keys(glyphs);
   const rows = Math.ceil(chars.length / PER_ROW);
   const canvas = document.createElement('canvas');
   canvas.width = PER_ROW * CELL_W;
@@ -27,7 +32,7 @@ export function ensureFont(scene: Phaser.Scene): void {
 
   const data = {
     retroFont: true,
-    font: FONT_KEY,
+    font: key,
     size: CELL_H,
     lineHeight: CELL_H,
     chars: {} as Record<number, unknown>,
@@ -36,7 +41,7 @@ export function ensureFont(scene: Phaser.Scene): void {
   chars.forEach((ch, i) => {
     const gx = (i % PER_ROW) * CELL_W;
     const gy = Math.floor(i / PER_ROW) * CELL_H;
-    GLYPHS[ch].forEach((row, y) => {
+    glyphs[ch].forEach((row, y) => {
       for (let x = 0; x < GLYPH_W; x++) if (row[x] === '#') ctx.fillRect(gx + x, gy + y, 1, 1);
     });
 
@@ -49,16 +54,16 @@ export function ensureFont(scene: Phaser.Scene): void {
     };
     data.chars[ch.charCodeAt(0)] = glyph;
     const lower = ch.toLowerCase();
-    if (lower !== ch) data.chars[lower.charCodeAt(0)] = glyph;
+    if (foldLower && lower !== ch) data.chars[lower.charCodeAt(0)] = glyph;
   });
 
-  scene.textures.addCanvas(FONT_KEY, canvas);
-  scene.cache.bitmapFont.add(FONT_KEY, { data, texture: FONT_KEY, frame: null });
+  scene.textures.addCanvas(key, canvas);
+  scene.cache.bitmapFont.add(key, { data, texture: key, frame: null });
 }
 
 /**
  * Pixel text at an integer scale (2 = 12px advance, 16px line). `color` is a
- * tint; the glyph sheet itself is white.
+ * tint; the glyph sheet itself is white. `font` CASED_FONT_KEY keeps lower case.
  */
 export function pixelText(
   scene: Phaser.Scene,
@@ -67,9 +72,10 @@ export function pixelText(
   text: string,
   scale = 2,
   color: number = THEME.ui.text,
+  font: string = FONT_KEY,
 ): Phaser.GameObjects.BitmapText {
   return scene.add
-    .bitmapText(Math.round(x), Math.round(y), FONT_KEY, text, CELL_H * scale)
+    .bitmapText(Math.round(x), Math.round(y), font, text, CELL_H * scale)
     .setTint(color)
     .setDropShadow(scale >= 3 ? 2 : 1, scale >= 3 ? 2 : 1, THEME.ui.panel, 0.85);
 }

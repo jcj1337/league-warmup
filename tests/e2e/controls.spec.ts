@@ -45,9 +45,9 @@ test('controls: Q quick-cast, T attack-move-click, targeting modes, T orbwalk, T
   const d = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
 
   const cfg = await page.evaluate(() => ({
-    qRange: window.__ezreal.SKILLSHOT_Q.maxRange,
-    qSpeed: window.__ezreal.SKILLSHOT_Q.speed,
-    qCd: window.__ezreal.SKILLSHOT_Q.cooldownMs,
+    qRange: window.__magicBoy.SKILLSHOT_Q.maxRange,
+    qSpeed: window.__magicBoy.SKILLSHOT_Q.speed,
+    qCd: window.__magicBoy.SKILLSHOT_Q.cooldownMs,
     atkRange: window.__balance.ATTACK.range,
     targeting: window.__balance.ATTACK.attackMoveTargeting,
     keysT: window.__balance.KEYBINDS.attackMoveClick,

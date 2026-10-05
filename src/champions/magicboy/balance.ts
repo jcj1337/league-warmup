@@ -1,7 +1,7 @@
 /**
- * Ezreal's numbers. The world (arena, enemies, waves, score, Flash) stays in
+ * Magic Boy's numbers. The world (arena, enemies, waves, score, Flash) stays in
  * src/config/balance.ts; everything here is his alone. Tunable live from the
- * console: __ezreal.SKILLSHOT_Q.speed = 1400
+ * console: __magicBoy.SKILLSHOT_Q.speed = 1400
  */
 
 export const STATS = {
@@ -94,7 +94,7 @@ export const SKILLSHOT_W = {
 };
 
 /**
- * E: an Arcane-Shift-flavoured blink that fires a homing bolt on arrival.
+ * E: a blink that fires a homing bolt on arrival.
  *
  * The blink always happens; the bolt only spawns if something is nearby. The
  * bolt prefers a W-marked enemy, which is what makes W -> E a real combo.
@@ -109,7 +109,7 @@ export const BLINK_E = {
   castTimeMs: 210,
   cooldownMs: 8000,
   /**
-   * League's ratio to the auto: Arcane Shift 475 against Ezreal's 550 auto
+   * League's ratio to the auto: a 475 blink against a 550 auto
    * (~0.86x), so just short of his attack range, and longer than Flash. (Was 310.)
    */
   range: 225,
@@ -123,7 +123,7 @@ export const BLINK_E = {
 };
 
 /**
- * R: Trueshot Barrage, as in League. A long charge, then one global wave
+ * R, as in League. A long charge, then one global wave
  * that crosses the whole arena and passes through everything in its path.
  * The first enemy it touches takes the brunt; everyone after, less. Each
  * enemy hit is a passive stack. No stage refresh: a landed Q lowers its
@@ -152,7 +152,7 @@ export const ULT_R = {
 };
 
 /**
- * The Ezreal-flavoured passive: landing abilities ramps your attack speed.
+ * His passive: landing abilities ramps your attack speed.
  *
  * Any damaging/marking ability hit stacks it: Q, the W mark landing, and the E
  * bolt. A W DETONATION does not (the stack was already granted when the mark
@@ -169,4 +169,4 @@ export const PASSIVE = {
 };
 
 /** The W mark, as an enemy status id. */
-export const MARK_STATUS = 'ezreal.mark';
+export const MARK_STATUS = 'magicboy.mark';

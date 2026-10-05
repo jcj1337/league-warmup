@@ -2,7 +2,7 @@ import { PALETTE as P } from '../../config/theme';
 import type { ChampionArt } from '../types';
 
 /**
- * Cassiopeia's slime: the same friendly dome as Ezreal's, in venom green,
+ * Snake Lady's slime: the same friendly dome as Magic Boy's, in venom green,
  * but the bottom of the body is a coiled snake tail sweeping out to the
  * facing side instead of a flat base. Same face, same crown on top.
  *   m body · L light · w shine · d dark · D deepest · k ink · e eye (ink; lights with a motion's glow)
@@ -45,7 +45,7 @@ const SHUT = withRows(BODY, {
   8: 'kdmmmmmmmmmmdk',
 });
 
-export const CASSIOPEIA_ART: ChampionArt = {
+export const SNAKE_LADY_ART: ChampionArt = {
   frames: {
     idle: BODY,
     /** Breath out / landing half of the hop: the coil takes the weight. */
@@ -66,11 +66,11 @@ export const CASSIOPEIA_ART: ChampionArt = {
       8: '..kdmmmmmkttttttt.',
       9: '...kdsmmFmmFsdk..t',
     }),
-    /** Twin Fang: jaws open on two fangs. */
+    /** E: jaws open on two fangs. */
     fangs: withRows(BODY, { 8: 'kdmmmkkkkkmmdk', 9: '.kdsmFkkFmsdk.' }),
-    /** Petrifying Gaze, breathing in: eyes shut, cheeks full. */
+    /** R, breathing in: eyes shut, cheeks full. */
     shut: SHUT,
-    /** Petrifying Gaze, the strike: eyes wide (they light up), mouth open. */
+    /** R, the strike: eyes wide (they light up), mouth open. */
     gaze: withRows(BODY, {
       5: 'kmmmeemmmeemmk',
       6: 'kmmmeemmmeemmk',

@@ -6,21 +6,21 @@ import { BLINK_E, LEVELS, MARK_STATUS, SKILLSHOT_Q, SKILLSHOT_W, ULT_R } from '.
 import { PassiveSystem } from './PassiveSystem';
 
 /**
- * Ezreal's kit, for one run.
+ * Magic Boy's kit, for one run.
  *
- *   Q  Mystic Shot   a linear bolt: one pip (two from LEVELS.qRankUp.level), refunds
- *                    part of every basic cooldown, stacks the passive
- *   W  Essence Flux  a linear orb that MARKS: the next pip the enemy loses detonates
- *                    the mark for one extra pip
- *   E  Arcane Shift  a blink committed at keypress, then a homing bolt from where he
- *                    lands, preferring a marked enemy
- *   R  Trueshot      a long charge, then a global wave through everything in its path:
- *      Barrage       two pips to the first enemy, one to each after, a passive stack each
+ *   Q  a linear bolt: one pip (two from LEVELS.qRankUp.level), refunds
+ *      part of every basic cooldown, stacks the passive
+ *   W  a linear orb that MARKS: the next pip the enemy loses detonates
+ *      the mark for one extra pip
+ *   E  a blink committed at keypress, then a homing bolt from where he
+ *      lands, preferring a marked enemy
+ *   R  a long charge, then a global wave through everything in its path:
+ *      two pips to the first enemy, one to each after, a passive stack each
  *
  * The engine owns the cast windows, cooldowns and projectiles; this decides
  * what each slot does when it resolves, and keeps his counters.
  */
-export class EzrealKit implements Kit {
+export class MagicBoyKit implements Kit {
   readonly passive = new PassiveSystem();
   /** Stats for the end screen (Q only — W removes no pips). */
   qFired = 0;

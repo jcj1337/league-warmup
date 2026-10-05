@@ -124,7 +124,7 @@ export class Target extends Enemy {
     if (this.nextSpitAt < 0) this.nextSpitAt = nowMs + this.spitCooldownMs * Phaser.Math.FloatBetween(0.3, 1);
 
     if (this.spitting) {
-      this.spitAngle = Math.atan2(dy, dx);
+      this.spitAngle = Math.atan2(this.aim.y - this.y, this.aim.x - this.x);
       if (nowMs < this.spitEndsAt) {
         this.pose.windup = Phaser.Math.Clamp((nowMs - this.spitStartedAt) / S.windupMs, 0, 1);
         return true;
@@ -150,7 +150,7 @@ export class Target extends Enemy {
     this.spitting = true;
     this.spitStartedAt = nowMs;
     this.spitEndsAt = nowMs + S.windupMs;
-    this.spitAngle = Math.atan2(dy, dx);
+    this.spitAngle = Math.atan2(this.aim.y - this.y, this.aim.x - this.x);
     this.pose.windup = 0;
     return true;
   }

@@ -18,12 +18,13 @@ const TAU = Math.PI * 2;
  *     in, a glow swelling behind them
  *   - arcane energy gathering over its crest while it casts: a swelling glow
  *     with motes spiralling into it
- *   - the Lance charge: a line that tracks you and stretches to full length
- *     as the charge completes, a bright head on its tip (the locked line is
- *     drawn by the HostileSpellView once it is placed)
- *   - the Eye: a reticle closing onto where the circle will go down
- *   - the Orb windup: an aim line that tracks you, then a red strip once the
- *     aim locks
+ *   - its three aim indicators, drawn alike: the spell's own shape at full
+ *     size from the first frame, which only travels (at the Magus's aim
+ *     speed) and brightens as the cast runs. Nothing grows, spins or pulses.
+ *       the Lance charge: its strip (the locked line is drawn by the
+ *         HostileSpellView once it is placed)
+ *       the Eye: its circle and hot centre, with a crosshair
+ *       the Orb windup: its strip, then a red strip once the aim locks
  *
  * Reads the entity only; never changes gameplay.
  */
@@ -135,18 +136,19 @@ export class MagusView extends EnemyView {
     g.fillStyle(G.core, 1);
     g.fillCircle(gx, gy, 1 + (G.radius / 2) * swell);
 
-    // Eye targeting: a reticle closing onto where the circle will go down.
+    // The aim indicators share one look: a faint fill and a steady outline that brighten with the cast.
+    const A = T.aim;
+    const alpha = Phaser.Math.Linear(A.alphaStart, A.alphaEnd, progress);
+    const fillAlpha = Phaser.Math.Linear(A.fillStart, A.fillEnd, progress);
+
+    // Eye targeting: the circle it will put down, travelling to where it will land.
     if (m.state === 'eye' && m.eyeTarget) {
-      const C = T.lanceCharge;
+      const C = A;
       const { x, y } = m.eyeTarget;
-      const r = MAGUS.eye.radius * Phaser.Math.Linear(1.35, 1, easeOut(progress));
-      const alpha = Phaser.Math.Linear(C.alphaStart, C.alphaEnd, progress);
-      const turn = (this.visualMs / 900) * TAU;
-      for (let k = 0; k < 4; k++) {
-        const a = turn + (k * TAU) / 4;
-        smoothRing(this.overlay, x, y, r, C.color, alpha, C.width, a, a + 1.05);
-      }
-      smoothRing(this.overlay, x, y, MAGUS.eye.centreRadius * Phaser.Math.Linear(1.6, 1, progress), C.core, alpha * 0.8, C.width);
+      this.overlay.fillStyle(C.color, fillAlpha);
+      this.overlay.fillCircle(x, y, MAGUS.eye.radius);
+      smoothRing(this.overlay, x, y, MAGUS.eye.radius, C.color, alpha, C.width);
+      smoothRing(this.overlay, x, y, MAGUS.eye.centreRadius, C.core, alpha * 0.8, C.width);
       smoothLine(this.overlay, x - 9, y, x + 9, y, C.core, alpha, C.width);
       smoothLine(this.overlay, x, y - 9, x, y + 9, C.core, alpha, C.width);
       Object.assign(this.reticle, { visible: true, x, y });
@@ -154,39 +156,32 @@ export class MagusView extends EnemyView {
       this.reticle.visible = false;
     }
 
-    // Lance charge: tracks the player and reaches full length as the charge completes.
+    // Lance charge: the strip it will land as, sweeping after the player.
     if (m.state === 'lance') {
-      const C = T.lanceCharge;
-      const length = MAGUS.lance.length * Math.pow(progress, 0.6);
-      const ex = m.x + Math.cos(m.aimAngle) * length;
-      const ey = m.y + Math.sin(m.aimAngle) * length;
-      const alpha = Phaser.Math.Linear(C.alphaStart, C.alphaEnd, progress);
-      // The width it will land with, faintly, so the charge reads as a strip and not a wire.
-      this.overlay.fillStyle(C.color, 0.05 + 0.07 * progress);
-      this.overlay.fillPoints(stripPoints(m.x, m.y, m.aimAngle, length, MAGUS.lance.halfWidth), true);
-      smoothLine(this.overlay, m.x, m.y, ex, ey, C.color, alpha, C.width + 2 * progress);
-      this.overlay.fillStyle(C.core, alpha);
-      this.overlay.fillCircle(ex, ey, 3 + 2 * Math.sin(this.visualMs / 50) * progress);
+      const { length, halfWidth } = MAGUS.lance;
+      this.overlay.fillStyle(A.color, fillAlpha);
+      this.overlay.fillPoints(stripPoints(m.x, m.y, m.aimAngle, length, halfWidth), true);
+      smoothStrip(this.overlay, m.x, m.y, m.aimAngle, length, halfWidth, A.color, alpha, A.width);
       Object.assign(this.charge, { visible: true, length, angle: m.aimAngle });
     } else {
       this.charge.visible = false;
     }
 
-    // Orb windup: the aim line tracks you, then locks into a red strip.
+    // Orb windup: the strip the orb will fly down, sweeping after you; it locks into a red strip.
     if (m.state === 'orb') {
-      const A = T.orbAim;
+      const L = T.orbAim;
       const O = MAGUS.orb;
       const locked = m.orbLocked(nowMs);
       const sx = m.x + Math.cos(m.aimAngle) * m.radius;
       const sy = m.y + Math.sin(m.aimAngle) * m.radius;
       if (locked) {
-        this.overlay.fillStyle(A.lockFill, A.lockFillAlpha);
+        this.overlay.fillStyle(L.lockFill, L.lockFillAlpha);
         this.overlay.fillPoints(stripPoints(sx, sy, m.aimAngle, O.range, O.radius), true);
-        smoothStrip(this.overlay, sx, sy, m.aimAngle, O.range, O.radius, A.lockEdge, 0.9, 2);
+        smoothStrip(this.overlay, sx, sy, m.aimAngle, O.range, O.radius, L.lockEdge, 0.9, 2);
       } else {
-        const ex = sx + Math.cos(m.aimAngle) * O.range;
-        const ey = sy + Math.sin(m.aimAngle) * O.range;
-        smoothLine(this.overlay, sx, sy, ex, ey, A.color, Phaser.Math.Linear(A.alphaStart, A.alphaEnd, progress), 2);
+        this.overlay.fillStyle(A.color, fillAlpha);
+        this.overlay.fillPoints(stripPoints(sx, sy, m.aimAngle, O.range, O.radius), true);
+        smoothStrip(this.overlay, sx, sy, m.aimAngle, O.range, O.radius, A.color, alpha, A.width);
       }
       Object.assign(this.orbAim, { visible: true, locked, angle: m.aimAngle });
     } else {

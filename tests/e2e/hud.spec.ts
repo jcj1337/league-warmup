@@ -48,7 +48,7 @@ test('hud: contextual range ring, pause freeze + input gate, Q slot, settings me
     hold: window.__theme?.rangeHint?.holdMs ?? 320,
     atkRange: window.__balance.ATTACK.range,
     tRadius: window.__balance.TARGETS.radius,
-    qCd: window.__ezreal.SKILLSHOT_Q.cooldownMs,
+    qCd: window.__magicBoy.SKILLSHOT_Q.cooldownMs,
   }));
 
   // === 1. Attack-range circle is contextual ==================================
@@ -212,7 +212,7 @@ test('hud: contextual range ring, pause freeze + input gate, Q slot, settings me
   // Sub-second shows one decimal.
   await page.evaluate(() => {
     const g = window.__warmup.scene.getScene('GameScene');
-    g.cooldowns.reduce(999999, ['q']); g.cooldowns.start('q'); g.cooldowns.reduce(window.__ezreal.SKILLSHOT_Q.cooldownMs - 800, ['q']);
+    g.cooldowns.reduce(999999, ['q']); g.cooldowns.start('q'); g.cooldowns.reduce(window.__magicBoy.SKILLSHOT_Q.cooldownMs - 800, ['q']);
   });
   await page.waitForTimeout(120);
   const qSub = await page.evaluate(() => window.__warmup.scene.getScene('UIScene').abilityBar.slots[0].cooldownText.text);

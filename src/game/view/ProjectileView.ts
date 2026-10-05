@@ -17,6 +17,8 @@ export interface ProjectileArt {
   frameMs?: number;
   /** Rotate the sprite to its heading (bolts) or keep it upright (orbs). */
   rotate: boolean;
+  /** Turns per second, end over end (a thrown axe). Overrides `rotate`. */
+  spin?: number;
   trail?: TrailStyle;
   depth: number;
 }
@@ -57,7 +59,8 @@ export class ProjectileView {
       this.sprite.setTexture(this.art.frames[i]);
     }
     this.sprite.setPosition(Math.round(x), Math.round(y));
-    if (this.art.rotate && heading !== undefined) this.sprite.setRotation(snapAngle(heading, 32));
+    if (this.art.spin) this.sprite.setRotation(snapAngle((this.age / 1000) * this.art.spin * Math.PI * 2, 16));
+    else if (this.art.rotate && heading !== undefined) this.sprite.setRotation(snapAngle(heading, 32));
 
     const trail = this.art.trail;
     if (trail) {

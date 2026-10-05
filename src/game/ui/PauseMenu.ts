@@ -90,7 +90,7 @@ export class PauseMenu {
   /**
    * @param controls fixed (mouse) controls listed above the key rows, as
    *   'INPUT | what it does'.
-   * @param labelFor names a key row ('Q: Mystic Shot'); null keeps the
+   * @param labelFor names a key row ('R: no ultimate'); null keeps the
    *   action's own label. Re-applied through `setLabels` when the champion changes.
    */
   constructor(
@@ -135,7 +135,7 @@ export class PauseMenu {
     // ---- actions ---------------------------------------------------------
     parts.push(...this.button(x - 110, top + 100, 200, 40, 'RESUME', actions.resume));
     parts.push(...this.button(x + 110, top + 100, 200, 40, 'RESTART ROUND', actions.restart));
-    parts.push(...this.button(x, top + 146, 260, 40, 'CHANGE CHAMPION', actions.changeChampion));
+    parts.push(...this.button(x, top + 146, 260, 40, 'RETURN TO SELECT', actions.changeChampion));
 
     // ---- settings --------------------------------------------------------
     parts.push(pixelText(scene, x, top + 190, '- SETTINGS -', 2, THEME.ui.faint).setOrigin(0.5));

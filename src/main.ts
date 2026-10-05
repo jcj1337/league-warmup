@@ -11,8 +11,9 @@ import { activeMode } from './game/Mode';
 import { Settings } from './game/Settings';
 import { Profile } from './profile/Profile';
 import { CHAMPIONS } from './champions';
-import * as ezreal from './champions/ezreal/balance';
-import * as cassiopeia from './champions/cassiopeia/balance';
+import * as magicboy from './champions/magicboy/balance';
+import * as snakelady from './champions/snakelady/balance';
+import * as axeman from './champions/axeman/balance';
 
 const game = new Phaser.Game({
   type: Phaser.AUTO,
@@ -47,8 +48,9 @@ const game = new Phaser.Game({
 //   __settings.all() / .pauseOnFocusLoss = false             // pause-menu settings (saved in this browser)
 //   __profile.data / .reset()                                // everything saved, in one place
 //   __profile.update((d) => { d.mode = 'hard' })             // the difficulty mode of the next run (MODES)
-//   __ezreal.SKILLSHOT_Q.speed = 1400                        // Ezreal's numbers (src/champions/ezreal/balance.ts)
-//   __cassiopeia.Q.radius = 90                               // Cassiopeia's (src/champions/cassiopeia/balance.ts)
+//   __magicBoy.SKILLSHOT_Q.speed = 1400                        // Magic Boy's numbers (src/champions/magicboy/balance.ts)
+//   __snakeLady.Q.radius = 90                               // Snake Lady's (src/champions/snakelady/balance.ts)
+//   __axeMan.Q.dropMaxPx = 220                               // Axe Man's (src/champions/axeman/balance.ts)
 //   __champions                                              // every playable champion
 const runs = {
   list: () => RunHistory.list(),
@@ -60,5 +62,5 @@ const runs = {
 };
 Object.assign(window as unknown as Record<string, unknown>, {
   __warmup: game, __balance: balance, __theme: THEME, __runs: runs, __keybinds: Keybinds, __mouseSpeed: MouseSpeed,
-  __settings: Settings, __profile: Profile, __ezreal: ezreal, __cassiopeia: cassiopeia, __champions: CHAMPIONS,
+  __settings: Settings, __profile: Profile, __magicBoy: magicboy, __snakeLady: snakelady, __axeMan: axeman, __champions: CHAMPIONS,
 });

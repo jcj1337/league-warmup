@@ -50,7 +50,7 @@ export interface SuiteOptions {
    * real staggered opening.
    */
   arriveAll?: boolean;
-  /** Play as this champion: the profile's pick is seeded before the page loads (default: Ezreal). */
+  /** Play as this champion: the profile's pick is seeded before the page loads (default: Magic Boy). */
   champion?: string;
   /** Play on this difficulty mode, seeded the same way (default: Normal). */
   mode?: string;

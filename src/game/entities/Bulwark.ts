@@ -34,7 +34,7 @@ export type BulwarkState = 'chase' | 'strike' | 'recover' | 'brace' | 'ram' | 'w
  *
  * It is a normal `Enemy`: every hit removes one pip whatever it is doing, and
  * every player tool works on it. A Strike is its own, resolved here like the
- * Pursuer's swing, so it dies with it and a stun (Cassiopeia's R) breaks it.
+ * Pursuer's swing, so it dies with it and a stun (Snake Lady's R) breaks it.
  */
 export class Bulwark extends Enemy {
   readonly archetype: EnemyArchetype = 'bulwark';
@@ -170,7 +170,7 @@ export class Bulwark extends Enemy {
     if (!ctx.player.stunned) {
       const W = BULWARK.pathMaker;
       if (nowMs >= this.nextPathMakerAt && dist >= W.minRange && dist <= W.maxRange) {
-        this.pathAngle = Math.atan2(dy, dx);
+        this.pathAngle = Math.atan2(this.aim.y - this.y, this.aim.x - this.x);
         this.facing = this.pathAngle;
         this.nextPathMakerAt = nowMs + this.pathMakerCooldownMs * cooldown;
         this.unstoppable = true;
@@ -181,7 +181,7 @@ export class Bulwark extends Enemy {
       if (nowMs >= this.nextStrikeAt && dist <= (heavy ? BULWARK.heavy.triggerRange : BULWARK.strike.length)) {
         this.strikeHeavy = heavy;
         this.strikesSinceHeavy = heavy ? 0 : this.strikesSinceHeavy + 1;
-        this.strikeAngle = Math.atan2(dy, dx);
+        this.strikeAngle = Math.atan2(this.aim.y - this.y, this.aim.x - this.x);
         this.facing = this.strikeAngle;
         this.nextStrikeAt = nowMs + this.strikeCooldownMs * cooldown;
         this.enter('strike', nowMs, heavy ? BULWARK.heavy.windupMs : BULWARK.strike.windupMs);

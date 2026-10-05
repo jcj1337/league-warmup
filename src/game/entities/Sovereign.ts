@@ -159,7 +159,7 @@ export class Sovereign extends Caster {
       const lined = this.linedUpSphere(ctx);
       if (lined) return this.beginScatter(nowMs, ctx, Math.atan2(lined.y - this.y, lined.x - this.x));
       if (dist <= S.scatter.radius + ctx.player.radius) {
-        return this.beginScatter(nowMs, ctx, Math.atan2(ctx.player.y - this.y, ctx.player.x - this.x));
+        return this.beginScatter(nowMs, ctx, Math.atan2(this.aim.y - this.y, this.aim.x - this.x));
       }
     }
     if (ready('scatter') && ready('sphere') && dist <= S.scatter.comboDistancePx + S.scatter.launch.range
@@ -217,7 +217,7 @@ export class Sovereign extends Caster {
 
   /** Q→E: a sphere on the line between you and her, close enough for Scatter to fling it at you. */
   private beginComboSphere(nowMs: number, ctx: EnemyContext, dist: number): boolean {
-    const angle = Math.atan2(ctx.player.y - this.y, ctx.player.x - this.x);
+    const angle = Math.atan2(this.aim.y - this.y, this.aim.x - this.x);
     const d = Math.min(SOVEREIGN.scatter.comboDistancePx, Math.max(40, dist - 60));
     this.placeSphere(nowMs, ctx, this.x + Math.cos(angle) * d, this.y + Math.sin(angle) * d);
     return true;

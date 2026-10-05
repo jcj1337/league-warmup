@@ -63,7 +63,7 @@ export function ensurePlayerFrames(scene: Phaser.Scene, champion: Champion, look
   const named: Record<string, string> = {};
   const glow: Record<string, string> | null = art.glow ? {} : null;
   for (const [frame, rows] of Object.entries(bodies)) {
-    const sprite = compose(rows, art.pal, art.frameHeight, look);
+    const sprite = compose(rows, art.pal, art.frameHeight, look, art.hatPal);
     addPixelTexture(scene, key(frame), sprite);
     named[frame] = key(frame);
     if (glow && art.glow) {
@@ -98,9 +98,15 @@ export function ensurePlayerFrames(scene: Phaser.Scene, champion: Champion, look
  * One composed frame: the body (skinned) bottom-aligned into `frameHeight`,
  * with the hat's rows directly above the body's top row, centred. Layer
  * characters are moved to private codes so they can never collide with the
- * body's.
+ * body's. `hatPal` recolours the hat by its own characters (a champion's take on it).
  */
-export function compose(body: readonly string[], pal: Readonly<Record<string, PixelColor>>, frameHeight: number, look: PlayerLook): PixelSprite {
+export function compose(
+  body: readonly string[],
+  pal: Readonly<Record<string, PixelColor>>,
+  frameHeight: number,
+  look: PlayerLook,
+  hatPal?: Readonly<Record<string, PixelColor>>,
+): PixelSprite {
   const width = body[0]?.length ?? 0;
   const blank = '.'.repeat(width);
   const merged: Record<string, PixelColor> = { ...pal, ...(look.skin ?? {}) };
@@ -112,7 +118,7 @@ export function compose(body: readonly string[], pal: Readonly<Record<string, Pi
     for (const [ch, color] of Object.entries(look.hat.pal)) {
       const priv = String.fromCharCode(code++);
       remap.set(ch, priv);
-      merged[priv] = color;
+      merged[priv] = hatPal?.[ch] ?? color;
     }
     for (const row of look.hat.rows) {
       const cells = [...row].map((ch) => (ch === '.' ? '.' : (remap.get(ch) ?? ch)));

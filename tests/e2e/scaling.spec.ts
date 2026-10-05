@@ -38,11 +38,11 @@ test('scaling: level-based attack speed, measured cycle, passive on top, cancel 
   const cfg = await page.evaluate(() => ({
     // The first ten stages as played: hand-written ones, then generated ones.
     stages: Array.from({ length: 10 }, (_, s) => window.__warmup.scene.getScene('GameScene').director.describeStage(s)),
-    levels: { ...window.__balance.LEVELS, ...window.__ezreal.LEVELS },
+    levels: { ...window.__balance.LEVELS, ...window.__magicBoy.LEVELS },
     windupPct: window.__balance.ATTACK.windupPercent,
     minWindup: window.__balance.ATTACK.minWindupMs,
     spawn: window.__balance.ENEMY_PROJECTILES.spawnIntervalMs,
-    passive: window.__ezreal.PASSIVE,
+    passive: window.__magicBoy.PASSIVE,
   }));
   /** The level's base auto cycle: LEVELS.baseAttackCooldownMs sped up by attackSpeedPerLevel per level. */
   const baseOf = (level) => cfg.levels.baseAttackCooldownMs / (1 + cfg.levels.attackSpeedPerLevel * (level - 1));

@@ -7,9 +7,9 @@ test('progression: contact damage, levels from kills (haste, attack speed, Q ran
   const cfg = await page.evaluate(() => ({
     enemies: window.__balance.ENEMIES,
     contact: window.__balance.CONTACT,
-    levels: { ...window.__balance.LEVELS, ...window.__ezreal.LEVELS },
-    q: window.__ezreal.SKILLSHOT_Q,
-    r: window.__ezreal.ULT_R,
+    levels: { ...window.__balance.LEVELS, ...window.__magicBoy.LEVELS },
+    q: window.__magicBoy.SKILLSHOT_Q,
+    r: window.__magicBoy.ULT_R,
     flash: window.__balance.FLASH,
   }));
 

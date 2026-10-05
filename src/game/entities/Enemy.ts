@@ -57,6 +57,8 @@ export interface EnemyContext {
   spells: HostileSpellSink;
   /** Shared pool a crowd takes turns with for token-gated attacks (the basic spit). */
   attackTokens: AttackTokens;
+  /** The mode's multiplier on every enemy's aim cursor speed (MODES[id].aimSpeedMultiplier). */
+  aimSpeedScale: number;
   /** Enemies still between the player and a wave clear (pending + arriving + alive), the caller included. */
   enemiesRemaining: number;
   /** The current wave's enemies (the caller included), for mobs that act on their allies. */
@@ -118,10 +120,21 @@ export abstract class Enemy {
    * Which way it is going, in radians (0 = right): the direction of its last
    * movement, or toward the player while it winds up an attack or cast. An
    * enemy that stops keeps the heading it arrived with. Read by abilities that
-   * care whether an enemy is facing the player (Cassiopeia's R).
+   * care whether an enemy is facing the player (Snake Lady's R).
    */
   public heading = 0;
   private hadHeading = false;
+  /**
+   * Its aim cursor: where it is aiming, which is where it last saw you unless
+   * a cast is tracking somewhere else (trackAim). It travels at `aimSpeed`
+   * instead of snapping, so a blink leaves it behind until it catches up.
+   * Everything an enemy aims reads this, never the player's position.
+   */
+  public readonly aim = { x: 0, y: 0 };
+  /** DIFFICULTY.aimSpeed on its stage, in px/s, before the mode's multiplier. */
+  public readonly aimSpeed: number;
+  private aimPlaced = false;
+  private aimTracked = false;
   /** Slows a champion applied: id → the fraction and when it lapses. The strongest live one counts. */
   private readonly slows = new Map<string, { fraction: number; until: number }>();
 
@@ -157,7 +170,7 @@ export abstract class Enemy {
   /**
    * Statuses a champion applied (a mark, a poison): id → clock time it lapses.
    * They live on the enemy itself so every archetype gets them for free and
-   * they die with it. Ids are namespaced by champion ('ezreal.mark').
+   * they die with it. Ids are namespaced by champion ('magicboy.mark').
    */
   private readonly statusUntil = new Map<string, number>();
   /** Clock time this enemy may next bump the player (see checkContact). */
@@ -185,6 +198,7 @@ export abstract class Enemy {
     this.scoreMultiplier = opts.scoreMultiplier;
     this.stage = opts.stage;
     this.baseMoveScale = scaled(DIFFICULTY.moveSpeed, opts.stage);
+    this.aimSpeed = scaled(DIFFICULTY.aimSpeed, opts.stage);
     this.maxHp = opts.maxHp;
     this.hp = opts.maxHp;
   }
@@ -316,6 +330,9 @@ export abstract class Enemy {
       this.heading = Math.atan2(ctx.player.y - this.y, ctx.player.x - this.x);
       this.hadHeading = true;
     }
+    // It arrives with its cursor on the player; from then on the cursor has to travel.
+    if (!this.active || !this.aimPlaced) this.snapAim(ctx.player.x, ctx.player.y);
+    this.aimTracked = false;
     if (this.active && !this.held && nowMs >= this.dazedUntil) {
       this.updateAi(deltaSeconds, nowMs, ctx);
       this.checkContact(nowMs, ctx);
@@ -329,7 +346,38 @@ export abstract class Enemy {
     } else if (this.held) {
       this.pose.moving = false;
     }
+    // Not tracking a cast this frame: the cursor follows the player.
+    if (!this.aimTracked) this.trackAim(ctx.player.x, ctx.player.y, deltaSeconds, ctx);
     this.view.sync(nowMs, deltaSeconds);
+  }
+
+  /**
+   * Move the aim cursor toward a point, at most its speed × the frame. A cast
+   * that tracks (a charging line, a reticle) calls this each frame with where
+   * it wants to aim; otherwise the cursor follows the player.
+   * @returns the cursor.
+   */
+  protected trackAim(x: number, y: number, deltaSeconds: number, ctx: EnemyContext): { x: number; y: number } {
+    this.aimTracked = true;
+    const dx = x - this.aim.x;
+    const dy = y - this.aim.y;
+    const dist = Math.hypot(dx, dy);
+    const step = this.aimSpeed * ctx.aimSpeedScale * deltaSeconds;
+    if (dist <= step) {
+      this.aim.x = x;
+      this.aim.y = y;
+    } else {
+      this.aim.x += (dx / dist) * step;
+      this.aim.y += (dy / dist) * step;
+    }
+    return this.aim;
+  }
+
+  /** Put the aim cursor on a point at once (its arrival; the suites, after moving the player by hand). */
+  snapAim(x: number, y: number): void {
+    this.aim.x = x;
+    this.aim.y = y;
+    this.aimPlaced = true;
   }
 
   /**

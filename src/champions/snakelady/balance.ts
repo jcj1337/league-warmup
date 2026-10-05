@@ -1,12 +1,12 @@
 /**
- * Cassiopeia's numbers. Tunable live from the console: __cassiopeia.Q.radius = 60
+ * Snake Lady's numbers. Tunable live from the console: __snakeLady.Q.radius = 60
  *
- * She drills a different rhythm from Ezreal: autos are slower and her E is
+ * She drills a different rhythm from Magic Boy: autos are slower and her E is
  * the beat between them; Q and W are ground spells you place ahead of where
  * enemies will be; R is a once-a-stage cone that punishes enemies facing you.
  *
- * She's a battle mage (League's Cassiopeia, Ryze, Vladimir, Swain): sustained
- * damage from short range, in the thick of the fight, where Ezreal pokes from
+ * She's a battle mage: sustained
+ * damage from short range, in the thick of the fight, where Magic Boy pokes from
  * far off. Her auto reaches ~0.77x his; E and W keep League's ratio to her auto
  * (700 / 550), and Q sits just past it, so her whole kit is shorter than his.
  */
@@ -17,7 +17,7 @@ export const STATS = {
   moveSpeed: 280,
 };
 
-/** Her auto: shorter than Ezreal's 260 (__balance.ATTACK.range). Centre to the target's edge. */
+/** Her auto: shorter than Magic Boy's 260 (__balance.ATTACK.range). Centre to the target's edge. */
 export const AUTO = {
   range: 200,
 };
@@ -25,15 +25,15 @@ export const AUTO = {
 /** Her level perks: no boots, but speed with every level. */
 export const LEVELS = {
   abilityHastePerLevel: 5,
-  /** Slower than Ezreal's 700ms: her E, not her auto, is the fast beat. */
+  /** Slower than Magic Boy's 700ms: her E, not her auto, is the fast beat. */
   baseAttackCooldownMs: 950,
   attackSpeedPerLevel: 0.03,
-  /** Serpentine Grace: +3% move speed per level (×1.51 at 18). */
+  /** Her passive: +3% move speed per level (×1.51 at 18). */
   moveSpeedPerLevel: 0.03,
 };
 
 /**
- * Q, Noxious Blast: a delayed blast at a ground point. One pip, and poison.
+ * Q: a delayed blast at a ground point. One pip, and poison.
  * Sized from League by body widths, not by range: her Q is 200 units against a
  * ~65-unit champion, about three radii, so a small blast you aim at one enemy.
  */
@@ -58,7 +58,7 @@ export const POISON = {
 };
 
 /**
- * W, Miasma: venom spat in an arc, a wall of clouds across her aim. Enemies
+ * W, Smog: venom spat in an arc, a wall of clouds across her aim. Enemies
  * inside any cloud are slowed and poisoned; it deals no pip itself.
  */
 export const W = {
@@ -96,7 +96,7 @@ export const W = {
 };
 
 /**
- * E, Twin Fang: point-and-click, as in League. Press it with the cursor on an
+ * E: point-and-click, as in League. Press it with the cursor on an
  * enemy within range; empty ground, or an enemy out of range, casts nothing.
  * One pip; two if the target is poisoned.
  */
@@ -112,7 +112,7 @@ export const E = {
 };
 
 /**
- * R, Petrifying Gaze: a cone. Enemies facing her are stunned; the rest are slowed. One pip to all.
+ * R: a cone. Enemies facing her are stunned; the rest are slowed. One pip to all.
  * As in League it has a half-second cast and strikes the moment the cast ends: she's rooted
  * throughout, and the cone telegraph is the cast window itself. Flash mid-cast and it strikes
  * from where she lands (R-Flash).
@@ -128,7 +128,7 @@ export const R = {
   slowFraction: 0.5,
   slowMs: 1500,
   /**
-   * Every Twin Fang that lands on a poisoned enemy takes this off R's
+   * Every fang that lands on a poisoned enemy takes this off R's
    * remaining cooldown. This trainer's own rule, not League's: it replaces the
    * old once-a-stage refresh, so R comes round faster the better you play.
    */
@@ -136,7 +136,7 @@ export const R = {
 };
 
 /** Status ids she applies. */
-export const POISON_STATUS = 'cassiopeia.poison';
-export const MIASMA_SLOW = 'cassiopeia.miasma';
-export const PETRIFY_STATUS = 'cassiopeia.petrify';
-export const GAZE_SLOW = 'cassiopeia.gaze';
+export const POISON_STATUS = 'snakelady.poison';
+export const SMOG_SLOW = 'snakelady.smog';
+export const PETRIFY_STATUS = 'snakelady.petrify';
+export const GAZE_SLOW = 'snakelady.gaze';

@@ -41,9 +41,9 @@ test('start screen, saved pause-menu settings, pause on focus loss', async ({ pa
     s.awaiting && s.startVisible && s.now === 0
       ? pass('the first round holds at time 0 behind the start screen')
       : fail(`held: ${JSON.stringify(s)}`);
-    s.startTexts.includes("QWER'S BACKYARD") && s.startTexts.includes('CLICK OR PRESS ANY KEY') &&
+    s.startTexts.includes('hands diff') && s.startTexts.includes('CLICK OR PRESS ANY KEY') &&
       s.startTexts.includes('CHOOSE YOUR CHAMPION') && s.startTexts.includes('DESIGNED BY QWER') && s.startTexts.includes('TOP 50') && s.startTexts.length === 5
-      ? pass("start screen shows QWER'S BACKYARD, the champion row, the prompt and the credit with its TOP 50 badge, nothing else")
+      ? pass("start screen shows hands diff, the champion row, the prompt and the credit with its TOP 50 badge, nothing else")
       : fail(`texts: ${JSON.stringify(s.startTexts)}`);
   }
   // The release of a key pressed before the card (the F5 that reloaded the page) doesn't count.
@@ -122,7 +122,7 @@ test('start screen, saved pause-menu settings, pause on focus loss', async ({ pa
   await page.waitForTimeout(100);
   const row = () => page.evaluate(() => {
     const ui = window.__warmup.scene.getScene('UIScene');
-    const tile = ui.championRow.tiles.get('ezreal');
+    const tile = ui.championRow.tiles.get('magicboy');
     return {
       selected: ui.championRow.selectedId as string,
       tiles: [...ui.championRow.tiles.keys()] as string[],
@@ -134,7 +134,7 @@ test('start screen, saved pause-menu settings, pause on focus loss', async ({ pa
   });
   {
     const r = await row();
-    r.selected === 'ezreal' && r.profile === 'ezreal' && r.hudChampion === 'ezreal' && r.tiles.join() === r.champions.join()
+    r.selected === 'magicboy' && r.profile === 'magicboy' && r.hudChampion === 'magicboy' && r.tiles.join() === r.champions.join()
       ? pass(`the row shows every champion (${r.tiles.join(', ')}) with the profile's pick framed`)
       : fail(`row: ${JSON.stringify(r)}`);
     // A click on a tile picks; it never starts the run.
@@ -148,11 +148,11 @@ test('start screen, saved pause-menu settings, pause on focus loss', async ({ pa
   await page.waitForTimeout(150);
   {
     const [r, s] = [await row(), await game()];
-    s.awaiting && r.selected === 'ezreal'
+    s.awaiting && r.selected === 'magicboy'
       ? pass('the arrow keys browse the row without starting the run')
       : fail(`arrows: ${JSON.stringify({ r, s })}`);
   }
-  // "Change champion" from the pause menu: back to the start screen with a fresh, held round.
+  // "Return to select" from the pause menu: back to the start screen with a fresh, held round.
   await page.mouse.click(1100, 650);
   await page.waitForTimeout(400);
   const roundBefore = await page.evaluate(() => window.__warmup.scene.getScene('GameScene').getHudState().round);
@@ -160,7 +160,7 @@ test('start screen, saved pause-menu settings, pause on focus loss', async ({ pa
   await page.waitForTimeout(80);
   const changeAt = await page.evaluate(() => {
     const t = window.__warmup.scene.getScene('UIScene').pauseMenu.container.list
-      .find((o: { type: string; text?: string }) => /Text$/.test(o.type) && o.text === 'CHANGE CHAMPION');
+      .find((o: { type: string; text?: string }) => /Text$/.test(o.type) && o.text === 'RETURN TO SELECT');
     return t ? { x: t.x, y: t.y } : null;
   });
   // Held like a person's click: the button acts on the press, and the release
@@ -176,8 +176,8 @@ test('start screen, saved pause-menu settings, pause on focus loss', async ({ pa
   {
     const s = await game();
     changeAt && s.awaiting && s.startVisible && s.now === 0 && !s.paused && !s.menu
-      ? pass('Change Champion in the pause menu returns to the start screen with a fresh held round')
-      : fail(`change champion: ${JSON.stringify({ changeAt, s })}`);
+      ? pass('Return to Select in the pause menu returns to the start screen with a fresh held round')
+      : fail(`return to select: ${JSON.stringify({ changeAt, s })}`);
   }
   await page.mouse.click(1100, 650);
   await page.waitForTimeout(300);
@@ -257,7 +257,7 @@ test('start screen, saved pause-menu settings, pause on focus loss', async ({ pa
       m.settings.pauseOnFocusLoss === false && m.runs.length === 1 && m.runs[0].stage === 4
       ? pass('old bindings, Mouse Speed, settings and run log all carry into the profile (a broken run is dropped)')
       : fail(`migrated: ${JSON.stringify(m)}`);
-    m.legacyLeft.length === 0 && m.saved && m.profile.version === 2 && m.profile.champion === 'ezreal' && m.profile.currency === 0
+    m.legacyLeft.length === 0 && m.saved && m.profile.version === 2 && m.profile.champion === 'magicboy' && m.profile.currency === 0
       ? pass('the profile is saved and the old keys are removed')
       : fail(`cleanup: ${JSON.stringify({ legacyLeft: m.legacyLeft, saved: m.saved, profile: m.profile })}`);
   }

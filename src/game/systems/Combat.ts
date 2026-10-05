@@ -28,7 +28,7 @@ export class Combat {
 
   /**
    * A pip-removing hit landed, AFTER the enemy has already lost its pip:
-   * autos and ability pips. Emitted so a kit can react (Ezreal's W mark
+   * autos and ability pips. Emitted so a kit can react (Magic Boy's W mark
    * detonates on the next counted hit) without this knowing any kit.
    */
   hit(target: Enemy, killed: boolean): void {

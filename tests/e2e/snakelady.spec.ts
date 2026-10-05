@@ -1,13 +1,13 @@
 import { test } from '@playwright/test';
 import { startSuite } from './support/harness';
 
-test('cassiopeia: picked from the profile, slow autos, Q blast + poison ticks, W cloud wall, E twin fang, R gaze by facing, R cooldown from poisoned fangs, speed per level', async ({ page }, testInfo) => {
-  const { pass, fail, section, finish } = await startSuite(page, testInfo, 400, { champion: 'cassiopeia' });
+test('snakelady: picked from the profile, slow autos, Q blast + poison ticks, W cloud wall, E fangs, R gaze by facing, R cooldown from poisoned fangs, speed per level', async ({ page }, testInfo) => {
+  const { pass, fail, section, finish } = await startSuite(page, testInfo, 400, { champion: 'snakelady' });
 
   const cfg = await page.evaluate(() => ({
-    Q: window.__cassiopeia.Q, W: window.__cassiopeia.W, E: window.__cassiopeia.E, R: window.__cassiopeia.R,
-    POISON: window.__cassiopeia.POISON, LEVELS: window.__cassiopeia.LEVELS, STATS: window.__cassiopeia.STATS,
-    AUTO: window.__cassiopeia.AUTO, ezrealRange: window.__balance.ATTACK.range,
+    Q: window.__snakeLady.Q, W: window.__snakeLady.W, E: window.__snakeLady.E, R: window.__snakeLady.R,
+    POISON: window.__snakeLady.POISON, LEVELS: window.__snakeLady.LEVELS, STATS: window.__snakeLady.STATS,
+    AUTO: window.__snakeLady.AUTO, magicboyRange: window.__balance.ATTACK.range,
   }));
   const G = () => page.evaluate(() => {
     const g = window.__warmup.scene.getScene('GameScene');
@@ -23,7 +23,7 @@ test('cassiopeia: picked from the profile, slow autos, Q blast + poison ticks, W
       stats: g.kit.stats() as Record<string, number>,
       enemies: g.director.enemies.map((e) => ({
         type: e.archetype, x: e.x, y: e.y, hp: e.hp, active: e.active, heading: e.heading, slow: e.slowFactor, dazed: g.clock.now < e.dazedUntil,
-        poisoned: e.hasStatus('cassiopeia.poison', g.clock.now), petrified: e.hasStatus('cassiopeia.petrify', g.clock.now),
+        poisoned: e.hasStatus('snakelady.poison', g.clock.now), petrified: e.hasStatus('snakelady.petrify', g.clock.now),
       })),
       player: { x: g.player.x, y: g.player.y, speed: g.player.moveSpeed, level: g.progression.level },
       slots: window.__warmup.scene.getScene('UIScene').abilityBar.slots.map((s) => s.keyText.text),
@@ -53,15 +53,15 @@ test('cassiopeia: picked from the profile, slow autos, Q blast + poison ticks, W
   section('1. Champion');
   {
     const s = await G();
-    s.champion === 'cassiopeia' && s.slots.join('') === 'QWERF' && Math.abs(s.base - cfg.LEVELS.baseAttackCooldownMs) < 1
-      ? pass(`playing Cassiopeia: Q W E R + F on the bar, ${s.base}ms auto cycle at level 1`)
+    s.champion === 'snakelady' && s.slots.join('') === 'QWERF' && Math.abs(s.base - cfg.LEVELS.baseAttackCooldownMs) < 1
+      ? pass(`playing Snake Lady: Q W E R + F on the bar, ${s.base}ms auto cycle at level 1`)
       : fail(`champion: ${JSON.stringify({ champion: s.champion, slots: s.slots, base: s.base })}`);
-    s.attackRange === cfg.AUTO.range && cfg.AUTO.range < cfg.ezrealRange && cfg.Q.range < 450 && cfg.E.range < cfg.ezrealRange
-      ? pass(`a battle mage's reach: auto ${s.attackRange} (Ezreal's ${cfg.ezrealRange}), Q ${cfg.Q.range}, E ${cfg.E.range}, W ${cfg.W.range}`)
+    s.attackRange === cfg.AUTO.range && cfg.AUTO.range < cfg.magicboyRange && cfg.Q.range < 450 && cfg.E.range < cfg.magicboyRange
+      ? pass(`a battle mage's reach: auto ${s.attackRange} (Magic Boy's ${cfg.magicboyRange}), Q ${cfg.Q.range}, E ${cfg.E.range}, W ${cfg.W.range}`)
       : fail(`ranges: ${JSON.stringify({ auto: s.attackRange, cfg: cfg.AUTO, q: cfg.Q.range, e: cfg.E.range })}`);
   }
 
-  // Her auto is her own: a slim violet needle, not Ezreal's cyan bolt.
+  // Her auto is her own: a slim violet needle, not Magic Boy's cyan bolt.
   await stage(780, 360, 9);
   await page.evaluate(() => {
     const g = window.__warmup.scene.getScene('GameScene');
@@ -174,7 +174,7 @@ test('cassiopeia: picked from the profile, slow autos, Q blast + poison ticks, W
     const c = g.kit.zones.clouds[0];
     return {
       from: c.thrownFrom, px: g.player.x, py: g.player.y, inFlight: c.landsAt > g.clock.now,
-      flightMs: c.landsAt - c.placedAt, poisoned: g.director.enemies[0].hasStatus('cassiopeia.poison', g.clock.now),
+      flightMs: c.landsAt - c.placedAt, poisoned: g.director.enemies[0].hasStatus('snakelady.poison', g.clock.now),
     };
   });
   thrown.from && Math.abs(thrown.from.x - thrown.px) < 1 && Math.abs(thrown.from.y - thrown.py) < 1 && thrown.inFlight && !thrown.poisoned
@@ -224,8 +224,8 @@ test('cassiopeia: picked from the profile, slow autos, Q blast + poison ticks, W
       puffs: c ? c.puffs.length : 0,
       across: ys.length ? Math.max(...ys) - Math.min(...ys) : 0,
       along: xs.length ? Math.max(...xs) - Math.min(...xs) : 0,
-      side: g.director.enemies[0].hasStatus('cassiopeia.poison', g.clock.now),
-      behind: g.director.enemies[1].hasStatus('cassiopeia.poison', g.clock.now),
+      side: g.director.enemies[0].hasStatus('snakelady.poison', g.clock.now),
+      behind: g.director.enemies[1].hasStatus('snakelady.poison', g.clock.now),
     };
   });
   wall.puffs === cfg.W.puffs && wall.across > wall.along * 3 && wall.side && !wall.behind
@@ -327,7 +327,7 @@ test('cassiopeia: picked from the profile, slow autos, Q blast + poison ticks, W
   await page.waitForTimeout(cfg.R.stunMs + 100);
   (await G()).enemies[0].dazed === false ? pass(`the petrify wears off after ${cfg.R.stunMs}ms`) : fail('still petrified');
 
-  // Instead, every Twin Fang on a poisoned enemy takes time off R.
+  // Instead, every fang on a poisoned enemy takes time off R.
   await stage(800, 360, 4);
   const rFang0 = await page.evaluate(() => {
     const g = window.__warmup.scene.getScene('GameScene');
@@ -344,7 +344,7 @@ test('cassiopeia: picked from the profile, slow autos, Q blast + poison ticks, W
   });
   const rFangShaved = rFang0.r - rFang1.r - (rFang1.now - rFang0.now);
   Math.abs(rFangShaved - cfg.R.poisonedFangCooldownReductionMs) < 30 && rFang1.sinceReduced < 500
-    ? pass(`a poisoned Twin Fang takes ${Math.round(rFangShaved)}ms off R's cooldown, and the R slot flashes (${Math.round(rFang1.sinceReduced)}ms ago)`)
+    ? pass(`a fang on a poisoned enemy takes ${Math.round(rFangShaved)}ms off R's cooldown, and the R slot flashes (${Math.round(rFang1.sinceReduced)}ms ago)`)
     : fail(`fang on R: ${JSON.stringify({ rFang0, rFang1, rFangShaved })}`);
 
   // === 6. Heading comes from movement ========================================
@@ -365,7 +365,7 @@ test('cassiopeia: picked from the profile, slow autos, Q blast + poison ticks, W
     ? pass('an enemy walking toward her heads her way (facing is read from movement)')
     : fail(`heading: ${JSON.stringify(moved)}`);
 
-  // === 7. Serpentine Grace ===================================================
+  // === 7. Passive: speed =====================================================
   section('7. Passive');
   const speed1 = (await G()).player.speed;
   await page.evaluate(() => { const g = window.__warmup.scene.getScene('GameScene'); g.progression.addXp(1e6, g.clock.now); });

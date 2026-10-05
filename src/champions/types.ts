@@ -57,7 +57,7 @@ export interface CastTelegraph {
 }
 
 /** Which THEME.fx entry colours a slot's effects. Grows with each champion. */
-export type FxKey = 'q' | 'w' | 'e' | 'r' | 'poison' | 'miasma' | 'fang' | 'gaze' | 'venom';
+export type FxKey = 'q' | 'w' | 'e' | 'r' | 'poison' | 'smog' | 'fang' | 'gaze' | 'venom' | 'axe' | 'rush';
 
 /** How a champion's auto looks: the missile, the colours of its muzzle burst and impact, its muzzle flash. */
 export interface AutoLook {
@@ -65,6 +65,18 @@ export interface AutoLook {
   fx: FxKey;
   /** Texture key of the flash at the slime's edge as it fires. */
   muzzle: string;
+}
+
+/**
+ * One auto the kit has changed (Kit.autoShot): how this shot looks, and what
+ * else happens when it lands. The engine still takes its one pip first.
+ */
+export interface AutoShot {
+  look?: AutoLook;
+  /** The missile connected, after its own pip was counted. */
+  onImpact?(target: Enemy, killed: boolean): void;
+  /** The target died before the missile arrived. */
+  onFizzle?(target: Enemy): void;
 }
 
 /** What a cast window scales with: both are 1 at level 1 with no passive. */
@@ -76,8 +88,6 @@ export interface CastPace {
 }
 
 export interface AbilityDef {
-  /** 'Mystic Shot': the pause menu's key row and the champion's README. */
-  label: string;
   targeting: Targeting;
   /** Cast and pick range for point / unit targeting; the range ring for those. */
   range?: number;
@@ -85,7 +95,7 @@ export interface AbilityDef {
    * Read live, so console tuning applies to the next cast. 0 means instant.
    * Handed how fast she casts right now: `castSpeed` from ability haste (most
    * slots divide by it), `attackSpeed` from level and passive (for a cast that
-   * speeds up with her autos instead, like Ezreal's R).
+   * speeds up with her autos instead, like Magic Boy's R).
    */
   castTimeMs(pace: CastPace): number;
   cooldownMs(): number;
@@ -99,9 +109,15 @@ export interface AbilityDef {
   /** What the slime's body does for this cast (see Motion). The engine's plain 'cast' pose when omitted. */
   motion?: Motion;
   /**
+   * Pressing it interrupts nothing: an auto already winding up carries on
+   * (a buff readied mid-swing). Otherwise a cast cancels an uncommitted auto,
+   * as a move order does.
+   */
+  quick?: boolean;
+  /**
    * A mid-cast Flash leaves this cast where it began: it goes off from the
-   * spot she stood when the key went down, aimed as clicked (Ezreal's R, as in
-   * League). Otherwise the cast travels with her (Cassiopeia's W-Flash).
+   * spot she stood when the key went down, aimed as clicked (Magic Boy's R, as in
+   * League). Otherwise the cast travels with her (Snake Lady's W-Flash).
    */
   anchored?: boolean;
   fx: FxKey;
@@ -179,6 +195,8 @@ export interface ChampionArt {
   extraFrames?: Readonly<Record<string, readonly string[]>>;
   /** Palette characters whose pixels light up with a motion's `glow` (eyes, a gem). */
   glow?: string;
+  /** Recolours the worn hat, by its palette characters (his crown is black). */
+  hatPal?: Readonly<Record<string, PixelColor>>;
   pal: Readonly<Record<string, PixelColor>>;
   frameHeight: number;
   /** Sprite origin (fraction of the body frame) that puts the body centre on the gameplay position. */
@@ -251,6 +269,13 @@ export interface Kit {
   update(deltaSeconds: number, nowMs: number): void;
   /** Multiplies the auto cycle (a passive's attack speed). 1 when none. */
   readonly attackSpeedMultiplier: number;
+  /** Multiplies move speed (a burst of speed). 1 when omitted. */
+  readonly moveSpeedMultiplier?: number;
+  /**
+   * An auto is leaving for `target`: the kit may change this one shot (an
+   * empowered attack). Null, or omitted, for a plain auto.
+   */
+  autoShot?(target: Enemy): AutoShot | null;
   passiveHud(): PassiveHud | null;
   /** Raw counters for the run log ('qFired', ...). */
   stats(): Record<string, number>;

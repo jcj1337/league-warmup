@@ -4,6 +4,7 @@ import { THEME } from '../../config/theme';
 import { AUTO_MISSILE_SPEC, AutoAttackMissile, type HomingMissileSpec } from '../entities/AutoAttackMissile';
 import type { Player } from '../entities/Player';
 import type { Enemy } from '../entities/Enemy';
+import type { AutoShot } from '../../champions/types';
 import type { KitingMetrics } from './KitingMetrics';
 
 /**
@@ -100,8 +101,8 @@ export class AttackSystem {
     private readonly player: Player,
     private readonly metrics: KitingMetrics,
     private readonly pacing: AttackPacing,
-    /** The champion's kit: its passive (if any) multiplies attack speed. */
-    private readonly haste: { readonly attackSpeedMultiplier: number },
+    /** The champion's kit: its passive (if any) multiplies attack speed, and it may change a shot as it leaves. */
+    private readonly haste: { readonly attackSpeedMultiplier: number; autoShot?(target: Enemy): AutoShot | null },
     private readonly callbacks: AttackCallbacks,
     /** The champion's missile: its speed, size and look. Read per shot, so console tuning applies. */
     private readonly missileSpec: () => HomingMissileSpec = () => AUTO_MISSILE_SPEC(),
@@ -439,6 +440,7 @@ export class AttackSystem {
     // The auto is committed HERE: a missile leaves the player and the cooldown
     // is already running. The hit lands when the missile arrives, but nothing
     // about the attack cycle waits for it.
+    const shot = this.haste.autoShot?.(target) ?? null;
     this.missiles.push(
       new AutoAttackMissile(
         this.scene,
@@ -446,18 +448,23 @@ export class AttackSystem {
         this.player.y,
         target,
         target.spawnId,
-        (hitTarget) => this.onMissileHit(hitTarget),
-        this.missileSpec(),
+        (hitTarget) => this.onMissileHit(hitTarget, shot),
+        shot?.look ? AUTO_MISSILE_SPEC(shot.look) : this.missileSpec(),
+        () => shot?.onFizzle?.(target),
       ),
     );
   }
 
-  /** Hit resolution, at the moment the missile visibly connects: one pip. */
-  private onMissileHit(target: Enemy): void {
-    if (!target.active) return;
+  /** Hit resolution, at the moment the missile visibly connects: one pip, then whatever the kit added to this shot. */
+  private onMissileHit(target: Enemy, shot: AutoShot | null): void {
+    if (!target.active) {
+      shot?.onFizzle?.(target);
+      return;
+    }
     const killed = target.takeHit();
     this.metrics.onAttackLanded();
     this.callbacks.onHit(target, killed);
+    shot?.onImpact?.(target, killed);
   }
 
   private updateMissiles(deltaSeconds: number): void {

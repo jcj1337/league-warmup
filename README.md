@@ -3,7 +3,7 @@
 A browser-based mechanical warm-up trainer for League-style ADC play. A run is an
 endless gauntlet of enemy waves that grows until it overwhelms you — your score is the
 stage you reach — built to drill four things at once: click-to-move positioning,
-kiting/orbwalking, dodging non-homing projectiles, and aiming an Ezreal-flavoured ability kit.
+kiting/orbwalking, dodging non-homing projectiles, and aiming a champion's ability kit.
 
 Top-down pixel-art slime skirmish on a dark, quiet volcanic waste. All art is original and
 repo-owned: small hand-authored pixel maps rasterised to textures at boot and drawn at an
@@ -93,15 +93,30 @@ what a stage clear pays:
 | Casters in generated waves | about two thirds of Normal's | — | about twice Normal's |
 | Enemies per wave | 75% (13 at Stage 10) | 100% (17) | 100% |
 | Damage you take | ×1 | ×1 | ×2, from every source |
+| Enemy aim speed | ×0.8 | ×1 | ×1.25 |
 | Stage-clear score bonus | none | 500 | 1500 |
 
 Mob behaviour, the difficulty curve and the stage a new attack switches on (spit, dash)
 are the same in every mode. During play a tag beside the stage plate names the mode. Runs
 are logged with their mode, and your best is kept per champion **and** per mode. Tuned in
 `MODES` in [balance.ts](src/config/balance.ts): each mode is a damage multiplier, a wave
-size multiplier, a stage-clear bonus, its intro stages and per-mob overrides of the
+size multiplier, an aim speed multiplier, a stage-clear bonus, its intro stages and per-mob overrides of the
 `ENEMIES` registry (unlock stage, weight, share, per-wave cap). From the console:
 `__profile.update((d) => { d.mode = 'hard'; })`, then restart.
+
+**Enemy aim.** Every enemy aims with a cursor that has to travel, the way a player's
+does: it follows you at 900px/s at Stage 1, rising with the stage to a cap of 1800
+(`DIFFICULTY.aimSpeed`, × the mode's multiplier). That is far faster than you walk, so
+walking is always tracked, but a blink leaves the cursor behind: Flash 190px away and an
+enemy's aim needs about 0.2s to reach you at Stage 1, 0.1s at the cap. Anything it aims
+in that time (a charging Lance, a circle it places, a spit, a dash) goes where its cursor
+is, not where you are. Changing direction moves its aim the same way: a tracking
+indicator sweeps to the new spot instead of jumping, and for a spell placed in one go
+the casters pick up your new direction gradually (`DIFFICULTY.aimLeadCatchUpMs`; a full
+reversal takes about a third of a second at Stage 1), so clicking back and forth doesn't
+re-centre their aim on every click. The casters' aim spread also tightens with the stage
+(`DIFFICULTY.aimSpread`: ×0.73 at Stage 10, never below ×0.4). Edge fire is not aimed by an
+enemy and is unchanged.
 
 **Contact damage.** An active enemy whose body touches yours bumps you: basic 6, Pursuer
 10, Magus 6, Bulwark 12 at Stage 1, scaled by `DIFFICULTY.contactDamage` (×1.88 at Stage 10, ×3.77 at
@@ -156,7 +171,7 @@ result keeps the breakdown into kills, speed, HP and clear. Tuned in `SCORE` in
 storage: stage, wave and level reached, run time, the champion, the difficulty mode, the
 growth setting and `BALANCE_VERSION` it was played on, what dealt the killing blow, and the HP lost to each
 source over the run and in the final stage (Pursuer, basic spit, Magus, edge fire, and
-each mob's body contact). The end screen shows `KILLED BY` and `YOUR BEST` (best stage and
+each mob's body contact). The end screen shows `YOUR BEST` (best stage and
 score as this champion in this mode, on the current growth setting and balance version,
 and how many runs); runs from
 older balance versions are kept but left out. From the console:
@@ -244,7 +259,7 @@ by at least 10s early on; informational only). A large "STAGE N" banner marks ea
 wave, and "WAVE CLEAR" / "STAGE CLEAR" fills the breather.
 
 A small system-message feed sits bottom-left, above the HP plate. A run opens with
-"Welcome to qwer's Backyard!" and "Mission 1: Clear 1 wave."; each new stage is briefed as
+"Welcome to hands diff!" and "Mission 1: Clear 1 wave."; each new stage is briefed as
 a Mission using its wave count, followed by a red "New threat: …" line for anything that
 stage introduces (the Pursuer and slime spit at Stage 2, the Pursuer dash at 4, the Magus
 at 5, any later mob at its unlock stage), and clearing a stage's last wave posts "Mission N
@@ -263,12 +278,14 @@ nothing in it switches on who is being played.
 
 | Champion | Kit |
 | --- | --- |
-| **Ezreal** (default) | [src/champions/ezreal/README.md](src/champions/ezreal/README.md): linear poke, a mark to cash in, a committed blink, a global wave that pierces (R), attack-speed passive |
-| **Cassiopeia** | [src/champions/cassiopeia/README.md](src/champions/cassiopeia/README.md): ground spells that poison (Q, W), a fast point-and-click fang that bites poisoned targets twice (E), a cone that petrifies enemies facing you (R, sooner with every poisoned fang), move speed per level |
+| **Magic Boy** (default) | [src/champions/magicboy/README.md](src/champions/magicboy/README.md): linear poke, a mark to cash in, a committed blink, a global wave that pierces (R), attack-speed passive |
+| **Snake Lady** | [src/champions/snakelady/README.md](src/champions/snakelady/README.md): ground spells that poison (Q, W), a fast point-and-click fang that bites poisoned targets twice (E), a cone that petrifies enemies facing you (R, sooner with every poisoned fang), move speed per level |
+| **Axe Man** | [src/champions/axeman/README.md](src/champions/axeman/README.md): Q readies a spinning axe for the next auto (2 pips), which then comes down near him, further out the further he is walking; catching it keeps it and resets W (a burst of speed); a line that shoves enemies aside (E); axes across the arena and back (R) |
 
 Keys are bound **per slot** (Q / W / E / R, plus Flash) and shared across champions, as in
-League; the pause menu names each row after the champion's ability. Your best runs are
-kept per champion. From the console: `__champions`, `__ezreal.SKILLSHOT_Q.speed = 1400`.
+League; the pause menu lists them as Q / W / E ability and R ultimate. Your best runs are
+kept per champion. From the console: `__champions`, `__magicBoy.SKILLSHOT_Q.speed = 1400`,
+`__snakeLady.Q.radius = 90`, `__axeMan.Q.dropMaxPx = 220`.
 
 **Looks.** A champion draws only its slime's body frames (`art.ts`). The crown and any
 later hat or skin are cosmetics in [src/cosmetics/catalogue.ts](src/cosmetics/catalogue.ts),
@@ -302,13 +319,15 @@ palette characters a motion's `glow` lights (her eyes, his gauntlet).
 
 The engine resolves the aim from the slot's `targeting` (toward the cursor, a ground
 point within range, the enemy nearest the cursor, or self), checks the cooldown, cancels
-an uncommitted auto, runs the cast window and hands the kit the committed aim. A slot
+an uncommitted auto (unless the slot is `quick`), runs the cast window and hands the kit the committed aim. A kit
+can also change an auto as it leaves (`autoShot`: Axe Man's axe) and scale move speed
+(`moveSpeedMultiplier`); a champion's art can recolour the worn hat (`hatPal`). A slot
 can also carry a `telegraph` (a cone, for now) drawn on the ground through its cast window.
 
 **Flash mid-cast.** You're rooted through a cast window, and other abilities are ignored,
 but Flash still goes off, as in League. The cast then resolves from where you land, aimed
 the same relative to you as when you pressed it: Q-Flash, W-Flash and R-Flash all carry
-the spell with you. A slot can be `anchored` instead (Ezreal's R, as in League): it goes
+the spell with you. A slot can be `anchored` instead (Magic Boy's R, as in League): it goes
 off from where you began, toward where you clicked, wherever Flash took you.
 
 ## Attack cycle
@@ -383,13 +402,15 @@ walks you into it; change direction or stop to dodge. The Eye and the Orb are bu
 **reacted to**: each shows you where it will land with enough time to step out once you
 see it, so you don't have to dodge pre-emptively. Each cast also aims at a **random spot near** that point
 (within 50px, or 20px for the Orb; `MAGUS.aimSpreadPx`), rolled once per cast so the
-Lance line and the Eye reticle still show exactly where it will land.
+Lance strip and the Eye circle still show exactly where it will land. While a spell
+tracks, its indicator is the spell's own shape at full size: it only travels, at the
+Magus's aim speed (see Enemy aim), and brightens as the cast runs.
 
 | Spell | Telegraph | Hit |
 | --- | --- | --- |
-| Lance (Q) | rooted, it charges for 900ms while a dotted line tracks where you're heading; the line then **locks** as a red strip (60px wide) and lands 450ms later | 18 |
-| Eye (W) | rooted for 550ms while a reticle tracks where you're heading; then a red circle (radius 95) goes down there, landing after **1s**, with its ring closing in over that second | 10 on the edge; **18 + 40% slow for 1s** if your centre is in the white sweet spot (radius 32) |
-| Orb (E) | a 650ms windup: a dotted aim line (the orb's full range) tracks where you're heading, then **locks** as a red strip for the last 250ms; then a visible white-gold orb (520px/s, 420px range) flies down it | 8 + a **stun** of 250ms (point-blank) to 750ms (full range) |
+| Lance (Q) | rooted, it charges for 900ms while its strip (60px wide, full length) sweeps after where you're heading; the strip then **locks** red and lands 450ms later | 18 |
+| Eye (W) | rooted for 550ms while its circle (radius 95, with the sweet spot marked) travels after where you're heading; then a red circle goes down there, landing after **1s**, with its ring closing in over that second | 10 on the edge; **18 + 40% slow for 1s** if your centre is in the white sweet spot (radius 32) |
+| Orb (E) | a 650ms windup: its strip (the orb's width and full range) sweeps after where you're heading, then **locks** red for the last 250ms; then a visible white-gold orb (520px/s, 420px range) flies down it | 8 + a **stun** of 250ms (point-blank) to 750ms (full range) |
 | Rite (R) | once per life, when it is the **last enemy left in the wave**: rooted, it calls three 70px circles onto you, 800ms apart | 15 each |
 
 Inside 300px it answers with the Orb first. Otherwise it picks at random among the
@@ -432,9 +453,9 @@ whatever it is doing; nothing it does reduces damage.
 | All Out (R) | at two thirds of its pips, a 400ms flare: its plates fly off | for the rest of its life: 1.5× speed (never above 0.8× yours), cooldowns ×0.6, every **second** Strike Heavy. Windups never change |
 
 **Unstoppable** from the start of the brace to the end of the ram, and through the All Out
-flare (a pale ring around it): no stun takes and no slow counts, so Cassiopeia's R and W
+flare (a pale ring around it): no stun takes and no slow counts, so Snake Lady's R and W
 still deal their pip and poison but neither holds it. After a ram it stands **winded** for
-700ms, stoppable again: the window to punish it. A stun that takes (Cassiopeia's R: it
+700ms, stoppable again: the window to punish it. A stun that takes (Snake Lady's R: it
 always walks at you, so it is always facing you) **breaks a Strike** it is winding up. Like
 the Pursuer, it starts nothing while you are stunned. Tuned in `BULWARK`; its Strike and
 Path Maker cooldowns shorten with the stage (min 1.1s / 4s).
@@ -447,7 +468,8 @@ current move or attack order resumes afterwards.
 
 ## Start screen
 
-A page load opens on a title card (**QWER'S BACKYARD**, *designed by qwer*) over the
+A page load opens on a title card (**hands diff**, the one line set in lower case;
+*designed by qwer*) over the
 first round, held at time 0: nothing moves. A click anywhere or any key starts the run.
 It starts on the release, so the click or key is never also a move order or a cast, and
 the press counts as the gesture a non-1.0 Mouse Speed needs for its pointer lock (except
@@ -456,7 +478,7 @@ the press counts as the gesture a non-1.0 Mouse Speed needs for its pointer lock
 **champion row**: click a tile or use Left / Right to pick who you play, and the
 **difficulty row** under it: click Easy, Normal or Hard, or use Up / Down (see
 Difficulty under The run). Both are saved to your profile and neither starts the run;
-**Change Champion** in the pause menu or on the end screen brings the card back with a
+**Return to Select** in the pause menu or on the end screen brings the card back with a
 fresh run.
 
 ## Pause & settings
@@ -465,7 +487,7 @@ fresh run.
 timers, cast windows, cooldowns, mark durations, projectiles, wave breathers and the run
 clock. Nothing fast-forwards on resume.
 
-The menu has Resume, Restart Round, Change Champion, a **Mouse Speed** slider, **Range Indicator**
+The menu has Resume, Restart Round, Return to Select, a **Mouse Speed** slider, **Range Indicator**
 (contextual / always / off), **Damage Numbers** (the "-1" pip-loss pops) and **Pause on
 Focus Loss** (on by default: alt-tabbing, clicking another window or switching tabs
 opens this menu, so the run never plays on without you). Below them are the controls,

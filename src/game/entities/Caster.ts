@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
-import { ARENA, PLAYER, TARGETS } from '../../config/balance';
+import { ARENA, DIFFICULTY, PLAYER, TARGETS } from '../../config/balance';
 import { Enemy, type EnemyContext, type EnemyOptions } from './Enemy';
+import { scaled } from '../systems/Difficulty';
 import type { GameClock } from '../systems/GameClock';
 
 /** What a caster's spacing and aim read from its config block (MAGUS, SOVEREIGN). */
@@ -19,11 +20,20 @@ export interface CasterTuning {
  * Shared ground for the ranged casters (Magus, Sovereign): holding a spacing
  * band around the player, and aiming like a player would — where you're
  * heading when the spell lands (`aimLead`), plus a random offset rolled once
- * per cast (`rollAimOffset`) so the telegraph stays steady.
+ * per cast (`rollAimOffset`) so the telegraph stays steady. That is where it
+ * WANTS to aim; where it aims is its cursor (Enemy.aim), which has to travel.
  */
 export abstract class Caster extends Enemy {
   /** This cast's random aim offset, added to every aim point. */
   aimOffset = { x: 0, y: 0 };
+  /** DIFFICULTY.aimSpread on its stage: multiplies every spread it rolls. */
+  readonly aimSpreadScale: number;
+  /**
+   * The velocity it thinks you have: it turns toward your real one at a capped
+   * rate (DIFFICULTY.aimLeadCatchUpMs), so clicking back and forth doesn't
+   * re-aim a spell the instant you flip.
+   */
+  readonly seenVelocity = { x: 0, y: 0 };
 
   private goalX: number;
   private goalY: number;
@@ -31,29 +41,60 @@ export abstract class Caster extends Enemy {
 
   constructor(scene: Phaser.Scene, clock: GameClock, x: number, y: number, opts: EnemyOptions) {
     super(scene, clock, x, y, opts);
+    this.aimSpreadScale = scaled(DIFFICULTY.aimSpread, opts.stage);
     this.goalX = x;
     this.goalY = y;
   }
 
   protected abstract get tuning(): CasterTuning;
 
+  override update(deltaSeconds: number, nowMs: number, ctx: EnemyContext): void {
+    const v = this.seenVelocity;
+    const dx = ctx.player.vx - v.x;
+    const dy = ctx.player.vy - v.y;
+    const gap = Math.hypot(dx, dy);
+    const step = ((this.aimSpeed * ctx.aimSpeedScale) / (DIFFICULTY.aimLeadCatchUpMs / 1000)) * deltaSeconds;
+    if (!this.active || gap <= step) {
+      v.x = ctx.player.vx;
+      v.y = ctx.player.vy;
+    } else {
+      v.x += (dx / gap) * step;
+      v.y += (dy / gap) * step;
+    }
+    super.update(deltaSeconds, nowMs, ctx);
+  }
+
   /**
-   * Where it aims: where the player will be `impactMs` from now at their
-   * current velocity, `aimLead` of the way, plus this cast's random offset,
-   * kept in the arena.
+   * Where it wants to aim: where the player will be `impactMs` from now at
+   * their current velocity, `aimLead` of the way, plus this cast's random
+   * offset, kept in the arena. A cast that tracks walks its cursor here (trackAim).
+   */
+  protected wantedAim(ctx: EnemyContext, impactMs: number, leadFraction = this.tuning.aimLead): { x: number; y: number } {
+    return this.ledFrom(ctx.player.x, ctx.player.y, ctx.player.vx, ctx.player.vy, ctx, impactMs, leadFraction);
+  }
+
+  /**
+   * Where a spell placed right now goes: the same lead and offset, from where
+   * its cursor is and the velocity it has seen, rather than where you are and
+   * how you move this instant. Caught up, it is `wantedAim`; just after a
+   * blink or a change of direction it is still short of it.
    */
   protected aimPoint(ctx: EnemyContext, impactMs: number, leadFraction = this.tuning.aimLead): { x: number; y: number } {
+    return this.ledFrom(this.aim.x, this.aim.y, this.seenVelocity.x, this.seenVelocity.y, ctx, impactMs, leadFraction);
+  }
+
+  private ledFrom(x: number, y: number, vx: number, vy: number, ctx: EnemyContext, impactMs: number, leadFraction: number): { x: number; y: number } {
     const lead = (leadFraction * impactMs) / 1000;
     const m = ARENA.padding + ctx.player.radius;
     return {
-      x: Phaser.Math.Clamp(ctx.player.x + ctx.player.vx * lead + this.aimOffset.x, m, ARENA.width - m),
-      y: Phaser.Math.Clamp(ctx.player.y + ctx.player.vy * lead + this.aimOffset.y, m, ARENA.height - m),
+      x: Phaser.Math.Clamp(x + vx * lead + this.aimOffset.x, m, ARENA.width - m),
+      y: Phaser.Math.Clamp(y + vy * lead + this.aimOffset.y, m, ARENA.height - m),
     };
   }
 
-  /** Pick this cast's aim offset: a uniformly random point within `radius`. */
+  /** Pick this cast's aim offset: a uniformly random point within `radius` × its stage's spread scale. */
   rollAimOffset(radius: number): void {
-    const r = radius * Math.sqrt(Math.random());
+    const r = radius * this.aimSpreadScale * Math.sqrt(Math.random());
     const a = Math.random() * Math.PI * 2;
     this.aimOffset = { x: Math.cos(a) * r, y: Math.sin(a) * r };
   }

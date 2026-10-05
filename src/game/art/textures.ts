@@ -53,6 +53,9 @@ export const TEX = {
     glob: 'proj_glob',
     sphere: 'proj_sphere',
     fang: 'proj_fang',
+    axe: 'proj_axe',
+    spinAxe: 'proj_spin_axe',
+    cleave: 'proj_cleave',
   },
   fx: {
     coin: 'fx_coin',
@@ -73,7 +76,8 @@ export const TEX = {
   } as Record<string, string>,
   icons: {
     q: 'icon_q', w: 'icon_w', e: 'icon_e', r: 'icon_r', flash: 'icon_flash',
-    cassioQ: 'icon_cassio_q', cassioW: 'icon_cassio_w', cassioE: 'icon_cassio_e', cassioR: 'icon_cassio_r',
+    snakeQ: 'icon_snake_q', snakeW: 'icon_snake_w', snakeE: 'icon_snake_e', snakeR: 'icon_snake_r',
+    axeQ: 'icon_axe_q', axeW: 'icon_axe_w', axeE: 'icon_axe_e', axeR: 'icon_axe_r',
   } as Record<string, string>,
   ground: 'battlefield_ground',
 } as const;

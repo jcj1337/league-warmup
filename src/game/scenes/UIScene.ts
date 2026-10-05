@@ -13,11 +13,11 @@ import { CHAMPIONS, DEFAULT_CHAMPION, isChampionId, SLOTS, type Champion } from 
 import type { BindableAction } from '../Keybinds';
 import { ARENA, DEBUG, BALANCE_VERSION, MODES, MOUSE } from '../../config/balance';
 import { THEME } from '../../config/theme';
-import { pixelText, setPixelScale } from '../art/font';
+import { CASED_FONT_KEY, pixelText, setPixelScale } from '../art/font';
 import { TEX, ensureArt } from '../art/textures';
 import { AbilityBar } from '../ui/AbilityBar';
 import { ChatBox } from '../ui/ChatBox';
-import { missionBriefing, missionComplete, stageThreats, welcomeMessage } from '../ui/missionMessages';
+import { GAME_TITLE, missionBriefing, missionComplete, stageThreats, welcomeMessage } from '../ui/missionMessages';
 import { PassiveDisplay } from '../ui/PassiveDisplay';
 import { PauseMenu } from '../ui/PauseMenu';
 import { PixelBar } from '../view/PixelBar';
@@ -82,7 +82,7 @@ export class UIScene extends Phaser.Scene {
   private resultText!: Phaser.GameObjects.BitmapText;
   private overlayVisible = false;
 
-  /** Title card over a held round (page load, "Change champion"); a click or key starts the run. */
+  /** Title card over a held round (page load, "Return to select"); a click or key starts the run. */
   private startScreen!: Phaser.GameObjects.Container;
   private championRow!: ChampionRow;
   private modeRow!: ModeRow;
@@ -210,9 +210,7 @@ export class UIScene extends Phaser.Scene {
 
     this.pauseMenu?.setLabels((action) => {
       const slot = SLOTS.find((s) => actionOf(s) === action);
-      if (!slot) return null;
-      const def = champion.slots[slot];
-      return `${slot.toUpperCase()}: ${def ? def.label : 'no ultimate'}`;
+      return slot && !champion.slots[slot] ? `${slot.toUpperCase()}: no ultimate` : null;
     });
   }
 
@@ -320,7 +318,7 @@ export class UIScene extends Phaser.Scene {
     };
     const buttons = [
       ...endButton(ARENA.width / 2 - 160, 'PLAY AGAIN  [R]', () => this.game_.restartRound()),
-      ...endButton(ARENA.width / 2 + 160, 'CHANGE CHAMPION', () => this.game_.returnToStart()),
+      ...endButton(ARENA.width / 2 + 160, 'RETURN TO SELECT', () => this.game_.returnToStart()),
     ];
 
     this.overlay = this.add
@@ -331,7 +329,7 @@ export class UIScene extends Phaser.Scene {
 
   /**
    * The title card shown over a held round (the first after a page load, or
-   * after "Change champion"), while GameScene holds it at time 0. A click
+   * after "Return to select"), while GameScene holds it at time 0. A click
    * anywhere or any key starts the run; the champion row picks who plays it
    * (a click on a tile, or Left / Right) and the mode row picks the difficulty
    * (a click on a button, or Up / Down), neither starting it.
@@ -344,7 +342,7 @@ export class UIScene extends Phaser.Scene {
   private buildStartScreen(): void {
     const cx = ARENA.width / 2;
     const panelW = 620;
-    const panelH = 418;
+    const panelH = 428;
     // Everything on the card is laid out from the champion row's line.
     const cy = ARENA.height / 2 - 34;
 
@@ -389,30 +387,31 @@ export class UIScene extends Phaser.Scene {
     });
 
     const plate = this.add.graphics();
-    pixelPanel(plate, cx - panelW / 2, cy - 175, panelW, panelH, {
+    pixelPanel(plate, cx - panelW / 2, cy - 196, panelW, panelH, {
       fill: THEME.ui.panel, fillAlpha: 0.97, edge: THEME.ui.panelEdge, highlight: THEME.ui.panelHighlight, border: 3,
     });
     plate.fillStyle(THEME.ui.accent, 0.9);
-    plate.fillRect(cx - panelW / 2 + 28, cy - 80, panelW - 56, 3);
+    plate.fillRect(cx - panelW / 2 + 28, cy - 44, panelW - 56, 3);
 
-    const title = pixelText(this, cx, cy - 120, "QWER'S BACKYARD", 6, THEME.ui.accent).setOrigin(0.5);
-    const choose = pixelText(this, cx, cy - 58, 'CHOOSE YOUR CHAMPION', 2, THEME.ui.faint).setOrigin(0.5);
-    this.championRow = new ChampionRow(
-      this, cx, cy - 6, Object.values(CHAMPIONS), championOf(Profile.data.champion).id, resolveLook(Profile.data),
-      (id) => this.pickChampion(id),
-    );
-    this.modeRow = new ModeRow(this, cx, cy + 104, Object.values(MODES), modeOf(Profile.data.mode).id, (id) => this.pickMode(id));
-    const prompt = pixelText(this, cx, cy + 152, 'CLICK OR PRESS ANY KEY', 3, THEME.ui.text).setOrigin(0.5);
-    // The credit, with qwer's rank beside it: a challenger crest over TOP 50, the pair centred as one line.
-    const credit = pixelText(this, 0, cy + 204, 'DESIGNED BY QWER', 2, THEME.ui.faint).setOrigin(0, 0.5);
-    const badge = this.add.image(0, cy + 194, TEX.ui.challenger).setScale(2);
-    const rank = pixelText(this, 0, cy + 220, 'TOP 50', 2, THEME.ui.accent).setOrigin(0.5);
+    const title = pixelText(this, cx, cy - 144, GAME_TITLE, 6, THEME.ui.accent, CASED_FONT_KEY).setOrigin(0.5);
+    // The credit under the title, with qwer's rank beside it: a challenger crest over TOP 50, the pair centred as one line.
+    const credit = pixelText(this, 0, cy - 80, 'DESIGNED BY QWER', 2, THEME.ui.faint).setOrigin(0, 0.5);
+    const badge = this.add.image(0, cy - 90, TEX.ui.challenger).setScale(2);
+    const rank = pixelText(this, 0, cy - 64, 'TOP 50', 2, THEME.ui.accent).setOrigin(0.5);
     const badgeW = Math.max(badge.displayWidth, rank.width);
     const gap = 14;
     const left = Math.round(cx - (credit.width + gap + badgeW) / 2);
     credit.setX(left);
     badge.setX(Math.round(left + credit.width + gap + badgeW / 2));
     rank.setX(badge.x);
+
+    const choose = pixelText(this, cx, cy - 22, 'CHOOSE YOUR CHAMPION', 2, THEME.ui.faint).setOrigin(0.5);
+    this.championRow = new ChampionRow(
+      this, cx, cy + 30, Object.values(CHAMPIONS), championOf(Profile.data.champion).id, resolveLook(Profile.data),
+      (id) => this.pickChampion(id),
+    );
+    this.modeRow = new ModeRow(this, cx, cy + 140, Object.values(MODES), modeOf(Profile.data.mode).id, (id) => this.pickMode(id));
+    const prompt = pixelText(this, cx, cy + 188, 'CLICK OR PRESS ANY KEY', 3, THEME.ui.text).setOrigin(0.5);
 
     // UIScene's tweens never pause, so the prompt keeps breathing while the run is held.
     this.tweens.add({
@@ -636,7 +635,6 @@ export class UIScene extends Phaser.Scene {
         row('KILLS', `${result.targetsKilled}`),
         row('KILLS BY TYPE', killsLine(result.killsByType)),
         ...result.kitRows.map((stat) => row(stat.label, stat.value)),
-        row('KILLED BY', result.killedBy ? sourceName(result.killedBy) : '-'),
         row('YOUR BEST', bestLine(RunHistory.summary(result.growth, BALANCE_VERSION, result.champion, result.mode))),
       ].join('\n\n'),
     );
@@ -648,18 +646,11 @@ function championOf(id: string): Champion {
   return isChampionId(id) ? CHAMPIONS[id] : CHAMPIONS[DEFAULT_CHAMPION];
 }
 
-const SOURCE_NAMES: Record<string, string> = {
-  pursuer: 'pursuer', basic: 'spit', magus: 'magus', edgeFire: 'fire',
-  basicContact: 'slime touch', pursuerContact: 'pursuer touch', magusContact: 'magus touch',
-  sovereign: 'sovereign', sovereignContact: 'sovereign touch',
-};
-
 /** "basic 12  pursuer 3  sovereign 1": only the mobs actually killed, most first. */
 function killsLine(kills: Record<string, number>): string {
   const parts = Object.entries(kills).filter(([, n]) => n > 0).sort((a, b) => b[1] - a[1]).map(([id, n]) => `${id} ${n}`);
   return parts.length ? parts.join('  ') : 'none';
 }
-const sourceName = (source: string) => SOURCE_NAMES[source] ?? source;
 
 /** "STAGE 9  SCORE 45200  (8 RUNS)": your best on the current balance version. */
 function bestLine(s: RunSummary): string {

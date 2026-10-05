@@ -8,7 +8,7 @@ test('magus: roster + pips, spacing, Lance / Eye / Orb / Rite, stun rules, zones
     magus: window.__balance.MAGUS,
     // The first ten stages as played: hand-written ones, then generated ones.
     stages: Array.from({ length: 10 }, (_, s) => window.__warmup.scene.getScene('GameScene').director.describeStage(s)),
-    playerSpeed: window.__ezreal.STATS.moveSpeed,
+    playerSpeed: window.__magicBoy.STATS.moveSpeed,
   }));
   // Most checks below need exact aim: switch the random spread off, and back on in 4c.
   const spread = { ...cfg.magus.aimSpreadPx };
@@ -173,6 +173,102 @@ test('magus: roster + pips, spacing, Lance / Eye / Orb / Rite, stun rules, zones
     ? pass('sidestepping after the lock dodges it')
     : fail(`dodge: hp ${dodge.at(-1).hp}, resolved ${dodge[0].resolved}->${dodge.at(-1).resolved}`);
 
+  // === 3b. The aim cursor ====================================================
+  section('3b. Aim cursor');
+  // A blink mid-charge: the line doesn't snap to you, it sweeps over at the Magus's aim speed.
+  await calm();
+  await place([{ type: 'magus', x: 1040, y: 360 }]);
+  await castNow('lance');
+  await page.waitForFunction(() => {
+    const g = window.__warmup.scene.getScene('GameScene');
+    const m = g.director.enemies[0];
+    return m.state === 'lance' && m.castProgress(g.clock.now) > 0.25;
+  }, null, { timeout: 4000 });
+  const sweep = await page.evaluate(() => new Promise<any>((res) => {
+    const g = window.__warmup.scene.getScene('GameScene');
+    const m = g.director.enemies[0];
+    const before = Math.hypot(m.aim.x - g.player.x, m.aim.y - g.player.y);
+    g.blink.blinkTo({ x: 640, y: 560 });
+    const t0 = g.clock.now;
+    const frames = [];
+    const tick = () => {
+      const toCursor = Math.atan2(m.aim.y - m.y, m.aim.x - m.x);
+      frames.push({ t: g.clock.now - t0, ax: m.aim.x, ay: m.aim.y, off: Math.hypot(m.aim.x - g.player.x, m.aim.y - g.player.y), skew: Math.abs(Math.sin(m.aimAngle - toCursor)) });
+      if (g.clock.now - t0 >= 420 || m.state !== 'lance') res({ before, frames, speed: m.aimSpeed * g.mode.aimSpeedMultiplier });
+      else requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
+  }));
+  {
+    const f = sweep.frames;
+    const jump = 200;
+    const early = f.find((s) => s.t > 0 && s.t <= 80);
+    sweep.before < 2 && early && early.off >= jump - sweep.speed * (early.t / 1000) - 12
+      ? pass(`a 200px blink mid-charge leaves the Lance behind: ${Math.round(early.off)}px off you ${Math.round(early.t)}ms later`)
+      : fail(`after the blink: before ${sweep.before}, early ${JSON.stringify(early)}`);
+    const top = Math.max(...f.slice(1).map((s, i) => (s.t > f[i].t ? Math.hypot(s.ax - f[i].ax, s.ay - f[i].ay) / (s.t - f[i].t) * 1000 : 0)));
+    top <= sweep.speed * 1.1 && top >= sweep.speed * 0.9
+      ? pass(`its cursor travels at ~${Math.round(top)}px/s (aim speed ${Math.round(sweep.speed)})`)
+      : fail(`cursor speed ${Math.round(top)}px/s vs ${Math.round(sweep.speed)}`);
+    const arrived = f.find((s) => s.off < 1);
+    const due = (jump / sweep.speed) * 1000;
+    arrived && Math.abs(arrived.t - due) <= 60
+      ? pass(`and is back on you after ~${Math.round(arrived.t)}ms (200px at that speed: ${Math.round(due)}ms)`)
+      : fail(`arrival: ${arrived ? arrived.t : 'never'} vs ${Math.round(due)}ms`);
+    f.every((s) => s.skew < 0.02)
+      ? pass('the charge line points at the cursor the whole way')
+      : fail(`the line left its cursor (skew ${Math.max(...f.map((s) => s.skew)).toFixed(3)})`);
+  }
+  // Clicking back the other way: the velocity it leads by turns round at a capped rate, it doesn't flip.
+  await calm(400, 360);
+  await place([{ type: 'magus', x: 1040, y: 600 }]);
+  await page.mouse.click(1200, 360, { button: 'right' });
+  await page.waitForTimeout(700);
+  await page.mouse.click(60, 360, { button: 'right' });
+  const turn = await page.evaluate(() => new Promise<any>((res) => {
+    const g = window.__warmup.scene.getScene('GameScene');
+    const m = g.director.enemies[0];
+    const t0 = g.clock.now;
+    const frames = [];
+    const tick = () => {
+      frames.push({ t: g.clock.now - t0, seen: m.seenVelocity.x, real: g.player.vx });
+      if (g.clock.now - t0 >= 700) res({ frames, rate: (m.aimSpeed * g.mode.aimSpeedMultiplier) / (window.__balance.DIFFICULTY.aimLeadCatchUpMs / 1000) });
+      else requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
+  }));
+  {
+    const f = turn.frames.filter((s) => s.real < 0);
+    const v = -f[0].real;
+    const due = ((2 * v) / turn.rate) * 1000;
+    const mid = f.find((s) => s.t - f[0].t >= due / 2);
+    const done = f.find((s) => s.seen === s.real);
+    const top = Math.max(...f.slice(1).map((s, i) => (s.t > f[i].t ? Math.abs(s.seen - f[i].seen) / (s.t - f[i].t) * 1000 : 0)));
+    f[0].seen > 0 && mid && Math.abs(mid.seen) < v * 0.35 && done && Math.abs(done.t - f[0].t - due) <= 70 && top <= turn.rate * 1.1
+      ? pass(`reversing at ${Math.round(v)}px/s, the lead it aims by turns round over ~${Math.round(done.t - f[0].t)}ms instead of flipping`)
+      : fail(`turn: v ${v}, due ${Math.round(due)}ms, first ${JSON.stringify(f[0])}, mid ${JSON.stringify(mid)}, done ${JSON.stringify(done)}, top ${Math.round(top)} of ${Math.round(turn.rate)}`);
+  }
+  // Faster with the stage (capped), slower on Easy and faster on Hard; and it spreads less.
+  {
+    const s = await page.evaluate(() => {
+      const d = window.__warmup.scene.getScene('GameScene').director;
+      const at = (stage) => { d.stageIndex = stage - 1; const m = d.spawnEnemy('magus'); const o = { speed: m.aimSpeed, spread: m.aimSpreadScale }; m.destroy(); return o; };
+      const out = { s1: at(1), s10: at(10), s40: at(40), curve: window.__balance.DIFFICULTY.aimSpeed,
+        modes: Object.fromEntries(Object.values(window.__balance.MODES).map((m: any) => [m.id, m.aimSpeedMultiplier])) };
+      d.stageIndex = 0;
+      return out;
+    });
+    s.s1.speed === s.curve.base && s.s10.speed > s.s1.speed * 1.3 && s.s40.speed === s.curve.max
+      ? pass(`aim speed grows with the stage and caps: ${s.s1.speed} at Stage 1, ${Math.round(s.s10.speed)} at 10, ${s.s40.speed} at 40`)
+      : fail(`aim speed: ${JSON.stringify(s)}`);
+    s.s1.spread === 1 && s.s10.spread < 0.85 && s.s40.spread >= 0.4
+      ? pass(`aim spread shrinks with the stage: x${s.s10.spread.toFixed(2)} at 10, x${s.s40.spread.toFixed(2)} at 40`)
+      : fail(`aim spread: ${JSON.stringify(s)}`);
+    s.modes.easy < s.modes.normal && s.modes.normal === 1 && s.modes.hard > 1
+      ? pass(`modes scale it: Easy x${s.modes.easy}, Normal x1, Hard x${s.modes.hard}`)
+      : fail(`mode aim speeds: ${JSON.stringify(s.modes)}`);
+  }
+
   // === 4. Eye ================================================================
   section('4. Eye');
   await calm();
@@ -297,7 +393,7 @@ test('magus: roster + pips, spacing, Lance / Eye / Orb / Rite, stun rules, zones
       ? pass(`three Eyes on a standing player land at different spots within ${spread.spell}px (${off.map((d) => Math.round(d)).join(', ')}px off)`)
       : fail(`eye spots: ${JSON.stringify(eyeSpots)}`);
   }
-  // The reticle holds its offset while it tracks: it doesn't jitter frame to frame.
+  // The reticle travels to its offset spot and holds it: it never jumps and doesn't jitter frame to frame.
   await calm();
   await place([{ type: 'magus', x: 1040, y: 360 }]);
   await castNow('eye');
@@ -306,14 +402,19 @@ test('magus: roster + pips, spacing, Lance / Eye / Orb / Rite, stun rules, zones
     const m = g.director.enemies[0];
     const seen = [];
     const tick = () => {
-      if (m.state === 'eye' && m.eyeTarget) seen.push(`${m.eyeTarget.x.toFixed(2)},${m.eyeTarget.y.toFixed(2)}`);
-      if (g.hostileSpells.zones.length > 0 || seen.length > 60) res(seen); else requestAnimationFrame(tick);
+      if (m.state === 'eye' && m.eyeTarget) seen.push({ t: g.clock.now, x: m.eyeTarget.x, y: m.eyeTarget.y });
+      if (g.hostileSpells.zones.length > 0 || seen.length > 400) res({ seen, speed: m.aimSpeed * g.mode.aimSpeedMultiplier }); else requestAnimationFrame(tick);
     };
     tick();
   }));
-  steady.length > 3 && new Set(steady).size === 1
-    ? pass(`the reticle stays put on a standing player across ${steady.length} targeting frames`)
-    : fail(`reticle moved: ${new Set(steady).size} distinct spots`);
+  {
+    const f = steady.seen;
+    const top = Math.max(0, ...f.slice(1).map((s, i) => (s.t > f[i].t ? Math.hypot(s.x - f[i].x, s.y - f[i].y) / (s.t - f[i].t) * 1000 : 0)));
+    const settled = f.slice(-4).every((s) => s.x === f.at(-1).x && s.y === f.at(-1).y);
+    f.length > 8 && top <= steady.speed * 1.1 && settled
+      ? pass(`the reticle travels to its spot at no more than its aim speed (${Math.round(top)}px/s) and holds there on a standing player`)
+      : fail(`reticle: ${f.length} frames, top ${Math.round(top)}px/s of ${Math.round(steady.speed)}, settled ${settled}`);
+  }
   await setSpread({ spell: 0, orb: 0 });
 
   section('5. Orb and the stun');

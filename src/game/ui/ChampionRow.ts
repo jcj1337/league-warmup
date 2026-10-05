@@ -31,7 +31,7 @@ export class ChampionRow {
   ) {
     this.selected = selected;
     const parts: Phaser.GameObjects.GameObject[] = [];
-    // Names are wider than tiles ('CASSIOPEIA'), so the row is spaced by the widest of either.
+    // Names are wider than tiles ('SNAKE LADY'), so the row is spaced by the widest of either.
     const names = champions.map((c) => pixelText(scene, 0, cy + TILE / 2 + 12, c.name.toUpperCase(), 2, THEME.ui.dim).setOrigin(0.5));
     const pitch = Math.max(TILE, ...names.map((n) => n.width)) + GAP;
     const left = cx - ((champions.length - 1) * pitch) / 2;

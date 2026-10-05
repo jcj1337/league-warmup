@@ -1,4 +1,4 @@
-# Warmup (qwer's backyard)
+# Warmup (hands diff)
 
 A browser mechanics trainer for League-style play: Phaser 3 + TypeScript (strict), Vite,
 no physics engine, no backend. The README is the player-facing and tuning reference;
@@ -10,7 +10,7 @@ this file is for working on the code.
 - `npm run typecheck` — `tsc --noEmit` for src and tests. Run it before any test run.
 - `npm test` — the Playwright suites in `tests/e2e/`, one at a time in headless Edge
   (~5 min). They start their own Vite server on :5173 or reuse one.
-- `npx playwright test <name>` — one suite (`kit`, `waves`, `cassiopeia`, `bulwark`, `modes`, ...).
+- `npx playwright test <name>` — one suite (`kit`, `waves`, `snakelady`, `axeman`, `bulwark`, `modes`, ...).
 - **Never run `mouse-speed.spec.ts` on a machine someone is using**: it takes a real
   pointer lock, which on Windows grabs the OS cursor even headless. It is skipped
   unless `PW_POINTER_LOCK=1`.
@@ -56,10 +56,13 @@ this file is for working on the code.
 - Enemy health is pips: `takeHit()` removes exactly one. There are no damage amounts on
   the enemy side; player damage is HP.
 - Gameplay state flips first; views and effects read it afterwards and never feed back.
+- Enemies never aim at the player's position: they aim at their cursor (`Enemy.aim`),
+  which chases it at `DIFFICULTY.aimSpeed`. A cast that tracks calls `trackAim`; a spell
+  placed at once reads `aim` (casters: `aimPoint`). Movement still reads the player.
 - A difficulty mode is only numbers (`MODES`): the engine reads them and never tests which
   mode it is. Mode-dependent registry reads go through `enemyEntry(id, mode)`, not
   `ENEMIES[id]`; Normal must stay exactly the un-overridden game.
-- Console handles (`__warmup`, `__balance`, `__ezreal`, `__cassiopeia`, `__profile`,
+- Console handles (`__warmup`, `__balance`, `__magicBoy`, `__snakeLady`, `__axeMan`, `__profile`,
   `__runs`, `__keybinds`, `__settings`) are what the suites drive too.
 
 ## Tests

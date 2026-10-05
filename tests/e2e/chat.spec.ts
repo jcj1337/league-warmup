@@ -15,7 +15,7 @@ test('chat: system messages, missions + new threats, Z light/dark toggle, bottom
     chat: window.__theme.chat,
   }));
   // Expected wording, built from the stage table the test reads itself.
-  const WELCOME = "Welcome to qwer's Backyard!";
+  const WELCOME = 'Welcome to hands diff!';
   const waves = (n) => `${n} wave${n === 1 ? '' : 's'}`;
   const briefing = (stage) => `Mission ${stage}: Clear ${waves(cfg.stages[stage - 1]?.waves.length ?? 3)}.`;
   /** What a stage introduces, in order: new mobs, then new attacks. */

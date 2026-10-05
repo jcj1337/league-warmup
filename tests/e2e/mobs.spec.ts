@@ -50,21 +50,21 @@ test('mobs: passive stacks, Q cooldown refund, Pursuer AI, stage pips + segmente
     return { type: e.archetype, hp: e.hp, maxHp: e.maxHp, r: e.radius };
   }, { type, x, y, hp });
   const cfg = await page.evaluate(() => ({
-    qCd: window.__ezreal.SKILLSHOT_Q.cooldownMs,
-    qSpeed: window.__ezreal.SKILLSHOT_Q.speed,
-    qRefund: window.__ezreal.SKILLSHOT_Q.hitCooldownReductionMs,
-    passive: window.__ezreal.PASSIVE,
+    qCd: window.__magicBoy.SKILLSHOT_Q.cooldownMs,
+    qSpeed: window.__magicBoy.SKILLSHOT_Q.speed,
+    qRefund: window.__magicBoy.SKILLSHOT_Q.hitCooldownReductionMs,
+    passive: window.__magicBoy.PASSIVE,
     pursuer: window.__balance.PURSUER,
-    playerSpeed: window.__ezreal.STATS.moveSpeed,
+    playerSpeed: window.__magicBoy.STATS.moveSpeed,
     // The first ten stages as played: hand-written ones, then generated ones.
     stages: Array.from({ length: 10 }, (_, s) => window.__warmup.scene.getScene('GameScene').director.describeStage(s)),
     obsolete: {
       targetsMaxHp: 'maxHp' in window.__balance.TARGETS,
       pursuerHpMult: 'baseHpMultiplier' in window.__balance.PURSUER,
       autoDamage: 'damage' in window.__balance.ATTACK,
-      qDamage: 'damage' in window.__ezreal.SKILLSHOT_Q,
-      wDetonation: 'detonationDamage' in window.__ezreal.SKILLSHOT_W,
-      eDamage: 'damage' in window.__ezreal.BLINK_E,
+      qDamage: 'damage' in window.__magicBoy.SKILLSHOT_Q,
+      wDetonation: 'detonationDamage' in window.__magicBoy.SKILLSHOT_W,
+      eDamage: 'damage' in window.__magicBoy.BLINK_E,
       pointsPerDamage: 'pointsPerDamage' in window.__balance.SCORE,
       stageHpMult: window.__balance.STAGES.some((s) => 'enemyHpMultiplier' in s),
     },

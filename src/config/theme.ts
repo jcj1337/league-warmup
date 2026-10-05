@@ -126,7 +126,7 @@ export const PALETTE = {
   e: 0xff5fae,
   eBlue: 0x7ab8ff,
   eCore: 0xfff0fa,
-  // Ezreal's R, Trueshot Barrage: League's golden wave.
+  // Magic Boy's R: a golden wave.
   rDeep: 0xb7791f,
   rGold: 0xf5b83d,
   r: 0xffdf5c,
@@ -163,7 +163,7 @@ export const PALETTE = {
   danger: 0xff6b57,
   good: 0x7fdc6a,
 
-  // ---- cassiopeia: a venom-green slime with a coiled tail -------------------------
+  // ---- snakelady: a venom-green slime with a coiled tail -------------------------
   venomDeepest: 0x173d2a,
   venomDeep: 0x24734a,
   venom: 0x4fc96d,
@@ -171,17 +171,34 @@ export const PALETTE = {
   venomShine: 0xeaffe6,
   venomScale: 0x3a9c5a,
   tongue: 0xe8445e,
-  // Her spells are purple, as in League: violet blasts, a plum miasma, lilac fangs.
+  // Her spells are purple, as in League: violet blasts, a plum smog, lilac fangs.
   toxinDeepest: 0x1a0a26,
   toxinDeep: 0x3a1656,
   toxin: 0x9446d0,
   toxinLight: 0xc890f5,
   toxinCore: 0xf6ecff,
-  miasmaDeep: 0x2a1040,
-  miasma: 0x6e3a9e,
+  smogDeep: 0x2a1040,
+  smog: 0x6e3a9e,
   stone: 0x9aa0ad,
   stoneCore: 0xeef1f7,
   stoneDeep: 0x5c6270,
+
+  // ---- axeman: a white slime with a brown beard, a black crown and steel axes ----
+  snowDeep: 0x8f8a9c,
+  snowShade: 0xc3bfcc,
+  snow: 0xeeebe6,
+  snowShine: 0xffffff,
+  beardDark: 0x4a2a12,
+  beard: 0x7a4a22,
+  beardLight: 0xa66c38,
+  crownBlack: 0x413c4a,
+  crownBlackDeep: 0x121016,
+  steelDeep: 0x5a6172,
+  steel: 0xaab3c4,
+  steelShine: 0xf2f6ff,
+  bloodDeep: 0x7a1420,
+  blood: 0xe0363f,
+  bloodCore: 0xffd9d2,
 } as const;
 
 const P = PALETTE;
@@ -345,13 +362,14 @@ export const THEME = {
     runes: { sidePx: 27, liftPx: 8, bobPx: 3, bobMs: 900, castRisePx: 12, castPull: 0.72, follow: 10, glowRadius: 11 },
     /** Energy gathering over its crest while it casts: a swelling glow, motes spiralling into it. */
     castGlow: { color: P.arcane, core: P.arcaneCore, liftPx: 40, radius: 8, motes: 4, moteOrbitPx: 26, moteTurnMs: 520 },
-    /** Lance charge: a line that tracks you and reaches full length as the charge completes, a bright head on its tip. */
-    lanceCharge: { color: P.arcane, core: P.arcaneCore, alphaStart: 0.3, alphaEnd: 0.85, width: 2 },
     /**
-     * Orb windup: an aim line (orb range long) that tracks you, then turns
-     * into a red strip with bright edges when it locks.
+     * Its aim indicators while a cast tracks (Lance strip, Eye circle, Orb
+     * strip): the spell's shape at full size, a faint fill and an outline that
+     * brighten from `Start` to `End` through the cast. They only travel.
      */
-    orbAim: { color: P.arcane, alphaStart: 0.3, alphaEnd: 0.7, lockFill: P.warning, lockFillAlpha: 0.22, lockEdge: P.arcaneCore },
+    aim: { color: P.arcane, core: P.arcaneCore, alphaStart: 0.3, alphaEnd: 0.85, fillStart: 0.05, fillEnd: 0.14, width: 2 },
+    /** The Orb's aim once it locks: a red strip with bright edges. */
+    orbAim: { lockFill: P.warning, lockFillAlpha: 0.22, lockEdge: P.arcaneCore },
     /**
      * How its body moves (see MagusView.animate): a slow hover, drawn up and
      * trembling through a cast, a squash as the spell leaves.
@@ -500,17 +518,20 @@ export const THEME = {
   // --------------------------------------------------------------- effects
   fx: {
     auto: { color: P.auto, core: P.autoCore, deep: P.autoDeep, impactRadius: 18, impactMs: 180, sparks: 5 },
-    /** Cassiopeia's auto: a deep violet, smaller and quicker than her spells. */
+    /** Snake Lady's auto: a deep violet, smaller and quicker than her spells. */
     venom: { color: P.toxin, core: P.toxinLight, deep: P.toxinDeepest, impactRadius: 15, impactMs: 160, sparks: 4 },
     q: { color: P.q, core: P.qCore, deep: P.qDeep, castFlashRadius: 24, castFlashMs: 120, impactRadius: 30, impactMs: 200, sparks: 9 },
     w: { color: P.w, core: P.wCore, deep: P.wDeep, castFlashRadius: 28, castFlashMs: 130, impactRadius: 34, impactMs: 220, sparks: 8 },
     e: { color: P.e, core: P.eCore, deep: P.eDeep, blue: P.eBlue, blinkMs: 180, impactRadius: 24, impactMs: 200, sparks: 7 },
     r: { color: P.r, core: P.rCore, deep: P.rDeep, castFlashRadius: 44, castFlashMs: 220, impactRadius: 34, impactMs: 240, sparks: 10 },
-    // Cassiopeia: violet for Q and the poison, plum for W, lilac fangs for E, stone for R.
+    // Snake Lady: violet for Q and the poison, plum for W, lilac fangs for E, stone for R.
     poison: { color: P.toxin, core: P.toxinCore, deep: P.toxinDeep, castFlashRadius: 22, castFlashMs: 120, impactRadius: 28, impactMs: 220, sparks: 8 },
-    miasma: { color: P.miasma, core: P.toxinCore, deep: P.miasmaDeep, castFlashRadius: 26, castFlashMs: 130, impactRadius: 30, impactMs: 220, sparks: 6 },
+    smog: { color: P.smog, core: P.toxinCore, deep: P.smogDeep, castFlashRadius: 26, castFlashMs: 130, impactRadius: 30, impactMs: 220, sparks: 6 },
     fang: { color: P.toxinLight, core: P.toxinCore, deep: P.toxin, castFlashRadius: 18, castFlashMs: 100, impactRadius: 20, impactMs: 170, sparks: 6 },
     gaze: { color: P.stone, core: P.stoneCore, deep: P.stoneDeep, castFlashRadius: 30, castFlashMs: 160, impactRadius: 36, impactMs: 260, sparks: 10 },
+    // Axe Man: steel with a blood-red edge for every axe, hot red for his rush.
+    axe: { color: P.steel, core: P.steelShine, deep: P.blood, castFlashRadius: 26, castFlashMs: 130, impactRadius: 26, impactMs: 200, sparks: 8 },
+    rush: { color: P.blood, core: P.bloodCore, deep: P.bloodDeep, castFlashRadius: 30, castFlashMs: 160, impactRadius: 26, impactMs: 200, sparks: 8 },
     flash: { color: P.flash, core: P.flashCore, burstMs: 220 },
     hostile: { color: P.fireOrange, core: P.fireCore, deep: P.fire },
     detonation: { color: P.wHot, accent: P.wCore, deep: P.w, radius: 46, ms: 280, shards: 12 },
@@ -531,6 +552,8 @@ export const THEME = {
       sphere: { color: P.voidGlow, spacing: 10, life: 220, size: 5 },
       glob: { color: P.redDeep, spacing: 10, life: 160, size: 3 },
       fang: { color: P.toxinLight, spacing: 10, life: 140, size: 3 },
+      axe: { color: P.steel, spacing: 14, life: 110, size: 2 },
+      spinAxe: { color: P.blood, spacing: 9, life: 170, size: 4 },
     },
   },
 
@@ -546,12 +569,41 @@ export const THEME = {
   },
 
   /**
-   * Cassiopeia's Twin Fang, past the cast: two fangs that split apart in flight
+   * Axe Man's axes outside a throw: the ones spinning at his sides, the one
+   * coming down to be caught with its circle on the ground, and his R's size.
+   */
+  axeman: {
+    /** Held axes: this far out to each side, lifted off the ground, bobbing, turning. */
+    held: { sidePx: 19, liftPx: 9, bobPx: 2, bobMs: 520, turnsPerSecond: 2.2 },
+    drop: {
+      /** The falling axe: how high its arc peaks, and how fast it turns. */
+      arcPx: 74,
+      turnsPerSecond: 3,
+      /** The catch circle: an outline at the catch radius, and a disc that fills it as the axe comes down. */
+      ring: P.steelShine,
+      ringAlpha: 0.9,
+      ringWidth: 2,
+      fill: P.blood,
+      fillAlpha: 0.26,
+      /** A catch: a ring bursting out and sparks. A miss: grey dust. */
+      catchMs: 220,
+      catchSparks: 9,
+      missColor: P.creamFaint,
+    },
+    /** R is the E sprite at this scale, as wide as its hitbox. */
+    whirlScale: 6,
+    /** W: a ring off his feet as the rush starts. */
+    rushRingPx: 40,
+    rushRingMs: 240,
+  },
+
+  /**
+   * Snake Lady's E, past the cast: two fangs that split apart in flight
    * and snap shut on the target. A poisoned target takes a second, wider bite
    * (closing a beat later, since its fangs start further out), a bigger burst
    * and a short shake.
    */
-  twinFang: {
+  fangBolt: {
     /** How far apart the two fangs weave at mid-flight, and how high they arc. */
     weavePx: 9,
     arcPx: 14,
@@ -711,14 +763,14 @@ export const THEME = {
     cooldownEdge: P.panelEdge,
     fill: P.panel,
     cooldownWashAlpha: 0.55,
-    /** Something took time off a cooldown (Ezreal's Q hit, Cassiopeia's poisoned fang): the slot washes grey, fading over this long. */
+    /** Something took time off a cooldown (Magic Boy's Q hit, Snake Lady's poisoned fang): the slot washes grey, fading over this long. */
     reduceFlash: P.silver,
     reduceFlashAlpha: 0.6,
     reduceFlashMs: 500,
     sweepColor: P.ink,
     sweepAlpha: 0.7,
     /** Per-slot accent: the ability's own colour. */
-    accents: { q: P.q, w: P.w, e: P.e, r: P.r, flash: P.flash, venom: P.toxin, miasma: P.miasma, fang: P.toxinLight, stone: P.stone } as Record<string, number>,
+    accents: { q: P.q, w: P.w, e: P.e, r: P.r, flash: P.flash, venom: P.toxin, smog: P.smog, fang: P.toxinLight, stone: P.stone, steel: P.steel, blood: P.blood } as Record<string, number>,
   },
 
   /** The difficulty modes' colours (start screen picker, HUD tag, end screen), by MODES id. */
@@ -735,7 +787,7 @@ export const THEME = {
   },
 
   /**
-   * The player's ground spells (PlayerZoneView): Cassiopeia's purple, never
+   * The player's ground spells (PlayerZoneView): Snake Lady's purple, never
    * the red that means "this hurts you". One language for all of them: venom
    * lobbed from her body, landing in opaque blotchy puffs that pop open with
    * a little overshoot, splatter droplets and shrink away.
@@ -761,7 +813,7 @@ export const THEME = {
      * Venom for her spells; stone where the gaze petrifies.
      */
     styles: {
-      venom: { rim: P.miasma, fill: P.miasmaDeep, blotch: P.toxinDeepest, drop: P.toxinLight },
+      venom: { rim: P.smog, fill: P.smogDeep, blotch: P.toxinDeepest, drop: P.toxinLight },
       stone: { rim: P.stone, fill: P.stoneDeep, blotch: P.ink, drop: P.stoneCore },
     },
     /** How far the rim shows past each puff. */

@@ -1,4 +1,4 @@
-# Ezreal
+# Magic Boy
 
 The ADC the trainer was built around: autos to orbwalk with, a linear poke (Q), a mark
 to cash in (W), a committed blink (E) and a global wave (R). Every number is in [balance.ts](balance.ts);
@@ -53,7 +53,7 @@ R, as in League — never Flash, and never by restarting a cooldown. Each slot i
 flashes grey for half a second. That's what brings R
 back: there's no stage refresh, so the more Qs you land, the more often you have it.
 
-**R, Trueshot Barrage.** As in League: a long charge (1s, rooted; divided by his attack
+**R.** As in League: a long charge (1s, rooted; divided by his attack
 speed, level and passive alike, so ~625ms at level 11 and ~495ms at 18), then one wave that crosses the whole arena and passes through every enemy
 in its path, 40px either side of its line. The first enemy it touches loses two pips and
 every one after loses one, so it clears a line of slimes and softens the rest. Every enemy

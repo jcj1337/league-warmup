@@ -50,7 +50,7 @@ interface CastCallbacks {
  * her, as in League (W-Flash, R-Flash): it resolves from where she is at the
  * end of the window, aimed the same relative to her as when it was committed.
  * An anchored cast stays put instead: its aim is never shifted, and it carries
- * `from`, the spot the key went down, to fire from (Ezreal's R).
+ * `from`, the spot the key went down, to fire from (Magic Boy's R).
  *
  * All timing is GameClock time, so a pause preserves partial cast progress
  * exactly: nothing is rescheduled, the clock simply stops advancing.

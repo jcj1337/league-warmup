@@ -2,7 +2,7 @@ import { PALETTE as P } from '../../config/theme';
 import type { ChampionArt } from '../types';
 
 /**
- * Ezreal's slime: an ink-outlined blue dome lit from the top-left, with the
+ * Magic Boy's slime: an ink-outlined blue dome lit from the top-left, with the
  * face set one pixel toward the direction it faces (right; flipX turns it),
  * and his gauntlet, a gold cuff with a gem, worn low on that side. Two clear
  * columns either side keep the body centred while the cuff reaches past it.
@@ -35,7 +35,7 @@ const doubled = (rows: readonly string[], index: number) => [...rows.slice(0, in
 /** Eyes narrowed. */
 const NARROWED = withRow(BODY, 5, '..kmmmmmmmmmmmmk..');
 
-export const EZREAL_ART: ChampionArt = {
+export const MAGIC_BOY_ART: ChampionArt = {
   frames: {
     idle: BODY,
     /** Breath out / landing half of the hop. */
@@ -48,7 +48,7 @@ export const EZREAL_ART: ChampionArt = {
     cast: withRow(BODY, 8, '..kdmmmmmkkmmkyggk'),
   },
   extraFrames: {
-    /** Trueshot Barrage, bracing: eyes narrowed, teeth gritted. */
+    /** R, bracing: eyes narrowed, teeth gritted. */
     grit: withRow(NARROWED, 8, '..kdmmmmkkkkmkyggk'),
   },
   glow: 'g',

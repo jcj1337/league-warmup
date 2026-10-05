@@ -338,8 +338,8 @@ export const SPRITES: Record<string, PixelSprite> = {
     pal: { k: P.ink, V: P.w, M: P.wHot, W: P.wCore },
   },
 
-  // ---- cassiopeia: ability icons, her fang bolt, the poison and petrify marks ------
-  icon_cassio_q: {
+  // ---- snakelady: ability icons, her fang bolt, the poison and petrify marks ------
+  icon_snake_q: {
     rows: [
       '..............',
       '......g.......',
@@ -358,7 +358,7 @@ export const SPRITES: Record<string, PixelSprite> = {
     ],
     pal: { k: P.ink, g: P.toxinDeep, G: P.toxin, W: P.toxinCore },
   },
-  icon_cassio_w: {
+  icon_snake_w: {
     rows: [
       '..............',
       '..............',
@@ -375,9 +375,9 @@ export const SPRITES: Record<string, PixelSprite> = {
       '..............',
       '..............',
     ],
-    pal: { k: P.ink, m: P.miasmaDeep, M: P.miasma, W: P.toxinLight, g: P.miasma },
+    pal: { k: P.ink, m: P.smogDeep, M: P.smog, W: P.toxinLight, g: P.smog },
   },
-  icon_cassio_e: {
+  icon_snake_e: {
     rows: [
       '..............',
       '..kkk....kkk..',
@@ -396,7 +396,7 @@ export const SPRITES: Record<string, PixelSprite> = {
     ],
     pal: { k: P.ink, G: P.toxinLight, W: P.toxinCore },
   },
-  icon_cassio_r: {
+  icon_snake_r: {
     rows: [
       '..............',
       '..............',
@@ -420,7 +420,7 @@ export const SPRITES: Record<string, PixelSprite> = {
     rows: ['...k...', '..kGk..', '..kGk..', '.kGGGk.', '.kGWGk.', 'kGGWGGk', 'kGGGGGk', '.kGGGk.', '..kkk..'],
     pal: { k: P.ink, G: P.toxin, W: P.toxinCore },
   },
-  /** One fang of Twin Fang's bite, its tip pointing right (rotated to where it snaps). */
+  /** One fang of Snake Lady's E, its tip pointing right (rotated to where it snaps). */
   fx_fang: {
     rows: ['kk.....', 'kWkk...', 'kWWWkk.', 'kWWWWWk', 'kLLkkk.', 'kk.....'],
     pal: { k: P.ink, W: P.toxinCore, L: P.toxinLight },
@@ -431,15 +431,62 @@ export const SPRITES: Record<string, PixelSprite> = {
   },
 
   // ---- projectiles -------------------------------------------------------------
-  /** Cassiopeia's auto: a slim needle of venom, a third the height of Ezreal's bolt. */
+  /** Snake Lady's auto: a slim needle of venom, a third the height of Magic Boy's bolt. */
   proj_venom: { rows: ['dgGGGWW'], pal: { d: P.toxinDeepest, g: P.toxinDeep, G: P.toxin, W: P.toxinLight } },
+  // ---- axeman: his thrown axes and ability icons -----------------------------------
+  //   S steel · W glint · h handle · k outline (ink; blood-red on a spinning axe)
+  proj_axe: {
+    rows: ['...kkk...', '..kSWSk..', '.kSWWSSk.', '.kSSSShk.', '..kkShk..', '....khk..', '.....khk.', '......khk', '.......kk'],
+    pal: { k: P.ink, S: P.steel, W: P.steelShine, h: P.beard },
+  },
+  /** A spinning axe: in his hand, thrown by an empowered auto, and coming down to be caught. */
+  proj_spin_axe: {
+    rows: ['...kkk...', '..kSWSk..', '.kSWWSSk.', '.kSSSShk.', '..kkShk..', '....khk..', '.....khk.', '......khk', '.......kk'],
+    pal: { k: P.blood, S: P.steel, W: P.steelShine, h: P.beardLight },
+  },
+  /** A double-bitted axe: his E, and his R drawn larger. */
+  proj_cleave: {
+    rows: [
+      '.kkk...kkk.', 'kSWSk.kSWSk', 'kSWWSkSWWSk', 'kSSSShSSSSk', '.kkShhhSkk.',
+      '...khhhk...', '....khk....', '....khk....', '....khk....', '....kkk....',
+    ],
+    pal: { k: P.bloodDeep, S: P.steel, W: P.steelShine, h: P.beard },
+  },
+  icon_axe_q: {
+    rows: [
+      '..............', '..r...........', '.r...kkk......', '.r..kSWSk.....', '....kSWWSk....', '...kSSSShk....', '....kkShk.....',
+      '......khk...r.', '.......khk..r.', '........khk.r.', '.........kk.r.', '..........rr..', '..............', '..............',
+    ],
+    pal: { k: P.ink, S: P.steel, W: P.steelShine, h: P.beardLight, r: P.blood },
+  },
+  icon_axe_w: {
+    rows: [
+      '..............', '..............', '..r....r......', '..rr...rr.....', '..RRr..RRr....', '..RRRr.RRRr...', '..RRRRrRRRRr..',
+      '..RRRr.RRRr...', '..RRr..RRr....', '..rr...rr.....', '..r....r......', '..............', '..............', '..............',
+    ],
+    pal: { r: P.bloodCore, R: P.blood },
+  },
+  icon_axe_e: {
+    rows: [
+      '..............', '..kkk...kkk...', '.kSWSk.kSWSk..', '.kSWWSkSWWSk..', '.kSSSShSSSSk..', '..kkShhhSkk...', '....khhhk.....',
+      '.....khk......', '.....khk......', '.....khk......', '.....kkk......', '..............', '..............', '..............',
+    ],
+    pal: { k: P.ink, S: P.steel, W: P.steelShine, h: P.beardLight },
+  },
+  icon_axe_r: {
+    rows: [
+      '..............', '.rrrrrrrrrr...', '.r........r...', '.r.kkk....r...', '.rkSWSk..rrr..', '..kSWWSk..r...', '.kSSSShk......',
+      '..kkShk.......', '....khk.......', '.....khk......', '......khk.....', '.......kk.....', '..............', '..............',
+    ],
+    pal: { k: P.ink, S: P.steel, W: P.steelShine, h: P.beardLight, r: P.blood },
+  },
   proj_auto: { rows: ['...cc.', 'bccWWW', '...cc.'], pal: { b: P.autoDeep, c: P.auto, W: P.autoCore } },
   proj_q: { rows: ['.....TT..', 'ttTTTWWWW', '.....TT..'], pal: { t: P.qDeep, T: P.q, W: P.qCore } },
   proj_w: {
     rows: ['..vvv..', '.vVVVv.', 'vVMWMVv', 'vVWWWVv', 'vVMWMVv', '.vVVVv.', '..vvv..'],
     pal: { v: P.wDeep, V: P.w, M: P.wHot, W: P.wCore },
   },
-  /** Trueshot Barrage: a tall crescent of light, bowed forward, as wide as its hitbox. */
+  /** Magic Boy's R: a tall crescent of light, bowed forward, as wide as its hitbox. */
   proj_r: {
     rows: [
       '...YW.....', '....YW....', '....GYW...', '....GYW...', '....DGYW..', '....DGYW..', '.....DGYW.', '.....DGYW.', '....DDGYW.',
@@ -596,7 +643,7 @@ export const SPRITES: Record<string, PixelSprite> = {
     ],
     pal: { p: P.e, P: P.eCore, W: P.white, b: P.eBlue, B: P.eCore },
   },
-  /** Ezreal's R: a golden wave with its streaks behind it. */
+  /** Magic Boy's R: a golden wave with its streaks behind it. */
   icon_r: {
     rows: [
       '.....YW.......', '......GYW.....', '.......GYW....', '........GYW...', 'g.g.g...DGYW..', '.........DGYW.', 'g.g.g.g..DGYW.',

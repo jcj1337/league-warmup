@@ -1,6 +1,6 @@
-# Cassiopeia
+# Snake Lady
 
-A venom mage with a different rhythm from Ezreal: her autos are slower and her **E is the
+A venom mage with a different rhythm from Magic Boy: her autos are slower and her **E is the
 beat between them**; Q and W are ground spells you place where enemies are *going* to be;
 R is a cone that punishes enemies facing you. Every number is in
 [balance.ts](balance.ts); what each slot does is [kit.ts](kit.ts). Keys are per slot and
@@ -8,16 +8,16 @@ shared across champions: see the main README's [Controls](../../../README.md#con
 
 | | Aim | Cast time | Cooldown | Range | Pips removed |
 | --- | --- | --- | --- | --- | --- |
-| Auto | target | ~240ms windup\* | 950ms\* | 200 (Ezreal's is 260) | 1 |
-| Q, Noxious Blast | ground point | 150ms | 3500ms† | 275, blast radius 45 | 1 on landing, then poison |
-| W, Miasma | ground point | 150ms | 12000ms† | 250; a wall of 7 clouds across your aim, ~180 × 60 | 0; slows 35% and poisons, only while inside |
-| E, Twin Fang | the enemy **under** the cursor | 150ms | 800ms† | 250 | 1, **2 if poisoned** |
-| R, Petrifying Gaze | cone toward the cursor | 500ms, rooted; strikes as it ends | 45000ms†, **−500ms per poisoned fang** | 280, 80° wide | 1; **stuns enemies facing you** 1.5s, slows the rest 50% |
+| Auto | target | ~240ms windup\* | 950ms\* | 200 (Magic Boy's is 260) | 1 |
+| Q | ground point | 150ms | 3500ms† | 275, blast radius 45 | 1 on landing, then poison |
+| W | ground point | 150ms | 12000ms† | 250; a wall of 7 clouds across your aim, ~180 × 60 | 0; slows 35% and poisons, only while inside |
+| E | the enemy **under** the cursor | 150ms | 800ms† | 250 | 1, **2 if poisoned** |
+| R | cone toward the cursor | 500ms, rooted; strikes as it ends | 45000ms†, **−500ms per poisoned fang** | 280, 80° wide | 1; **stuns enemies facing you** 1.5s, slows the rest 50% |
 | F | cursor | instant | 20000ms | 190 | — |
 
-\* her level-1 auto cycle is 950ms (Ezreal's is 700ms), +3% attack speed per level; the
+\* her level-1 auto cycle is 950ms (Magic Boy's is 700ms), +3% attack speed per level; the
 windup is a quarter of it. † at level 1; ability haste (+5 per level) shortens Q / W / E / R,
-as for Ezreal: ×0.8 at level 6, ×0.67 at 11, ×0.54 at 18 (Q 3.5s → 1.9s, E 800 → 430ms).
+as for Magic Boy: ×0.8 at level 6, ×0.67 at 11, ×0.54 at 18 (Q 3.5s → 1.9s, E 800 → 430ms).
 Haste shortens every cast window at half that rate: ×0.70 at level 18 (R 500 → 351ms).
 
 **Sizes come from League, by proportion.** Ranges are scaled by her auto range (League's
@@ -25,8 +25,8 @@ Haste shortens every cast window at half that rate: ×0.70 at level 18 (R 500 �
 past her auto (275), so you walk up to cast it. Areas are scaled by body size instead, since
 our bodies are far smaller relative to range than League's.
 
-**A battle mage.** Like League's Cassiopeia (or Ryze, Vladimir, Swain), she does her damage
-from short range, in the thick of the fight; Ezreal pokes from far off. Her auto reaches 200
+**A battle mage.** Like a battle mage in League, she does her damage
+from short range, in the thick of the fight; Magic Boy pokes from far off. Her auto reaches 200
 to his 260, and her whole kit is shorter than his to match.
 
 **Poison.** A pip every 2s while it lasts; being poisoned is what makes E hit for two.
@@ -40,8 +40,8 @@ stops, so tagging one with Q and running doesn't kill it. Poisoned at one pip, i
 that pop a little past their size, splatter droplets and shrink away, with smooth outlines
 rather than dotted ones. W set the tone; Q, E and R share it.
 
-**Her look.** The same friendly dome as Ezreal's, in venom green, with two small fangs
-under her smile. Her auto is her own: a slim, deep violet needle of venom where Ezreal
+**Her look.** The same friendly dome as Magic Boy's, in venom green, with two small fangs
+under her smile. Her auto is her own: a slim, deep violet needle of venom where Magic Boy
 fires a fat cyan bolt.
 
 **Q and W are telegraphed.** Q lands 400ms after you place it: venom wells up in place
@@ -91,8 +91,8 @@ you, or standing still having last walked at you. Those are petrified (stunned, 
 stone eye over their head); enemies walking away are slowed instead. Everyone in the cone
 loses a pip.
 
-**R comes back through E.** No stage refresh: every Twin Fang that lands on a poisoned
+**R comes back through E.** No stage refresh: every fang that lands on a poisoned
 enemy takes 500ms off R's remaining cooldown (the R slot flashes grey), so it returns faster the more you keep
 enemies poisoned and bite them. This is this trainer's own rule, not League's.
 
-**Passive, Serpentine Grace.** +3% move speed per level, in place of attack speed.
+**Passive.** +3% move speed per level, in place of attack speed.

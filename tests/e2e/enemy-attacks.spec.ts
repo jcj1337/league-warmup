@@ -8,7 +8,7 @@ test('enemy attacks: unlock stages, basic spit + attack tokens, Pursuer dash', a
     spit: window.__balance.TARGETS.spit,
     dash: window.__balance.PURSUER.dash,
     pursuer: window.__balance.PURSUER,
-    playerRadius: window.__ezreal.STATS.radius,
+    playerRadius: window.__magicBoy.STATS.radius,
   }));
 
   /**

@@ -2,34 +2,34 @@ import { ENEMIES, type EnemyEntry } from '../../config/balance';
 import type { Enemy } from '../../game/entities/Enemy';
 import { PlayerZoneSystem } from '../../game/systems/PlayerZoneSystem';
 import type { Aim, Kit, KitContext, KitStat, Slot } from '../types';
-import { E, GAZE_SLOW, MIASMA_SLOW, PETRIFY_STATUS, POISON, POISON_STATUS, Q, R, W } from './balance';
-import { TwinFang, playBite } from './TwinFang';
+import { E, GAZE_SLOW, SMOG_SLOW, PETRIFY_STATUS, POISON, POISON_STATUS, Q, R, W } from './balance';
+import { FangBolt, playBite } from './FangBolt';
 
 /**
- * Cassiopeia's kit, for one run.
+ * Snake Lady's kit, for one run.
  *
- *   Q  Noxious Blast     a delayed blast at a ground point: one pip, and poison
- *   W  Miasma            venom lobbed into a wall of clouds across her aim: enemies inside are
- *                        slowed and poisoned
- *   E  Twin Fang         point-and-click on the enemy under the cursor: twin fangs that bite
- *                        for one pip, two on a poisoned target
- *   R  Petrifying Gaze   a cone, striking as its cast ends: enemies facing her are stunned, the
- *                        rest slowed; one pip to all; every poisoned Twin Fang lowers its cooldown
+ *   Q  a delayed blast at a ground point: one pip, and poison
+ *   W  venom lobbed into a wall of clouds across her aim: enemies inside are
+ *      slowed and poisoned
+ *   E  point-and-click on the enemy under the cursor: twin fangs that bite
+ *      for one pip, two on a poisoned target
+ *   R  a cone, striking as its cast ends: enemies facing her are stunned, the
+ *      rest slowed; one pip to all; every fang on a poisoned enemy lowers its cooldown
  *
  * Every slot resolves from where she stands when its cast ends, so a mid-cast
  * Flash carries W and R with her (the engine shifts the aim; see CastSystem).
  *
- * Poison is a status on the enemy ('cassiopeia.poison') plus a tick schedule
+ * Poison is a status on the enemy ('snakelady.poison') plus a tick schedule
  * kept here: a pip every POISON.tickMs while it lasts. Q's lasts its full
  * duration; W's only while they stay in the cloud. On a spellcaster poisoned
  * above one pip, the tick that would kill doesn't land. Every pip goes through
  * the hit funnel, so kills, score and gold are the engine's.
  */
-export class CassiopeiaKit implements Kit {
+export class SnakeLadyKit implements Kit {
   /** Ground spells she owns. Public for the suites. */
   readonly zones: PlayerZoneSystem;
   /** E fangs in flight. */
-  readonly bolts: TwinFang[] = [];
+  readonly bolts: FangBolt[] = [];
   /**
    * Per poisoned enemy: when its next pip ticks, when the poison lapses (ticks
    * on the deadline still land), and whether it may kill.
@@ -73,13 +73,13 @@ export class CassiopeiaKit implements Kit {
     } else if (slot === 'w') {
       const { player } = this.ctx;
       this.zones.placeCloud({
-        x: aim.x, y: aim.y, puffs: this.miasmaPuffs(aim), radius: W.puffRadius,
+        x: aim.x, y: aim.y, puffs: this.smogPuffs(aim), radius: W.puffRadius,
         thrownFrom: { x: player.x, y: player.y, speed: W.boltSpeed },
         durationMs: W.durationMs, tickMs: W.tickMs,
         onTick: (inside) => {
           const t = this.ctx.clock.now;
           for (const e of inside) {
-            e.applySlow(MIASMA_SLOW, W.slowFraction, t, W.slowMs);
+            e.applySlow(SMOG_SLOW, W.slowFraction, t, W.slowMs);
             this.poison(e, W.poisonMs);
           }
         },
@@ -89,7 +89,7 @@ export class CassiopeiaKit implements Kit {
       if (!target || !target.active) return;
       this.fangs++;
       const { scene, player } = this.ctx;
-      this.bolts.push(new TwinFang(scene, player.x, player.y, target, E.boltSpeed, (hit, angle) => this.onFangImpact(hit, angle)));
+      this.bolts.push(new FangBolt(scene, player.x, player.y, target, E.boltSpeed, (hit, angle) => this.onFangImpact(hit, angle)));
     } else if (slot === 'r') {
       const { player } = this.ctx;
       const angle = Math.atan2(aim.y - player.y, aim.x - player.x);
@@ -106,7 +106,7 @@ export class CassiopeiaKit implements Kit {
    * her distance (or W.arcMinRadius, whichever is larger), so the field bows
    * away from her like venom spat in a sweep. Public for the suites.
    */
-  miasmaPuffs(aim: Aim): { x: number; y: number }[] {
+  smogPuffs(aim: Aim): { x: number; y: number }[] {
     const { player } = this.ctx;
     const dist = Math.hypot(aim.x - player.x, aim.y - player.y);
     const facing = dist > 0 ? Math.atan2(aim.y - player.y, aim.x - player.x) : 0;
@@ -214,12 +214,9 @@ export class CassiopeiaKit implements Kit {
     return { poisonTicks: this.poisonTicksLanded, fangs: this.fangs, fangsOnPoisoned: this.fangsOnPoisoned, gazeStuns: this.gazeStuns };
   }
 
+  /** Nothing of hers on the end screen: her counters stay in the run log (stats). */
   statRows(): KitStat[] {
-    const pct = this.fangs > 0 ? Math.round((this.fangsOnPoisoned / this.fangs) * 100) : 0;
-    return [
-      { label: 'FANGS ON POISON', value: `${this.fangsOnPoisoned}/${this.fangs}  (${pct}%)` },
-      { label: 'PETRIFIED', value: `${this.gazeStuns}` },
-    ];
+    return [];
   }
 
   clear(): void {
