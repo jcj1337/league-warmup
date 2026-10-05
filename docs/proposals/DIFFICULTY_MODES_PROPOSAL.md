@@ -1,9 +1,12 @@
 # Difficulty Modes Proposal
 
-Status: **approved** 2026-10-04, being implemented, with these decisions: the bonus is
+Status: **implemented** 2026-10-04, with these decisions: the bonus is
 per **stage**; its sizes are none / 500 / 1500; Easy **does not** reduce damage (thinner
 waves and later, rarer specials are enough); Easy's waves are 75% of Normal's. The numbers
-are first guesses to tune in play; `MODES` in `balance.ts` is current.
+are first guesses to tune in play; `MODES` in `balance.ts` and the README's Difficulty
+section are current. Measured after building it: over Stages 8 to 20 Easy fields about two
+thirds of Normal's casters and Hard about twice; the end screen names the mode on its own
+`DIFFICULTY` row and the HUD always shows the mode tag, Normal included.
 
 ## Summary
 

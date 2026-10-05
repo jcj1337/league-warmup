@@ -78,6 +78,31 @@ Clearing a stage's last wave moves you to Wave 1 of the next stage and **heals y
 full**: every stage starts from 100 HP, so the run ends at the first stage you can't
 survive. You stay in control during the breather.
 
+**Difficulty.** The start screen picks **Easy**, **Normal** (the default) or **Hard**,
+saved to your profile and fixed for a run. Everything in this README describes Normal
+unless it says otherwise. A mode changes only what the run fields, how hard hits land and
+what a stage clear pays:
+
+| | Easy | Normal | Hard |
+| --- | --- | --- | --- |
+| Hand-written intro | Stages 1–6, slimes and Pursuers | Stages 1–5 | Stages 1–4, casters included |
+| Magus first appears | Stage 7 | Stage 5 | Stage 3 |
+| Sovereign first appears | Stage 8 | Stage 5 | Stage 4 |
+| A Bulwark closes every stage from | Stage 11 | Stage 8 | Stage 5 |
+| A second Bulwark | never | Stage 18 | Stage 12 |
+| Casters in generated waves | about two thirds of Normal's | — | about twice Normal's |
+| Enemies per wave | 75% (13 at Stage 10) | 100% (17) | 100% |
+| Damage you take | ×1 | ×1 | ×2, from every source |
+| Stage-clear score bonus | none | 500 | 1500 |
+
+Mob behaviour, the difficulty curve and the stage a new attack switches on (spit, dash)
+are the same in every mode. During play a tag beside the stage plate names the mode. Runs
+are logged with their mode, and your best is kept per champion **and** per mode. Tuned in
+`MODES` in [balance.ts](src/config/balance.ts): each mode is a damage multiplier, a wave
+size multiplier, a stage-clear bonus, its intro stages and per-mob overrides of the
+`ENEMIES` registry (unlock stage, weight, share, per-wave cap). From the console:
+`__profile.update((d) => { d.mode = 'hard'; })`, then restart.
+
 **Contact damage.** An active enemy whose body touches yours bumps you: basic 6, Pursuer
 10, Magus 6, Bulwark 12 at Stage 1, scaled by `DIFFICULTY.contactDamage` (×1.88 at Stage 10, ×3.77 at
 20). Each enemy can bump you at most once per 800ms (`CONTACT.cooldownMs`), on top of the
@@ -101,8 +126,8 @@ stage. A strong player reaches the hard encounters sooner; a struggling player k
 practising the easier ones for longer.
 
 When you die, the end screen keeps to what tells you how the run went: the stage and
-wave reached and your level (marked **NEW BEST!** when it beats your logged runs on this
-growth setting and balance version), score, kills and kills by type, Q accuracy, what
+wave reached and your level (marked **NEW BEST!** when it beats your logged runs as this
+champion in this mode, on this growth setting and balance version), the difficulty, score, kills and kills by type, Q accuracy, what
 killed you, and your best run (stage and score). Tuning data — the score breakdown,
 damage by source, the raw attack metrics — stays in the round result and the run log, off
 the screen. `R` restarts at Stage 1 Wave 1.
@@ -128,11 +153,12 @@ result keeps the breakdown into kills, speed, HP and clear. Tuned in `SCORE` in
 [balance.ts](src/config/balance.ts).
 
 **Run log.** Every finished run (not a mid-run restart) is saved in this browser's local
-storage: stage, wave and level reached, run time, the growth setting and
-`BALANCE_VERSION` it was played on, what dealt the killing blow, and the HP lost to each
+storage: stage, wave and level reached, run time, the champion, the difficulty mode, the
+growth setting and `BALANCE_VERSION` it was played on, what dealt the killing blow, and the HP lost to each
 source over the run and in the final stage (Pursuer, basic spit, Magus, edge fire, and
 each mob's body contact). The end screen shows `KILLED BY` and `YOUR BEST` (best stage and
-score on the current growth setting and balance version, and how many runs); runs from
+score as this champion in this mode, on the current growth setting and balance version,
+and how many runs); runs from
 older balance versions are kept but left out. From the console:
 `__runs.summary()`, `__runs.list()`, and `__runs.clear()` to delete the log. It lives in
 [RunHistory.ts](src/game/RunHistory.ts); nothing leaves the machine.
@@ -427,9 +453,11 @@ It starts on the release, so the click or key is never also a move order or a ca
 the press counts as the gesture a non-1.0 Mouse Speed needs for its pointer lock (except
 `Esc`, which browsers don't count: the lock then waits for your next click). Restarts
 (`R`, Restart Round) skip it and go straight into play. The card also carries the
-**champion row**: click a tile or use the arrow keys to pick who you play (saved to your
-profile); **Change Champion** in the pause menu or on the end screen brings the card
-back with a fresh run.
+**champion row**: click a tile or use Left / Right to pick who you play, and the
+**difficulty row** under it: click Easy, Normal or Hard, or use Up / Down (see
+Difficulty under The run). Both are saved to your profile and neither starts the run;
+**Change Champion** in the pause menu or on the end screen brings the card back with a
+fresh run.
 
 ## Pause & settings
 
@@ -508,7 +536,7 @@ is armed and flashes briefly after `T`.
 
 ## Where things live
 
-- `src/config/balance.ts` — gameplay tuning: the run (`RUN`, `DIFFICULTY`, `ENEMIES`, `STAGES`, `ENDLESS`, `STAGE_RAMPS`), ranges, timings, damage, keybinds, debug flags.
+- `src/config/balance.ts` — gameplay tuning: the run (`RUN`, `DIFFICULTY`, `ENEMIES`, `STAGES`, `MODES`, `ENDLESS`, `STAGE_RAMPS`), ranges, timings, damage, keybinds, debug flags.
 - `src/config/theme.ts` — **the look**: `PALETTE` (raw colours) and `THEME` (sprite scale, depth bands, effect timings, HUD styling). Nothing in it affects gameplay.
 - `src/game/art/` — original pixel sprites as text pixel maps (`sprites.ts`), the 5×7 HUD font (`glyphs.ts`, `font.ts`), and `textures.ts`, which rasterises them once and owns every texture key. Real PNG art can later replace a sprite key-for-key.
 - `src/game/view/` — the read-only view layer: `PlayerView`, `EnemyView` / `PursuerView`, `MagusView`, `SovereignView`, `BulwarkView`, `HostileSpellView` (Magus zones), `ProjectileView` + `projectileArt`, `Fx` (pooled particles, dotted rings, smooth shockwaves and ground flashes, damage numbers), `PixelBar` (health bars), `Battlefield` (painted ground + props) and `pixelDraw` helpers.
@@ -519,7 +547,7 @@ is armed and flashes briefly after `T`.
   `AbilityCooldowns`, `SkillshotSystem` (Q+W), `BlinkSystem` (E+Flash), `PassiveSystem`,
   `WaveDirector` (stages, waves, breathers), `EnemyProjectileSystem`, `HostileSpellSystem`
   (Magus zones and orbs, basic spit), `ScoreSystem`, `KitingMetrics`.
-- `src/game/ui/` — `AbilityBar`, `PassiveDisplay`, `PauseMenu`.
+- `src/game/ui/` — `AbilityBar`, `PassiveDisplay`, `PauseMenu`, `ChampionRow`, `ModeRow` (the start screen's pickers).
 
 See [docs/TECHNICAL_REPORT.md](docs/TECHNICAL_REPORT.md) (historical: it predates the endless run and the Magus / Sovereign; see the proposals in [docs/proposals/](docs/proposals/) for what changed since) for how the systems actually work.
 

@@ -10,7 +10,7 @@ this file is for working on the code.
 - `npm run typecheck` — `tsc --noEmit` for src and tests. Run it before any test run.
 - `npm test` — the Playwright suites in `tests/e2e/`, one at a time in headless Edge
   (~5 min). They start their own Vite server on :5173 or reuse one.
-- `npx playwright test <name>` — one suite (`kit`, `waves`, `cassiopeia`, `bulwark`, ...).
+- `npx playwright test <name>` — one suite (`kit`, `waves`, `cassiopeia`, `bulwark`, `modes`, ...).
 - **Never run `mouse-speed.spec.ts` on a machine someone is using**: it takes a real
   pointer lock, which on Windows grabs the OS cursor even headless. It is skipped
   unless `PW_POINTER_LOCK=1`.
@@ -18,7 +18,8 @@ this file is for working on the code.
 ## Where things are
 
 - `src/config/balance.ts` — the world: arena, enemies (`ENEMIES` registry + per-mob
-  blocks), waves, difficulty, score, Flash, keybind defaults, `DEBUG`, `LEVELS` (XP curve).
+  blocks), waves, difficulty, `MODES` (Easy / Normal / Hard), score, Flash, keybind
+  defaults, `DEBUG`, `LEVELS` (XP curve).
   Mutable on purpose: `__balance.ATTACK.range = 400` from the console applies live.
 - `src/config/theme.ts` — every colour and presentation number. Palette at the top.
 - `src/champions/` — playable champions. `types.ts` is the contract (a `Champion` has
@@ -55,6 +56,9 @@ this file is for working on the code.
 - Enemy health is pips: `takeHit()` removes exactly one. There are no damage amounts on
   the enemy side; player damage is HP.
 - Gameplay state flips first; views and effects read it afterwards and never feed back.
+- A difficulty mode is only numbers (`MODES`): the engine reads them and never tests which
+  mode it is. Mode-dependent registry reads go through `enemyEntry(id, mode)`, not
+  `ENEMIES[id]`; Normal must stay exactly the un-overridden game.
 - Console handles (`__warmup`, `__balance`, `__ezreal`, `__cassiopeia`, `__profile`,
   `__runs`, `__keybinds`, `__settings`) are what the suites drive too.
 
@@ -64,7 +68,7 @@ The suites are characterization scripts: one long sequential scenario per area,
 `pass` / `fail` lines with soft assertions, and they reach into the scene
 (`window.__warmup.scene.getScene('GameScene').director`, `.kit`, `.attacks`, ...).
 Renaming an internal means updating them. `startSuite(page, testInfo, settleMs,
-{ champion })` boots the game past the start screen; `waitForGame` is the handle for
+{ champion, mode })` boots the game past the start screen; `waitForGame` is the handle for
 "the simulation has advanced". The headless browser can tick at 300+ fps, so never
 assume a frame is ~16ms: thresholds go in px/s or ms, not per call.
 
