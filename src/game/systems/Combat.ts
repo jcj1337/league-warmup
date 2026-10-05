@@ -1,4 +1,4 @@
-import { DIFFICULTY, ENEMIES } from '../../config/balance';
+import { DIFFICULTY, ENEMIES, type Mode } from '../../config/balance';
 import type { DamageKind, Enemy, EnemyArchetype } from '../entities/Enemy';
 import type { Player } from '../entities/Player';
 import type { RunEvents } from '../RunEvents';
@@ -23,6 +23,7 @@ export class Combat {
     private readonly scoring: ScoreSystem,
     private readonly director: WaveDirector,
     private readonly progression: Progression,
+    private readonly mode: Mode,
   ) {}
 
   /**
@@ -61,10 +62,13 @@ export class Combat {
     this.playerHit(Math.round(damage * mult), kind === 'contact' ? `${source}Contact` : source);
   }
 
-  /** Every hit on the player lands here, tagged with its source for the run log. */
+  /**
+   * Every hit on the player lands here, tagged with its source for the run
+   * log, and is multiplied by the mode (Mode.damageMultiplier) whatever dealt it.
+   */
   playerHit(damage: number, source: string): void {
     const hpBefore = this.player.hp;
-    const taken = this.player.takeDamage(damage, this.clock.now);
+    const taken = this.player.takeDamage(damage * this.mode.damageMultiplier, this.clock.now);
     if (taken <= 0) return;
     // Log the HP actually lost: overkill on the final hit is not damage taken.
     const lethal = !this.player.isAlive;

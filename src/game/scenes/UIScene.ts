@@ -605,7 +605,7 @@ export class UIScene extends Phaser.Scene {
         row('KILLS BY TYPE', killsLine(result.killsByType)),
         ...result.kitRows.map((stat) => row(stat.label, stat.value)),
         row('KILLED BY', result.killedBy ? sourceName(result.killedBy) : '-'),
-        row('YOUR BEST', bestLine(RunHistory.summary(result.growth, BALANCE_VERSION, result.champion))),
+        row('YOUR BEST', bestLine(RunHistory.summary(result.growth, BALANCE_VERSION, result.champion, result.mode))),
       ].join('\n\n'),
     );
   }

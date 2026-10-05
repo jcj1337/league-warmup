@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { ARENA, DEBUG, FLASH } from '../../config/balance';
+import { ARENA, DEBUG, DEFAULT_MODE, FLASH, type Mode } from '../../config/balance';
 import { activeChampion, type Champion, type Kit, type Slot } from '../../champions';
 import type { AbilityDef, Aim, CastPace } from '../../champions/types';
 import { THEME } from '../../config/theme';
@@ -10,6 +10,7 @@ import { Profile } from '../../profile/Profile';
 import { Player } from '../entities/Player';
 import type { DamageKind, Enemy, EnemyArchetype } from '../entities/Enemy';
 import { Run, type RoundResult } from '../Run';
+import { activeMode } from '../Mode';
 import { AttackSystem } from '../systems/AttackSystem';
 import { PlayerProjectileSystem } from '../systems/PlayerProjectileSystem';
 import { EnemyProjectileSystem } from '../systems/EnemyProjectileSystem';
@@ -40,6 +41,8 @@ export type { RoundResult, RoundState } from '../Run';
 export interface HudState {
   /** Who is being played: the HUD builds its slots and passive readout from the champion. */
   champion: string;
+  /** The difficulty mode being played (a key of MODES). */
+  mode: string;
   /**
    * Which round this snapshot belongs to. Bumps each time create() starts a
    * round, so the persistent UIScene can tell a restart from a continuing round.
@@ -81,6 +84,8 @@ export class GameScene extends Phaser.Scene {
   /** Who is being played this round, and their abilities. Public for the suites. */
   champion!: Champion;
   kit!: Kit;
+  /** The difficulty mode this round is played on, fixed for the round. Public for the suites. */
+  mode!: Mode;
   /** The current wave's roster. Owned by the WaveDirector; cached each frame. */
   private enemies: Enemy[] = [];
   private director!: WaveDirector;
@@ -159,6 +164,7 @@ export class GameScene extends Phaser.Scene {
     this.fx = new Fx(this);
 
     this.champion = activeChampion();
+    this.mode = activeMode();
     // The champion's slime wearing the profile's cosmetics, composed once per look.
     const look = ensurePlayerFrames(this, this.champion, resolveLook(Profile.data));
     this.player = new Player(
@@ -191,7 +197,7 @@ export class GameScene extends Phaser.Scene {
     );
     this.enemies = this.director.enemies;
 
-    this.combat = new Combat(this.clock, this.run.events, this.player, this.scoring, this.director, this.progression);
+    this.combat = new Combat(this.clock, this.run.events, this.player, this.scoring, this.director, this.progression, this.mode);
     // Presentation that listens to the run's events (kill gold, level-up ring, hit shake).
     new RunFeedback(this, this.fx, this.player, this.run.events);
 
@@ -531,7 +537,7 @@ export class GameScene extends Phaser.Scene {
     return Math.min(1, remaining / THEME.rangeHint.fadeMs);
   }
 
-  /** Back to the start screen with a fresh, held round (a champion change picks up the profile's choice). */
+  /** Back to the start screen with a fresh, held round (a champion or mode change picks up the profile's choice). */
   returnToStart(): void {
     this.holdNextRound = true;
     this.restartRound();
@@ -710,6 +716,7 @@ export class GameScene extends Phaser.Scene {
       targetsKilled: this.scoring.targetsKilled,
       projectileHitsTaken: this.scoring.projectileHitsTaken,
       champion: this.champion.id,
+      mode: this.mode.id,
       kit: this.kit.stats(),
       kitRows: this.kit.statRows(),
       attacksStarted: this.metrics.attacksStarted,
@@ -737,6 +744,7 @@ export class GameScene extends Phaser.Scene {
       runTime: this.run ? this.run.clock.now / 1000 : 0,
       score: this.scoring ? Math.round(this.scoring.score) : 0,
       champion: this.champion ? this.champion.id : 'ezreal',
+      mode: this.mode ? this.mode.id : DEFAULT_MODE,
       hp: this.player ? this.player.hp : 0,
       maxHp: this.player ? this.player.maxHp : 1,
       castingAbility: this.cast ? this.cast.castingAbility : null,

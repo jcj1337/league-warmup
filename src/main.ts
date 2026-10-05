@@ -7,6 +7,7 @@ import { UIScene } from './game/scenes/UIScene';
 import { Keybinds } from './game/Keybinds';
 import { MouseSpeed } from './game/MouseSpeed';
 import { RunHistory } from './game/RunHistory';
+import { activeMode } from './game/Mode';
 import { Settings } from './game/Settings';
 import { Profile } from './profile/Profile';
 import { CHAMPIONS } from './champions';
@@ -39,19 +40,22 @@ const game = new Phaser.Game({
 //   __warmup.scene.getScene('GameScene').getHudState()
 //   __balance.ATTACK.range = 400      // most values apply on the next frame
 //   __theme.player.attack.windupLeanPx // presentation values
-//   __runs.summary()                   // your logged runs on the current growth + balance version
+//   __runs.summary()                   // your logged runs on the current growth + balance version, champion and mode
 //   __runs.list() / __runs.clear()     // every logged run / delete the log
 //   __keybinds.all() / .set('flash', 'CapsLock') / .reset()  // key bindings (saved in this browser)
 //   __mouseSpeed.value / .set(2.5) / .reset()                // Mouse Speed (saved in this browser)
 //   __settings.all() / .pauseOnFocusLoss = false             // pause-menu settings (saved in this browser)
 //   __profile.data / .reset()                                // everything saved, in one place
+//   __profile.update((d) => { d.mode = 'hard' })             // the difficulty mode of the next run (MODES)
 //   __ezreal.SKILLSHOT_Q.speed = 1400                        // Ezreal's numbers (src/champions/ezreal/balance.ts)
 //   __cassiopeia.Q.radius = 90                               // Cassiopeia's (src/champions/cassiopeia/balance.ts)
 //   __champions                                              // every playable champion
 const runs = {
   list: () => RunHistory.list(),
-  summary: (growth: number = balance.DIFFICULTY.growth, version: number = balance.BALANCE_VERSION, champion: string = Profile.data.champion) =>
-    RunHistory.summary(growth, version, champion),
+  summary: (
+    growth: number = balance.DIFFICULTY.growth, version: number = balance.BALANCE_VERSION,
+    champion: string = Profile.data.champion, mode: string = activeMode().id,
+  ) => RunHistory.summary(growth, version, champion, mode),
   clear: () => RunHistory.clear(),
 };
 Object.assign(window as unknown as Record<string, unknown>, {

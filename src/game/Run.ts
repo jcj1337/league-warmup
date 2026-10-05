@@ -30,7 +30,7 @@ export interface RoundResult {
   waveReached: number;
   wavesInStage: number;
   wavesCleared: number;
-  /** Best stage of earlier logged runs on this growth setting (null: none), and whether this run beat it. */
+  /** Best stage of earlier logged runs as this champion in this mode, on this growth setting (null: none), and whether this run beat it. */
   previousBest: number | null;
   newBest: boolean;
   /** Total run time on the GameClock, in seconds. */
@@ -42,6 +42,8 @@ export interface RoundResult {
   projectileHitsTaken: number;
   /** Who was played, their raw counters for the log, and their end-screen lines. */
   champion: string;
+  /** The difficulty mode it was played on (a key of MODES). */
+  mode: string;
   kit: Record<string, number>;
   kitRows: KitStat[];
   /** Mechanical counters for the kiting drill — see KitingMetrics. */
@@ -138,7 +140,7 @@ export class Run {
    */
   finish(summary: RoundSummary): RoundResult {
     this.state = 'over';
-    const previousBest = RunHistory.summary(DIFFICULTY.growth, BALANCE_VERSION, summary.champion).best;
+    const previousBest = RunHistory.summary(DIFFICULTY.growth, BALANCE_VERSION, summary.champion, summary.mode).best;
     const result: RoundResult = {
       ...summary,
       outcome: 'defeated',
@@ -162,6 +164,7 @@ export class Run {
       damageTaken: result.damageTaken,
       stageDamage: result.stageDamage,
       champion: result.champion,
+      mode: result.mode,
     });
     return result;
   }

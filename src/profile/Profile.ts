@@ -55,6 +55,8 @@ export interface RunRecord {
   stageDamage?: Record<string, number>;
   /** Who was played (absent on runs logged before champions existed: Ezreal). */
   champion?: string;
+  /** The difficulty mode it was played on (absent on runs logged before modes existed: Normal). */
+  mode?: string;
 }
 
 export interface ProfileSettings {
@@ -67,6 +69,8 @@ export interface ProfileData {
   version: typeof CURRENT_VERSION;
   /** The champion the next run uses. Only Ezreal exists until champions arrive. */
   champion: string;
+  /** The difficulty mode the next run uses (a key of MODES). */
+  mode: string;
   /** Physical key per rebindable action; missing actions use the KEYBINDS default. */
   keybinds: Record<string, string>;
   mouseSpeed: number;
@@ -90,6 +94,7 @@ export function defaultProfile(): ProfileData {
   return {
     version: CURRENT_VERSION,
     champion: 'ezreal',
+    mode: 'normal',
     keybinds: {},
     mouseSpeed: MOUSE.defaultSpeed,
     settings: {
@@ -213,6 +218,7 @@ function sanitize(parsed: unknown): ProfileData {
   const data = defaultProfile();
   if (!isRecord(parsed)) return data;
   if (typeof parsed.champion === 'string' && parsed.champion) data.champion = parsed.champion;
+  if (typeof parsed.mode === 'string' && parsed.mode) data.mode = parsed.mode;
   if (isRecord(parsed.keybinds)) data.keybinds = upgradeKeybinds(stringMap(parsed.keybinds));
   if (typeof parsed.mouseSpeed === 'number' && Number.isFinite(parsed.mouseSpeed)) data.mouseSpeed = parsed.mouseSpeed;
   if (isRecord(parsed.settings)) data.settings = sanitizeSettings(parsed.settings, data.settings);

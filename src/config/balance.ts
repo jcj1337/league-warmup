@@ -824,6 +824,28 @@ export const ENDLESS = {
   wavesPerStage: 3,
 };
 
+// ============================================================================
+// MODES — the difficulty picked on the start screen. Normal is the reference;
+// a mode is only numbers, and the engine never asks which mode it is.
+// ============================================================================
+
+export interface Mode {
+  id: string;
+  /** How the start screen and the HUD name it. */
+  name: string;
+  /** Multiplies every HP the player loses, whatever dealt it (see Combat.playerHit). */
+  damageMultiplier: number;
+}
+
+export const MODES = {
+  easy: { id: 'easy', name: 'Easy', damageMultiplier: 1 },
+  normal: { id: 'normal', name: 'Normal', damageMultiplier: 1 },
+  hard: { id: 'hard', name: 'Hard', damageMultiplier: 2 },
+} satisfies Record<string, Mode>;
+
+export type ModeId = keyof typeof MODES;
+export const DEFAULT_MODE: ModeId = 'normal';
+
 /**
  * Per-stage ramps, indexed by stage - 1. Past the end, the last value holds.
  * (The player's attack speed comes from their level instead: see LEVELS.)
