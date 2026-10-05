@@ -23,12 +23,13 @@ export function speedFactor(elapsedMs: number, parMs: number): number {
  *   kills   SCORE.pointsPerKill × the mob's scoreMultiplier
  *   speed   clearing a wave near its par time (see speedFactor)
  *   hp      the HP you finish a stage with, +50% if you took no damage in it
+ *   clear   the mode's flat bonus for clearing a stage (Mode.stageClearBonus)
  * each × the stage multiplier, so later stages are worth more.
  */
 export class ScoreSystem {
   public score = 0;
   /** Where the score came from, for the end screen. */
-  public readonly scoreFrom = { kills: 0, speed: 0, hp: 0 };
+  public readonly scoreFrom = { kills: 0, speed: 0, hp: 0, clear: 0 };
   /** Pip-removing hits landed by autos and abilities. */
   public hitsLanded = 0;
   public targetsKilled = 0;
@@ -76,6 +77,14 @@ export class ScoreSystem {
     const S = SCORE.stageClear;
     const points = this.award('hp', hp * S.pointsPerHp * (flawless ? 1 + S.flawlessBonus : 1) * stageScoreMultiplier(stage));
     return { points, flawless };
+  }
+
+  /**
+   * The mode's flat bonus for the stage just cleared.
+   * @returns the points awarded (0 in a mode without one).
+   */
+  addStageClearBonus(bonus: number, stage: number): number {
+    return this.award('clear', bonus * stageScoreMultiplier(stage));
   }
 
   /** A hit that got through i-frames. `lethal` = it took the last HP. */

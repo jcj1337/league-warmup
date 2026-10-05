@@ -1,7 +1,7 @@
 import { test } from '@playwright/test';
 import { startSuite } from './support/harness';
 
-test('modes: the profile picks the mode, damage per mode, runs logged and compared per mode', async ({ page }, testInfo) => {
+test('modes: the profile picks the mode, damage per mode, stage-clear bonus per mode, runs logged and compared per mode', async ({ page }, testInfo) => {
   const { pass, fail, section, finish } = await startSuite(page, testInfo, 200, { mode: 'hard' });
 
   /** Save a mode to the profile and restart into a fresh round on it, arena quiet. */
@@ -83,6 +83,37 @@ test('modes: the profile picks the mode, damage per mode, runs logged and compar
   cfg.modes.hard.damageMultiplier === 2 && cfg.modes.normal.damageMultiplier === 1 && cfg.modes.easy.damageMultiplier === 1
     ? pass('Hard doubles damage; Easy and Normal leave it alone')
     : fail(`multipliers: ${JSON.stringify(cfg.modes)}`);
+
+  // === 2b. Stage-clear bonus ==================================================
+  section('2b. Stage-clear bonus');
+  const perStage = await page.evaluate(() => window.__balance.SCORE.stageMultiplierPerStage);
+  for (const mode of ['easy', 'normal', 'hard']) {
+    await playOn(mode);
+    // Clear Stage 3's last wave through the real hit funnel.
+    const got = await page.evaluate(() => {
+      const g = window.__warmup.scene.getScene('GameScene');
+      const d = g.director;
+      d.stageIndex = 2; d.waveIndex = d.wavesInStage - 1; d.currentPhase = 'wave';
+      d.spawnWave(); d.arriveAllNow();
+      const before = { ...g.scoring.scoreFrom };
+      for (const e of d.enemies) while (e.active) g.onTargetHit(e, e.takeHit());
+      const from = g.scoring.scoreFrom;
+      const popups = g.children.list
+        .filter((o: { text?: unknown }) => typeof o.text === 'string' && /CLEAR$/.test(o.text as string))
+        .map((o: { text: string }) => o.text);
+      return { clear: from.clear - before.clear, hp: from.hp - before.hp, score: g.scoring.score, parts: from.kills + from.speed + from.hp + from.clear, popups };
+    });
+    const want = Math.round(cfg.modes[mode].stageClearBonus * (1 + perStage * 2));
+    got.clear === want && got.hp > 0 && got.score === got.parts
+      ? pass(`${mode}: clearing Stage 3 pays +${got.clear} on top of the HP bonus`)
+      : fail(`${mode}: ${JSON.stringify(got)}, want clear ${want}`);
+    (want > 0 ? got.popups.join() === `+${want} CLEAR` : got.popups.length === 0)
+      ? pass(`${mode}: ${want > 0 ? `it pops as "+${want} CLEAR"` : 'no bonus, no popup'}`)
+      : fail(`${mode}: popups ${JSON.stringify(got.popups)}`);
+  }
+  cfg.modes.easy.stageClearBonus === 0 && cfg.modes.normal.stageClearBonus === 500 && cfg.modes.hard.stageClearBonus === 1500
+    ? pass('the bonus is none on Easy, 500 on Normal, 1500 on Hard, × the stage multiplier')
+    : fail(`bonuses: ${JSON.stringify(cfg.modes)}`);
 
   // === 3. The run log is per mode =============================================
   section('3. Run log');

@@ -12,8 +12,8 @@ import type { Fx } from './Fx';
  * directly for these.
  *
  * Popups over the slime stack by row above its crown: row 0 is kill gold; the
- * stage-clear heal, the HP bonus and the speed bonus sit on rows 1–3, so the
- * kill that clears a stage never hides them.
+ * stage-clear heal, the HP bonus, the speed bonus and the mode's clear bonus
+ * sit on rows 1–4, so the kill that clears a stage never hides them.
  */
 export class RunFeedback {
   constructor(
@@ -37,8 +37,9 @@ export class RunFeedback {
       if (points > 0) this.scorePopup(`+${points} SPEED`, 3);
     });
 
-    events.on('stageCleared', ({ points, flawless, healed }) => {
+    events.on('stageCleared', ({ points, bonus, flawless, healed }) => {
       if (points > 0) this.scorePopup(`+${points} ${flawless ? 'FLAWLESS' : 'HP'}`, 2);
+      if (bonus > 0) this.scorePopup(`+${bonus} CLEAR`, 4);
       // Damage is scaled, so HP can be fractional; the HUD shows it rounded up, so the
       // heal shows rounded down: exactly the jump the HP readout makes.
       const shown = Math.floor(healed);

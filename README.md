@@ -109,19 +109,22 @@ the screen. `R` restarts at Stage 1 Wave 1.
 
 **Score** rewards playing well, never time alive — kiting one enemy forever earns
 nothing. Every award is × a stage multiplier (×1 at Stage 1, ×2 at Stage 5, ×3.25 at 10):
-- **Kills:** 100 × the mob's multiplier (Pursuer ×2.25, Magus ×1.5).
+- **Kills:** 100 × the mob's multiplier (Pursuer ×2.25, Magus ×2.5, Sovereign ×3,
+  Bulwark ×8).
 - **Speed:** clearing a wave pays 50 per enemy in it when you finish within its **par
   time** — the time its enemies take to arrive plus 0.6s per health pip — sliding to
   nothing at twice par.
 - **HP:** clearing a stage pays 10 per HP you have left (before the full heal), +50% if
   the stage cost you no damage at all (**flawless**).
+- **Clear:** clearing a stage also pays the mode's flat bonus: 500 on Normal, 1500 on
+  Hard, none on Easy (`stageClearBonus` in `MODES`).
 
 Every kill pops its points over your slime in gold with a coin, like League's last-hit
 gold (`+100`), and the popup rides along on your slime's head as you move until it fades;
 kills within 250ms of each other add into one popup, so a multi-kill
 reads as one number. Bonuses stack above it (`+300 SPEED`, `+870 HP`, `+1500
-FLAWLESS`). Presentation in `killGold` in [theme.ts](src/config/theme.ts). The round
-result keeps the breakdown into kills, speed and HP. Tuned in `SCORE` in
+FLAWLESS`, `+500 CLEAR`). Presentation in `killGold` in [theme.ts](src/config/theme.ts). The round
+result keeps the breakdown into kills, speed, HP and clear. Tuned in `SCORE` in
 [balance.ts](src/config/balance.ts).
 
 **Run log.** Every finished run (not a mid-run restart) is saved in this browser's local

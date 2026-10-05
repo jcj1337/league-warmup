@@ -25,7 +25,7 @@ export interface RunEventMap {
   /** A wave was cleared; `points` is its speed bonus (0 when over par). */
   waveCleared: ClearedWave & { points: number };
   /** A stage was cleared: the HP bonus, whether it was flawless, and the HP the heal restored. */
-  stageCleared: { stage: number; points: number; flawless: boolean; healed: number };
+  stageCleared: { stage: number; points: number; bonus: number; flawless: boolean; healed: number };
   /** The player lost HP (hits eaten by i-frames never emit). */
   playerHit: { damage: number; source: string; lethal: boolean };
 }

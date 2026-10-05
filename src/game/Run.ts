@@ -55,8 +55,8 @@ export interface RoundResult {
   wastedRecoveryMs: number;
   /** Kills broken down by enemy archetype. */
   killsByType: Record<string, number>;
-  /** Where the score came from: kills, wave speed bonuses, stage HP bonuses. */
-  scoreFrom: { kills: number; speed: number; hp: number };
+  /** Where the score came from: kills, wave speed bonuses, stage HP bonuses, the mode's stage-clear bonuses. */
+  scoreFrom: { kills: number; speed: number; hp: number; clear: number };
   /** Damage taken per source over the run, and in the stage that killed you; the source of the killing blow. */
   damageTaken: Record<string, number>;
   stageDamage: Record<string, number>;

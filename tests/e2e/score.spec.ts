@@ -1,10 +1,13 @@
 import { test } from '@playwright/test';
 import { startSuite } from './support/harness';
 
-test('score: no points for time alive, kills × stage, wave speed bonus vs par, stage HP + flawless bonus, breakdown + high score', async ({ page }, testInfo) => {
+test('score: no points for time alive, kills × stage, wave speed bonus vs par, stage HP + flawless + clear bonus, breakdown + high score', async ({ page }, testInfo) => {
   const { pass, fail, section, finish } = await startSuite(page, testInfo, 400);
 
-  const cfg = await page.evaluate(() => ({ S: window.__balance.SCORE, P: window.__balance.PURSUER }));
+  const cfg = await page.evaluate(() => ({
+    S: window.__balance.SCORE, P: window.__balance.PURSUER, M: window.__balance.MAGUS, V: window.__balance.SOVEREIGN,
+    B: window.__balance.BULWARK, clearBonus: window.__balance.MODES.normal.stageClearBonus,
+  }));
   const mult = (stage) => 1 + cfg.S.stageMultiplierPerStage * (stage - 1);
 
   /** Put the run on a fresh stage / wave with its whole roster arrived, arena quiet. */
@@ -57,7 +60,7 @@ test('score: no points for time alive, kills × stage, wave speed bonus vs par, 
     const g = window.__warmup.scene.getScene('GameScene');
     const d = g.director;
     const out = [];
-    for (const [stage, type] of [[1, 'basic'], [5, 'basic'], [5, 'pursuer']] as const) {
+    for (const [stage, type] of [[1, 'basic'], [5, 'basic'], [5, 'pursuer'], [5, 'magus'], [5, 'sovereign'], [8, 'bulwark']] as const) {
       d.stageIndex = stage - 1; d.currentPhase = 'intermission';   // no wave bookkeeping
       const e = d.spawnEnemy(type);
       e.x = 1100; e.y = 600;
@@ -68,10 +71,14 @@ test('score: no points for time alive, kills × stage, wave speed bonus vs par, 
     }
     return out;
   });
-  const wantKill = (k) => Math.round(cfg.S.pointsPerKill * (k.type === 'pursuer' ? cfg.P.scoreMultiplier : 1) * mult(k.stage));
+  const killMult = { basic: 1, pursuer: cfg.P.scoreMultiplier, magus: cfg.M.scoreMultiplier, sovereign: cfg.V.scoreMultiplier, bulwark: cfg.B.scoreMultiplier };
+  const wantKill = (k) => Math.round(cfg.S.pointsPerKill * killMult[k.type] * mult(k.stage));
   kills.every((k) => k.points === wantKill(k))
     ? pass(`kills: ${kills.map((k) => `S${k.stage} ${k.type} ${k.points}`).join(', ')} (×${mult(5)} on Stage 5)`)
     : fail(`kill points: ${JSON.stringify(kills)}`);
+  killMult.pursuer === 2.25 && killMult.magus === 2.5 && killMult.sovereign === 3 && killMult.bulwark === 8
+    ? pass('a special is worth more than a Pursuer: Magus ×2.5, Sovereign ×3, Bulwark ×8')
+    : fail(`kill multipliers: ${JSON.stringify(killMult)}`);
 
   // Kill gold: League-style "+N" with a coin over the slime, exactly what the kill scored.
   await page.waitForTimeout(1000);                // let the popups above expire
@@ -157,6 +164,10 @@ test('score: no points for time alive, kills × stage, wave speed bonus vs par, 
   hpBonus === Math.round(80 * cfg.S.stageClear.pointsPerHp * mult(4))
     ? pass(`finishing Stage 4 on 80 HP: +${hpBonus}`)
     : fail(`hp bonus ${hpBonus}`);
+  const clearBonus = afterHp.from.clear - beforeHp.from.clear;
+  clearBonus === Math.round(cfg.clearBonus * mult(4)) && clearBonus > 0
+    ? pass(`clearing Stage 4 on Normal also pays the mode's flat bonus: +${clearBonus}`)
+    : fail(`clear bonus ${clearBonus}, want ${Math.round(cfg.clearBonus * mult(4))}`);
   const hpAfterHeal = await page.evaluate(() => window.__warmup.scene.getScene('GameScene').player.hp);
   hpAfterHeal === 100 ? pass('the bonus counts the HP before the full heal') : fail(`hp after clear ${hpAfterHeal}`);
   // Scaled damage leaves HP fractional; the heal popup still reads as a whole number,
@@ -186,8 +197,8 @@ test('score: no points for time alive, kills × stage, wave speed bonus vs par, 
   section('5. Breakdown, end screen, high score');
   await page.evaluate(() => window.__runs.clear());
   const total = await score();
-  total.score === total.from.kills + total.from.speed + total.from.hp
-    ? pass(`the score is exactly its parts: kills ${total.from.kills} + speed ${total.from.speed} + hp ${total.from.hp}`)
+  total.score === total.from.kills + total.from.speed + total.from.hp + total.from.clear
+    ? pass(`the score is exactly its parts: kills ${total.from.kills} + speed ${total.from.speed} + hp ${total.from.hp} + clear ${total.from.clear}`)
     : fail(`score ${total.score} vs parts ${JSON.stringify(total.from)}`);
   await page.evaluate(() => {
     const g = window.__warmup.scene.getScene('GameScene');
@@ -202,7 +213,7 @@ test('score: no points for time alive, kills × stage, wave speed bonus vs par, 
     summary: window.__runs.summary(),
   }));
   const f = end.result.scoreFrom;
-  new RegExp(`SCORE\\s+${end.result.score}\\n`).test(end.screen) && f.kills + f.speed + f.hp === end.result.score && !/SCORE FROM/.test(end.screen)
+  new RegExp(`SCORE\\s+${end.result.score}\\n`).test(end.screen) && f.kills + f.speed + f.hp + f.clear === end.result.score && !/SCORE FROM/.test(end.screen)
     ? pass('the end screen shows the score; its breakdown stays in the result, off the screen')
     : fail(`end screen:\n${end.screen}`);
   end.summary.bestScore === end.result.score && new RegExp(`YOUR BEST\\s+STAGE \\d+\\s+SCORE ${end.result.score}`).test(end.screen)

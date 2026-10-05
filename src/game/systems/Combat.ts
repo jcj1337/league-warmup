@@ -85,13 +85,15 @@ export class Combat {
 
   /**
    * A stage was cleared: the HP bonus for what you finished it with (before
-   * the heal), then back to full HP (DIFFICULTY.stageClearHeal) for the next.
+   * the heal) and the mode's flat bonus, then back to full HP
+   * (DIFFICULTY.stageClearHeal) for the next.
    */
   stageCleared(): void {
     const stage = this.director.stage;
     const { points, flawless } = this.scoring.addStageClear(this.player.hp, stage);
+    const bonus = this.scoring.addStageClearBonus(this.mode.stageClearBonus, stage);
     this.scoring.startStage();
     const healed = this.player.heal(Math.round(this.player.maxHp * DIFFICULTY.stageClearHeal));
-    this.events.emit('stageCleared', { stage, points, flawless, healed });
+    this.events.emit('stageCleared', { stage, points, bonus, flawless, healed });
   }
 }

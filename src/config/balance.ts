@@ -389,7 +389,7 @@ export const PURSUER = {
 export const MAGUS = {
   radius: 20,
   /** Kill score relative to a basic target. */
-  scoreMultiplier: 1.5,
+  scoreMultiplier: 2.5,
   /** Fraction of PLAYER.moveSpeed (≈168px/s). Below 1, so you can always run it down. */
   moveSpeedFraction: 0.6,
   /**
@@ -469,7 +469,7 @@ export const MAGUS = {
 export const SOVEREIGN = {
   radius: 20,
   /** Kill score relative to a basic target. */
-  scoreMultiplier: 1.75,
+  scoreMultiplier: 3,
   /** Fraction of PLAYER.moveSpeed (≈168px/s). Below 1, so you can always run her down. */
   moveSpeedFraction: 0.6,
   /** Closer than the Magus: inside your Q range, just outside your autos. */
@@ -526,7 +526,7 @@ export const SOVEREIGN = {
 export const BULWARK = {
   radius: 34,
   /** Kill score relative to a basic target. */
-  scoreMultiplier: 5,
+  scoreMultiplier: 8,
   /** Fraction of PLAYER.referenceMoveSpeed: slower than the Pursuer (0.55). */
   moveSpeedFraction: 0.4,
   /** However fast stages and All Out make it, it stays slower than you. */
@@ -664,7 +664,7 @@ export const DIFFICULTY = {
  * Bumped whenever tuning changes how hard a run is. The run log tags each run
  * with it, and its summary only compares runs from the same version.
  */
-export const BALANCE_VERSION = 11;
+export const BALANCE_VERSION = 12;
 
 /**
  * The player's level, League style: kills give XP (ENEMIES[id].xp). This is
@@ -835,12 +835,14 @@ export interface Mode {
   name: string;
   /** Multiplies every HP the player loses, whatever dealt it (see Combat.playerHit). */
   damageMultiplier: number;
+  /** Points for clearing a stage, × the stage multiplier like every award (see ScoreSystem). */
+  stageClearBonus: number;
 }
 
 export const MODES = {
-  easy: { id: 'easy', name: 'Easy', damageMultiplier: 1 },
-  normal: { id: 'normal', name: 'Normal', damageMultiplier: 1 },
-  hard: { id: 'hard', name: 'Hard', damageMultiplier: 2 },
+  easy: { id: 'easy', name: 'Easy', damageMultiplier: 1, stageClearBonus: 0 },
+  normal: { id: 'normal', name: 'Normal', damageMultiplier: 1, stageClearBonus: 500 },
+  hard: { id: 'hard', name: 'Hard', damageMultiplier: 2, stageClearBonus: 1500 },
 } satisfies Record<string, Mode>;
 
 export type ModeId = keyof typeof MODES;
@@ -860,7 +862,8 @@ export const STAGE_RAMPS = {
 
 /**
  * Score rewards doing things well — never time alive, so kiting one enemy
- * forever earns nothing. See ScoreSystem.
+ * forever earns nothing. See ScoreSystem. The flat bonus for clearing a stage
+ * is the mode's (MODES[id].stageClearBonus).
  */
 export const SCORE = {
   /** Base kill value; each archetype multiplies this by its scoreMultiplier. */
