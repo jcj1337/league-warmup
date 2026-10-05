@@ -304,5 +304,11 @@ export interface Champion {
   /** How the auto looks. The engine's cyan bolt when omitted. */
   autoLook?: AutoLook;
   slots: { q: AbilityDef; w: AbilityDef; e: AbilityDef; r?: AbilityDef };
+  /**
+   * The start screen's tooltip: a few short lines on what is this trainer's own
+   * about the champion, the rules a League player wouldn't guess. Read when
+   * shown, so it quotes the live numbers.
+   */
+  notes(): string[];
   createKit(ctx: KitContext): Kit;
 }

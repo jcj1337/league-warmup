@@ -219,8 +219,8 @@ test('progression: contact damage, levels from kills (haste, attack speed, Q ran
     last: window.__runs.list().at(-1),
     summary: window.__runs.summary(),
   }));
-  end.result.level === 2 && /STAGE REACHED\s+1\s+\(wave 1\/\d+\)\s+LV 2/.test(end.screen) && end.last.level === 2
-    ? pass('the end screen and the run log record the level reached')
+  end.result.level === 2 && !/LV \d/.test(end.screen) && end.last.level === 2
+    ? pass('the result and the run log record the level reached; the end screen leaves it out')
     : fail(`end: ${JSON.stringify({ level: end.result.level, last: end.last })}\n${end.screen}`);
   end.summary.runs === 1 && end.summary.best === 1 && end.last.balanceVersion === end.summary.balanceVersion
     ? pass(`runs are tagged with BALANCE_VERSION ${end.summary.balanceVersion}; an older version's Stage 30 run is left out of the summary`)

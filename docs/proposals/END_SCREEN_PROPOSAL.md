@@ -8,6 +8,9 @@ changes from the text below:
 - The damage bars show the last stage only, top three sources, the rest as OTHER; a mob's
   body contact is counted as that mob.
 - The track runs to one stage past the furthest you have been.
+- Removed after playtesting, at the user's request: the staged reveal (everything now
+  shows at once) and the score bar (the parts are listed as numbers, so the progress
+  track is the screen's main visual).
 - Not built: tinting a kit stat by how good it is (a kit row is free text), and the
   green "+N" against your best score (the screen says YOUR BEST SCORE instead).
 

@@ -361,19 +361,19 @@ test('hud: contextual range ring, pause freeze + input gate, Q slot, settings me
   await page.keyboard.press('Escape');
   await page.waitForTimeout(80);
   const settingValue = await page.evaluate(() => {
-    const v = window.__warmup.scene.getScene('UIScene').pauseMenu.rows[0].value;
+    const v = window.__warmup.scene.getScene('UIScene').pauseMenu.rows.find((r: { row: { label: string } }) => r.row.label === 'Damage Numbers').value;
     return { x: v.x - v.width / 2, y: v.y };
   });
-  for (let i = 0; i < 3; i++) {                // 3 clicks cycles Range Indicator back to where it was
+  for (let i = 0; i < 2; i++) {                // 2 clicks toggles Damage Numbers back to where it was
     await page.mouse.click(settingValue.x, settingValue.y);
     await page.waitForTimeout(30);
   }
   await page.keyboard.press('Escape');
   await page.waitForTimeout(80);
   const a2 = await apm();
-  a2.total === beforeMenu + 5
-    ? pass('menu open/close keys and settings clicks each count (+5)')
-    : fail(`menu inputs counted +${a2.total - beforeMenu}, want +5`);
+  a2.total === beforeMenu + 4
+    ? pass('menu open/close keys and settings clicks each count (+4)')
+    : fail(`menu inputs counted +${a2.total - beforeMenu}, want +4`);
 
   // Mouse movement after all that still adds nothing.
   await page.mouse.move(900, 100);

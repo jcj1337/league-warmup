@@ -224,9 +224,9 @@ export class UIScene extends Phaser.Scene {
   }
 
   /**
-   * The Escape menu. Range Indicator and Damage Numbers go through `Settings`,
-   * which writes the DEBUG config block that gameplay and HUD code already
-   * re-read every frame and saves it for the next visit.
+   * The Escape menu. Damage Numbers goes through `Settings`, which writes the
+   * DEBUG config block that gameplay and HUD code already re-read every frame
+   * and saves it for the next visit.
    */
   private buildPauseMenu(): void {
     this.pauseMenu = new PauseMenu(
@@ -252,11 +252,6 @@ export class UIScene extends Phaser.Scene {
             MouseSpeed.set(v);
           },
           read: () => MouseSpeed.label(),
-        },
-        {
-          label: 'Range Indicator',
-          read: () => DEBUG.attackRangeDisplay.toUpperCase(),
-          cycle: () => Settings.cycleRangeIndicator(),
         },
         {
           label: 'Damage Numbers',
@@ -385,7 +380,7 @@ export class UIScene extends Phaser.Scene {
     });
 
     this.startScreen = this.add
-      .container(0, 0, [scrim, plate, title, choose, this.championRow.container, this.modeRow.container, prompt, credit, badge, rank])
+      .container(0, 0, [scrim, plate, title, choose, this.championRow.container, this.modeRow.container, prompt, credit, badge, rank, this.championRow.tooltip, this.modeRow.tooltip])
       .setDepth(300)
       .setVisible(false);
   }
@@ -422,6 +417,8 @@ export class UIScene extends Phaser.Scene {
     this.buildKitHud(championOf(hud.champion));
     const mode = modeOf(hud.mode);
     this.modeRow.setSelected(mode.id);
+    this.modeRow.hideTooltip();
+    this.championRow.hideTooltip();
     this.difficultyText.setText(mode.name.toUpperCase()).setTint(modeTint(mode.id));
     this.lastStage = hud.stage;
     this.lastWave = hud.wave;
@@ -501,7 +498,6 @@ export class UIScene extends Phaser.Scene {
     this.cursorLock.update();
 
     this.syncOverlay();
-    this.endScreen.update();
   }
 
   /**

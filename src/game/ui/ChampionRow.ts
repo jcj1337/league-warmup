@@ -4,19 +4,27 @@ import { THEME } from '../../config/theme';
 import { ensurePlayerFrames, type PlayerLook } from '../art/look';
 import { pixelText } from '../art/font';
 import { pixelPanel } from '../view/pixelDraw';
+import { Tooltip } from './Tooltip';
 
 /** Portrait tile size, and the clear space between neighbours' tiles or names (whichever is wider), in screen pixels. */
 const TILE = 76;
 const GAP = 40;
+/** The gap between a tile's name and the tooltip hung under it. */
+const TIP_GAP = 8;
 
 /**
  * The champion picker on the start screen: one portrait tile per champion
  * (its slime, wearing the player's cosmetics), the picked one framed in gold.
+ * Hovering a tile hangs a tooltip under it with the champion's own rules
+ * (`Champion.notes`).
  * Pure view: clicking a tile calls `onPick`; whoever owns the row decides
  * what that means (the profile, a fresh round).
  */
 export class ChampionRow {
   readonly container: Phaser.GameObjects.Container;
+  /** The hover tooltip. Its owner adds it above everything else on the card. */
+  readonly tooltip: Phaser.GameObjects.Container;
+  private readonly tip: Tooltip;
   private readonly tiles = new Map<string, { frame: Phaser.GameObjects.Graphics; name: Phaser.GameObjects.BitmapText; cx: number; cy: number }>();
   private selected: string;
 
@@ -30,6 +38,8 @@ export class ChampionRow {
     private readonly onPick: (id: string) => void,
   ) {
     this.selected = selected;
+    this.tip = new Tooltip(scene);
+    this.tooltip = this.tip.container;
     const parts: Phaser.GameObjects.GameObject[] = [];
     // Names are wider than tiles ('SNAKE LADY'), so the row is spaced by the widest of either.
     const names = champions.map((c) => pixelText(scene, 0, cy + TILE / 2 + 12, c.name.toUpperCase(), 2, THEME.ui.dim).setOrigin(0.5));
@@ -44,8 +54,14 @@ export class ChampionRow {
         .setScale(THEME.art.scale);
       const name = names[i].setX(x);
       const hit = scene.add.rectangle(x, cy, TILE, TILE, 0xffffff, 0).setInteractive({ useHandCursor: true });
-      hit.on('pointerover', () => { if (champion.id !== this.selected) this.drawTile(champion.id, 'hover'); });
-      hit.on('pointerout', () => { if (champion.id !== this.selected) this.drawTile(champion.id, 'idle'); });
+      hit.on('pointerover', () => {
+        if (champion.id !== this.selected) this.drawTile(champion.id, 'hover');
+        this.tip.show(x, name.y + name.height / 2 + TIP_GAP, champion.name, THEME.ui.accent, champion.notes());
+      });
+      hit.on('pointerout', () => {
+        if (champion.id !== this.selected) this.drawTile(champion.id, 'idle');
+        this.tip.hide();
+      });
       hit.on('pointerup', () => this.onPick(champion.id));
       this.tiles.set(champion.id, { frame, name, cx: x, cy });
       parts.push(frame, portrait, name, hit);
@@ -53,6 +69,15 @@ export class ChampionRow {
 
     this.container = scene.add.container(0, 0, parts);
     this.setSelected(selected);
+  }
+
+  /** What the tooltip says while it is up; null when it isn't. */
+  get tooltipText(): string[] | null {
+    return this.tip.text;
+  }
+
+  hideTooltip(): void {
+    this.tip.hide();
   }
 
   get selectedId(): string {

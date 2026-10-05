@@ -67,7 +67,6 @@ export interface RunRecord {
 }
 
 export interface ProfileSettings {
-  attackRangeDisplay: 'contextual' | 'always' | 'off';
   showDamageNumbers: boolean;
   pauseOnFocusLoss: boolean;
 }
@@ -95,8 +94,6 @@ export interface ProfileData {
 /** Oldest runs are dropped past this. */
 export const MAX_RUNS = 500;
 
-const RANGE_MODES = ['contextual', 'always', 'off'] as const;
-
 export function defaultProfile(): ProfileData {
   return {
     version: CURRENT_VERSION,
@@ -105,7 +102,6 @@ export function defaultProfile(): ProfileData {
     keybinds: {},
     mouseSpeed: MOUSE.defaultSpeed,
     settings: {
-      attackRangeDisplay: 'contextual',
       showDamageNumbers: true,
       pauseOnFocusLoss: PREFERENCES.pauseOnFocusLoss,
     },
@@ -243,9 +239,6 @@ function sanitize(parsed: unknown): ProfileData {
 
 function sanitizeSettings(raw: Record<string, unknown>, defaults: ProfileSettings): ProfileSettings {
   const out = { ...defaults };
-  if (RANGE_MODES.includes(raw.attackRangeDisplay as ProfileSettings['attackRangeDisplay'])) {
-    out.attackRangeDisplay = raw.attackRangeDisplay as ProfileSettings['attackRangeDisplay'];
-  }
   if (typeof raw.showDamageNumbers === 'boolean') out.showDamageNumbers = raw.showDamageNumbers;
   if (typeof raw.pauseOnFocusLoss === 'boolean') out.pauseOnFocusLoss = raw.pauseOnFocusLoss;
   return out;

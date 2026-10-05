@@ -187,14 +187,13 @@ test('start screen, saved pause-menu settings, pause on focus loss', async ({ pa
   await page.keyboard.press('Escape');
   await page.waitForTimeout(80);
   const defaults = await menuRows();
-  defaults['Range Indicator'] === 'CONTEXTUAL' && defaults['Damage Numbers'] === 'ON' && defaults['Pause on Focus Loss'] === 'ON'
-    ? pass('defaults: CONTEXTUAL / ON / ON')
+  !('Range Indicator' in defaults) && defaults['Damage Numbers'] === 'ON' && defaults['Pause on Focus Loss'] === 'ON'
+    ? pass('defaults: ON / ON; the range indicator is not a setting')
     : fail(`defaults: ${JSON.stringify(defaults)}`);
-  await clickRow('Range Indicator');
   await clickRow('Damage Numbers');
   await clickRow('Pause on Focus Loss');
   const changed = await menuRows();
-  changed['Range Indicator'] === 'ALWAYS' && changed['Damage Numbers'] === 'OFF' && changed['Pause on Focus Loss'] === 'OFF'
+  changed['Damage Numbers'] === 'OFF' && changed['Pause on Focus Loss'] === 'OFF'
     ? pass('clicking cycles each setting')
     : fail(`changed: ${JSON.stringify(changed)}`);
 
@@ -208,9 +207,9 @@ test('start screen, saved pause-menu settings, pause on focus loss', async ({ pa
     await page.keyboard.press('Escape');
     await page.waitForTimeout(80);
     const rows = await menuRows();
-    live.range === 'always' && live.numbers === false &&
-      rows['Range Indicator'] === 'ALWAYS' && rows['Damage Numbers'] === 'OFF' && rows['Pause on Focus Loss'] === 'OFF'
-      ? pass('all three settings survive a reload, in the game and the menu')
+    live.range === 'contextual' && live.numbers === false &&
+      rows['Damage Numbers'] === 'OFF' && rows['Pause on Focus Loss'] === 'OFF'
+      ? pass('both settings survive a reload, in the game and the menu; the range ring stays contextual')
       : fail(`after reload: ${JSON.stringify({ live, rows })}`);
     await page.keyboard.press('Escape');
     await page.waitForTimeout(80);
@@ -224,7 +223,7 @@ test('start screen, saved pause-menu settings, pause on focus loss', async ({ pa
   await waitForGame(page, 100);
   {
     const s = await page.evaluate(() => ({ ...window.__settings.all(), mouseSpeed: window.__mouseSpeed.value, runs: window.__runs.list().length }));
-    s.attackRangeDisplay === 'contextual' && s.showDamageNumbers === false && s.pauseOnFocusLoss === true && s.mouseSpeed === 1 && s.runs === 0
+    !('attackRangeDisplay' in s) && s.showDamageNumbers === false && s.pauseOnFocusLoss === true && s.mouseSpeed === 1 && s.runs === 0
       ? pass('invalid saved values are ignored one by one; valid ones load')
       : fail(`partial load: ${JSON.stringify(s)}`);
   }
@@ -253,7 +252,7 @@ test('start screen, saved pause-menu settings, pause on focus loss', async ({ pa
       legacyLeft: ['warmup.keybinds.v1', 'warmup.mouseSpeed.v1', 'warmup.settings.v1', 'warmup.runHistory.v1'].filter((k) => localStorage.getItem(k) !== null),
       saved: localStorage.getItem('warmup.profile.v1') !== null,
     }));
-    m.binds.abilityQ === 'KeyY' && m.binds.flash === 'CapsLock' && m.speed === 2.5 && m.settings.attackRangeDisplay === 'off' &&
+    m.binds.abilityQ === 'KeyY' && m.binds.flash === 'CapsLock' && m.speed === 2.5 && !('attackRangeDisplay' in m.settings) &&
       m.settings.pauseOnFocusLoss === false && m.runs.length === 1 && m.runs[0].stage === 4
       ? pass('old bindings, Mouse Speed, settings and run log all carry into the profile (a broken run is dropped)')
       : fail(`migrated: ${JSON.stringify(m)}`);
