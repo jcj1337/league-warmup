@@ -1,0 +1,12 @@
+// Cloudflare Workers deploy config: the site is static, so the Worker only
+// serves the built files in dist/ (no server code). `npm run build` fills
+// dist/, then `npx wrangler deploy` uploads it.
+{
+  "name": "league-warmup",
+  "compatibility_date": "2026-10-01",
+  "assets": {
+    "directory": "./dist",
+    // Any unknown path (a typo, an old link) gets the game instead of a 404.
+    "not_found_handling": "single-page-application"
+  }
+}
