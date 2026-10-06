@@ -583,12 +583,15 @@ is armed and flashes briefly after `T`.
 - `src/game/scenes/UIScene.ts` — HUD, ability bar, pause menu (polls GameScene); `src/game/ui/EndScreen.ts` draws the end screen from a finished run.
 - `src/game/entities/` — `Player` (incl. stun / slow status), `Enemy` (abstract base), `Target`, `Pursuer`, `Magus`, `Sovereign`, `Bulwark`, `Projectile`, `AutoAttackMissile`.
 - `src/game/systems/` — `GameClock`, `Difficulty` (the curve), `InputController`, `AttackSystem`, `CastSystem`, `AttackTokens` (enemy turn-taking),
-  `AbilityCooldowns`, `SkillshotSystem` (Q+W), `BlinkSystem` (E+Flash), `PassiveSystem`,
+  `AbilityCooldowns`, `BlinkSystem` (blink geometry + Flash), `PlayerProjectileSystem` (every champion's
+  straight shots), `PlayerZoneSystem` (player ground spells), `Combat` (the hit funnel), `Progression` (levels),
   `WaveDirector` (stages, waves, breathers), `EnemyProjectileSystem`, `HostileSpellSystem`
-  (Magus zones and orbs, basic spit), `ScoreSystem`, `KitingMetrics`.
+  (enemy zones, orbs, spit, Dark Spheres), `ScoreSystem`, `KitingMetrics`, `ApmTracker`.
+- `src/game/Run.ts` — one round's clock, events and result; `src/game/RunEvents.ts` — the events gameplay emits.
+- `src/champions/` — the playable champions (see [Champions](#champions)); `src/profile/Profile.ts` — everything saved.
 - `src/game/ui/` — `AbilityBar`, `PassiveDisplay`, `PauseMenu`, `ChampionRow`, `ModeRow` (the start screen's pickers).
 
-See [docs/TECHNICAL_REPORT.md](docs/TECHNICAL_REPORT.md) (historical: it predates the endless run and the Magus / Sovereign; see the proposals in [docs/proposals/](docs/proposals/) for what changed since) for how the systems actually work.
+See [docs/TECHNICAL_REPORT.md](docs/TECHNICAL_REPORT.md) for how the systems actually work, and [docs/STUDY_GUIDE.md](docs/STUDY_GUIDE.md) for a gentler walk through the architecture.
 
 While playtesting, from the browser console:
 

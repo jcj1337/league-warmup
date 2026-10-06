@@ -49,7 +49,8 @@ this file is for working on the code.
   `src/game/ui/EndScreen.ts` draws the end screen from a `RoundResult`; the suites read it
   as plain lines through `UIScene.endScreen.text`.
 - `docs/proposals/` — design proposals with their status line; `docs/TECHNICAL_REPORT.md`
-  is historical (predates the endless run, champions and most mobs).
+  is the architecture reference (rewritten 2026-10-05; update it when a system changes
+  shape); `docs/STUDY_GUIDE.md` is the plain-language walkthrough of the same.
 
 ## Rules the code keeps
 

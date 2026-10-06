@@ -1,1240 +1,1090 @@
-# Warmup — Technical Report
+# hands diff — Technical Report
 
-> **Historical (as of 2026-10-04).** This report was written when the run had ten
-> authored stages and two enemy types. The endless run, the Magus, the Sovereign, the
-> start screen, the profile store and the `Run` / `Combat` split in `GameScene` all
-> came after it. The mechanics it explains (attack cycle, casting, pausing, the
-> GameClock) are still accurate; the stage table, enemy roster and file layout are
-> not. It will be rewritten once the champion refactor
-> ([proposals/CHAMPIONS_PROPOSAL.md](proposals/CHAMPIONS_PROPOSAL.md)) settles.
+> **Current as of 2026-10-05** (`BALANCE_VERSION` 15, after commit `a4a8da9`). Rewritten
+> from the source after the champion refactor, the endless run, the five mobs, difficulty
+> modes, the profile store and the `Run` / `Combat` split. The previous version described a
+> ten-stage run with an Ezreal-only kit and HP damage on enemies; none of that is true now.
 
-How the codebase actually works: architecture, mechanics, timing, state flow, and
-known weaknesses. Written to be trustworthy enough to learn the project from.
+This explains how the codebase works: the architecture, the frame, timing and state flow,
+and the known weak spots. It is written to be accurate enough to learn the project from.
+The [README](../README.md) is the player-facing and tuning reference (every number, every
+mob's moves). This report quotes numbers only where they explain a mechanism; when the
+two disagree, `src/config/balance.ts` and the champions' `balance.ts` files are the truth.
 
-Everything here was read out of the source. Where behaviour is subtle, surprising,
-or differs from what a comment claims, it is called out. Values quoted are the ones
-currently in `src/config/balance.ts` and `src/config/theme.ts`.
+For a gentler introduction, read [STUDY_GUIDE.md](STUDY_GUIDE.md) first.
 
 ---
 
 ## 1. Overview
 
-A mechanical warm-up trainer for League-style ADC play, structured as a gauntlet
-of 10 stages of authored waves (1–4 per stage, 22 in all). The player practises positioning,
-kiting/orbwalking, dodging, and an Ezreal-flavoured kit (Q/W/E + Flash) against two
-enemy archetypes. Progression comes from clearing waves, never from elapsed time.
+A browser trainer for League-style mechanics: click-to-move positioning, orbwalking
+(attack, move during the recovery, attack again), dodging telegraphed spells, and aiming a
+champion's ability kit. A run is an **endless** gauntlet of enemy waves that ends only when
+the player dies. You pick one of three champions and one of three difficulty modes.
 
 | Layer | Choice |
 | --- | --- |
-| Engine | Phaser **3.90** — rendering, scenes, input, tweens only |
-| Language | TypeScript **5.9**, `strict`, `noUnusedLocals`, `noUnusedParameters` |
-| Bundler | Vite **7**; `npm run build` = `tsc --noEmit && vite build` |
-| Physics | **None** — all movement and collision is hand-written math |
+| Engine | Phaser **3.90**: game loop, two scenes, input events, sprite/text/graphics drawing, a few tweens |
+| Language | TypeScript **5.9**, `strict`, `noUnusedLocals`, `noUnusedParameters`, `noImplicitOverride` |
+| Bundler | Vite **7**; `npm run build` = `tsc --noEmit && vite build` into `dist/` |
+| Physics | **None.** Movement, collision and range are plain arithmetic in the systems |
+| Tests | Playwright, 29 suites in `tests/e2e/` driving the real game in headless Edge |
+| Hosting | Static files in a Cloudflare Worker (`wrangler.jsonc`, assets only, no server code) |
+| Backend | None. Everything saved lives in one `localStorage` key |
 
-No physics engine is central to the design: every distance check, projectile step and
-collision test is explicit arithmetic inside a system class, which keeps timing
-deterministic and tunable.
+Source size: about 19,300 lines of TypeScript in 98 files under `src/`, and about 9,800
+lines of tests.
 
-Phaser provides exactly five things: the game loop (`Scene.update`), two parallel
-scenes, input capture, rendering (`Image` sprites from canvas-generated textures,
-`BitmapText`, `Graphics`, `Rectangle`, plus a debug `Text`), and tweens — used **only**
-for a couple of fire-and-forget screen effects. No tween is ever load-bearing.
+**Why no physics engine.** Every rule in the game is a timing or distance rule ("the
+swing lands if you are still within 56px when its 400ms windup ends"). Writing those as
+explicit math in one place keeps them deterministic, tunable from the console, and easy to
+test. A physics engine would add bodies, collision callbacks and solver behaviour that the
+game would then have to fight.
 
-Rendering runs with `pixelArt: true` (nearest-neighbour filtering, no antialias,
-whole-pixel sprite placement). Gameplay positions stay fractional; only where a sprite
-is *drawn* is rounded.
+---
+
+## 2. Architecture at a glance
 
 ```mermaid
 flowchart TD
-    subgraph Config["src/config (pure data)"]
-        BAL[balance.ts<br/>gameplay tuning + STAGES]
-        THM[theme.ts<br/>palette + look]
+    subgraph Config["Pure data"]
+        BAL["config/balance.ts<br/>world, mobs, waves, MODES, DIFFICULTY"]
+        THM["config/theme.ts<br/>palette, depths, effect timings"]
+        CB["champions/&lt;id&gt;/balance.ts"]
     end
 
-    MAIN[main.ts] --> GS
+    MAIN[main.ts<br/>Phaser.Game + console handles] --> GS
     MAIN --> UIS
 
-    IC[InputController<br/>keys/mouse → commands] -->|CommandHandler| GS
-
     subgraph Scenes
-        GS[GameScene<br/>owns entities + systems<br/>runs the frame]
-        UIS[UIScene<br/>HUD, ability bar, menu<br/>polls GameScene]
+        GS["GameScene<br/>builds everything per round<br/>runs the frame, input commands"]
+        UIS["UIScene<br/>HUD, start card, pause, end screen<br/>POLLS GameScene"]
     end
 
-    GS --> CLK[GameClock<br/>simulated time]
-    GS --> CAST[CastSystem<br/>Q/W/E commit window]
-    GS --> CD[AbilityCooldowns<br/>q w e flash]
-    GS --> AS[AttackSystem<br/>attack state machine]
-    GS --> SS[SkillshotSystem<br/>Q + W projectiles]
-    GS --> BS[BlinkSystem<br/>E blink + bolt, Flash]
-    GS --> PS[PassiveSystem]
-    GS --> WD[WaveDirector<br/>stages, waves, breathers]
-    GS --> EPS[EnemyProjectileSystem]
-    GS --> SC[ScoreSystem]
-    GS --> KM[KitingMetrics]
+    IC[InputController] -->|CommandHandler| GS
+    GS --> RUN["Run<br/>GameClock + RunEvents + state + result"]
+    GS --> CMB["Combat<br/>the hit funnel"]
+    GS --> WD["WaveDirector<br/>stages, waves, rosters, enemy AI"]
+    GS --> SYS["AttackSystem · CastSystem · AbilityCooldowns<br/>BlinkSystem · PlayerProjectileSystem · Progression<br/>EnemyProjectileSystem · HostileSpellSystem · AttackTokens<br/>ScoreSystem · KitingMetrics · ApmTracker"]
+    GS -->|KitContext| KIT["Champion Kit<br/>what Q/W/E/R do"]
 
-    WD --> EN[Enemy base<br/>Target / Pursuer]
-    AS --> PL[Player]
-    AS --> AAM[AutoAttackMissile]
-    BS --> AAM
-    SS --> PRJ[Projectile]
-    EPS --> PRJ
+    WD --> EN["Enemy subclasses<br/>Target · Pursuer · Magus · Sovereign · Bulwark"]
+    CMB --> SC[ScoreSystem]
+    CMB --> PRG[Progression]
+    CMB --> WD
+    CMB -->|emit| EV((RunEvents))
+    EV --> RF["RunFeedback (view)"]
+    EV --> KIT
 
-    CAST -.->|progress| PL
-    AS -.->|windupProgress| PL
-    PS -.->|attackSpeedMultiplier| AS
-    WD -.->|baseAttackCooldownMs| AS
-    WD -.->|isWaveActive / fireIntensity| EPS
-    GS -.->|getHudState| UIS
-
-    BAL -.-> AS
-    BAL -.-> WD
-    THM -.-> PL
+    EN -.->|state| VIEWS["view/*<br/>PlayerView · EnemyView · Fx · …"]
+    GS -.->|getHudState / getRoundResult| UIS
+    RUN --> RH[RunHistory] --> PRO[(Profile<br/>localStorage)]
 ```
 
-Two dotted relationships matter most: **systems → Player is a one-way visual feed**,
-and **UIScene polls GameScene** (never events — `scene.restart()` rebuilds every
-object, and an event-wired HUD kept breaking across restarts).
+The design rests on five rules. They are listed in `CLAUDE.md` and the code keeps them:
+
+1. **One clock.** Every gameplay deadline is a timestamp on the run's `GameClock`, which
+   only advances on frames the simulation runs. Pausing is "stop advancing the clock."
+2. **Gameplay decides, views read.** Entities and systems flip state first; views draw
+   from that state afterwards and never write back. No animation callback is
+   authoritative.
+3. **Pips, not damage, on enemies.** `Enemy.takeHit()` removes exactly one pip. The only
+   HP in the game is the player's.
+4. **One funnel per direction.** Every pip an enemy loses goes through `Combat.hit` /
+   `Combat.kill`; every HP the player loses goes through `Combat.playerHit`. Score, XP,
+   the wave's bookkeeping and the run log hang off those calls.
+5. **Data, not switches.** The engine never tests which champion, mob or mode it is
+   running. Champions are a registry of objects implementing an interface; mobs are a
+   registry plus one constructor line; modes are a bag of numbers.
 
 ---
 
-## 2. Files
+## 3. File map
 
-### Config *(pure data)*
+### Config (pure data, mutable on purpose)
 
-- **`src/config/balance.ts`** — gameplay tuning: `ARENA`, `PLAYER`, `ATTACK`,
-  `attackReach()`, `KEYBINDS`, `DEBUG`, `SKILLSHOT_Q`, `SKILLSHOT_W`,
-  `BLINK_E`, `FLASH`, `PASSIVE`, `TARGETS`, `ENEMY_PROJECTILES`, `PURSUER`, `RUN`,
-  `STAGES`, `SCORE`. Gameplay numbers only — no colours or effect timings.
-  `ATTACK`, `DEBUG` and `KEYBINDS` are deliberately
-  not `as const` so they stay writable from the console. `RUN` + `STAGES` are the one
-  place the run's structure and per-stage difficulty are tuned (§9, §10).
-- **`src/config/theme.ts`** — `PALETTE` (raw colours) and `THEME.{art, depth,
-  battlefield, player, enemy, basic, pursuer, hpBar, mark, fx, cast, passive, markers,
-  ui, banners, rangeHint, ability, menu}`, plus `actorDepth()` / `propDepth()` for
-  y-sorting. Nothing here affects gameplay.
+- **`src/config/balance.ts`** (978 lines): `ARENA` (1280×720), `PLAYER`, `ATTACK`,
+  `attackReach()`, `KEYBINDS`, `MOUSE`, `PREFERENCES`, `DEBUG`, `APM`, `FLASH`, each mob's
+  behaviour block (`TARGETS`, `PURSUER`, `MAGUS`, `SOVEREIGN`, `BULWARK`),
+  `ENEMY_PROJECTILES`, `RUN`, `DIFFICULTY`, `BALANCE_VERSION`, `LEVELS`, `CONTACT`, the
+  `ENEMIES` registry, `STAGES` (Normal's intro), `ENDLESS`, `MODES`, `enemyEntry()`,
+  `STAGE_RAMPS`, `SCORE`. Exposed as `__balance`; most values are read live, so a console
+  edit applies on the next read.
+- **`src/config/theme.ts`** (905 lines): `PALETTE` and `THEME` (art scale, depth bands,
+  every colour and effect timing). Nothing in it affects gameplay.
 
-### Scenes
+### Champions (`src/champions/`)
 
-- **`GameScene.ts`** (~800 lines) — the only file that knows about everything. Owns
-  the player, the enemy list, every system, `state`, `result`, and the "already
-  drawn" timestamps. Runs the frame (§3), implements the `CommandHandler` (§4),
-  owns W-mark detonation (§8) and the round lifecycle (§12). Wave/stage logic lives in
-  the `WaveDirector`, not here.
-- **`UIScene.ts`** — HUD (run time, stage / wave / enemies, transition banners),
-  ability bar, passive display, pause menu (with key rebinding), end screen. Holds no gameplay state;
-  polls `getHudState()` / `getRoundResult()` every frame.
+- `types.ts`: the contract (`Champion`, `AbilityDef`, `Kit`, `KitContext`, `Motion`, …).
+- `index.ts`: the `CHAMPIONS` registry and `activeChampion()` (reads the profile).
+- One folder each for `magicboy/`, `snakelady/`, `axeman/`: `balance.ts`, `art.ts`,
+  `motions.ts`, `kit.ts`, `index.ts`, a `README.md`, plus kit-private helpers
+  (`PassiveSystem`, `FangBolt`, `AxeDrop`, `HeldAxes`, `WhirlingAxes`).
 
-### Entities
+### Game (`src/game/`)
 
-- **`Player.ts`** — authoritative `x`, `y`, `hp`, move order, `rootCount`
-  (reference-counted movement lock), `lastHitAt`, crowd control (`stunnedUntil`,
-  `slowUntil` / `slowFraction`, read through `isStunned` / `moveSpeed`) and the
-  frame's velocity `vx` / `vy`. Rendering lives in its
-  `PlayerView` (`player.view`); the visual entry points (`applyAttackVisual`,
-  `setCastVisual`, `setRangeRingState`, `playReleaseBurst`, `playCastRelease`,
-  `showCancelTag`, `playPassivePulse`) only forward state to it — none can change
-  timing or position.
-- **`Enemy.ts`** — abstract base holding everything archetype-independent: position,
-  HP, damage/death lifecycle, `spawnId`, the W mark, and a `pose` (moving / facing /
-  windup progress / reach) the AI publishes for its view. Subclasses build their
-  `view` in the constructor and supply `updateAi()`. Every combat system types
-  against `Enemy`, never a concrete archetype.
-- **`Target.ts`** — basic enemy (red slime): hovers in a band around the player; from
-  `TARGETS.spit.fromStage` it spits (token-gated windup → glob via `HostileSpellSystem`).
-- **`Pursuer.ts`** — melee brute (horned purple slime) with a four-state AI (§9): chase, swing
-  windup, dash windup, dash. Tells its `PursuerView` when a swing resolves and whether it landed.
-- **`Caster.ts`** — shared base for the ranged casters: spacing band, leading aim with a
-  per-cast random offset (`aimPoint`, `rollAimOffset`).
-- **`Magus.ts`** — artillery caster (brass-masked slate slime) with a Xerath-style kit (§9).
-  Owns spacing, spell choice and charge states; the spells it places belong to
-  `HostileSpellSystem`.
-- **`AutoAttackMissile.ts`** — homing missile, spec-driven (speed, art, impact effect)
-  so autos and the E bolt share one class. Carries a `targetSpawnId` guard.
-- **`Projectile.ts`** — straight-line projectile shared by Q, W and enemy fire.
-  Fixed `vx/vy`, accumulates `travelled`, dies at `maxRange` or out of bounds. Its
-  sprite (`ProjectileView`) is separate from its collision `radius`.
-
-### Systems
-
-| File | Role |
+| Area | Files |
 | --- | --- |
-| `GameClock.ts` | Simulated time. The reason pause is safe (§13) |
-| `InputController.ts` | Keys/mouse → `CommandHandler` calls. Owns only `attackMovePending` |
-| `AttackSystem.ts` | Attack state machine, orders, acquisition, stage-based attack speed, auto missiles |
-| `CastSystem.ts` | Q/W/E commitment window, input lockout, order buffering |
-| `AbilityCooldowns.ts` | One `readyAt` table for `q w e flash` |
-| `SkillshotSystem.ts` | Q and W projectiles (one loop, two configs) |
-| `BlinkSystem.ts` | E blink + homing bolt, Flash |
-| `PassiveSystem.ts` | Stack count, shared expiry, attack-speed multiplier |
-| `WaveDirector.ts` | Stages, waves, finite rosters, breathers, stage tuning (HP / attack speed / fire), separation |
-| `EnemyProjectileSystem.ts` | Dodge pressure — fires only during a wave, cleared when a wave is cleared |
-| `HostileSpellSystem.ts` | Zones (line / circle / cone, styled arcane or void), Magus orbs, basic spit globs and the Sovereign's **Dark Spheres** (persistent ground objects: owner, lifetime, cap; `takeSphere`, `launchSphere`): resolves them, applies damage, stun and slow; spheres vanish when their owner dies; everything clears on wave clear |
-| `Progression.ts` | The player's level: XP from kills (`ENEMIES[id].xp`), levels 1-18 (`LEVELS`), ability haste for Q/W/E cooldowns, the base auto cycle (it is the `AttackPacing` source) and the Q rank-up |
-| `Difficulty.ts` | `threat(stage)`, `scaled(curve, stage, base)`, `stageDifficulty(stage)`: the per-stage curve every scaled number reads |
-| `AttackTokens.ts` | Turn-taking pool (`DIFFICULTY.attackTokens` for the stage): an enemy holds a token through a token-gated windup; tokens of inactive enemies are reclaimed |
-| `ScoreSystem.ts` | Score, damage, kills by archetype |
-| `KitingMetrics.ts` | Six raw mechanical counters |
-
-### UI
-
-`AbilityBar.ts` (pixel slots + pixel icons + cooldown sweep + cast fill),
-`PassiveDisplay.ts` (stack gems + duration bar), `PauseMenu.ts` (scrim, pixel panel,
-buttons, settings rows, controls reference). All HUD text is `BitmapText` in the
-generated 5×7 pixel font except the utilitarian debug readout.
-
-### Art and view *(presentation only)*
-
-| File | Role |
-| --- | --- |
-| `art/sprites.ts` | Every sprite as an original text pixel map with a character → `PALETTE` map |
-| `art/textures.ts` | `ensureArt()` rasterises sprites + font once per game; `TEX` holds every texture key |
-| `art/font.ts`, `art/glyphs.ts` | 5×7 bitmap font and `pixelText()` |
-| `view/PlayerView.ts` | Blue slime sprite + squash/stretch frames, shot flash, rings, cast charge-ups, HP bar |
-| `view/EnemyView.ts` | Enemy slime sprite, hit flash, death pop, W mark, HP bar; `PursuerView` adds slam frame + telegraph |
-| `view/ProjectileView.ts`, `view/projectileArt.ts` | Projectile sprites and trails |
-| `view/Fx.ts` | Pooled pixel particles, dotted rings and popups, advanced by `GameScene.update()` |
-| `view/Battlefield.ts` | Seeded painted ground texture + decorative props (no collision) |
-| `view/PixelBar.ts`, `view/pixelDraw.ts` | Health bars; dotted rings, pixel discs, HUD panels |
-
-Views observe entity state and gameplay events; nothing in `art/` or `view/` is read
-back by gameplay.
-
----
-
-## 3. The frame
-
-`GameScene.create()` runs on boot and on every `scene.restart()`, rebuilding
-everything. `UIScene.create()` runs once and is never re-run — hence polling.
-
-```ts
-const dt = Math.min(delta, 50) / 1000;   // clamped seconds
-this.clock.advance(dt * 1000);           // simulated time
-const now = this.clock.now;
-```
-
-Exact order, from `GameScene.update()`:
-
-```
-if (state !== 'running' || paused) return      ← pause freezes everything below
-dt = min(delta, 50) / 1000
-clock.advance(dt * 1000);  now = clock.now
-
-player.tickStatus(now)         stun / slow clock; a stun that just ended replays its held order
-passive.update(now)            expire stacks
-cooldowns.update(now)          refresh "now"
-cast.update(now)               ← resolves a Q/W/E cast, then replays buffered order
-
-attacks.update(now, dt, enemies)   ① GAMEPLAY DECIDES
-   ├─ auto missiles fly + resolve hits
-   ├─ windup complete → fireAttack()
-   ├─ recovery elapsed → idle
-   ├─ attack-move acquire / chase / release
-   └─ target reticle
-
-player.applyAttackVisual(...)      ② VISUALS READ IT
-player.setRangeRingState(...)
-player.update(dt)                  ③ MOVE + REDRAW
-
-metrics.update(dt, ...)
-player.setPassiveMaxed(...)
-player.setCastVisual(...)          cast charge, read from cast.progress
-one-shot cues: cast release / attack cancel / attack release (timestamp-gated)
-
-director.update(dt, now, ctx)      breather over → next wave/stage spawns; enemy AI, separation
-skillshot.update(dt, now, enemies) Q + W projectiles and collisions
-blink.update(dt)                   E bolts
-enemyProjectiles.update(dt, now)   wave cleared → clear all shots; else spawn, fly, collide
-hostileSpells.update(dt, now)      wave cleared → clear all; else resolve due zones, fly orbs
-
-end condition → endRound('defeated')   (the run is endless: death is the only end)
-```
-
-The ①②③ ordering is load-bearing: when `applyAttackVisual` ran *after*
-`player.update()`, the charge ring rendered one frame stale and visibly persisted
-into recovery.
-
-A wave is cleared the instant its last kill is registered (inside `attacks`,
-`skillshot`, `blink` or a detonation). `enemyProjectiles.update` runs after all of
-those, so hostile shots are removed before that frame's collision test.
-
-**Time sources.** `dt` (clamped seconds) drives rate-based motion. `clock.now`
-(`GameClock`, ms) drives **every** gameplay deadline, including wave breathers.
-Phaser's own `time` is used only for tweens. `scene.time.now` appears **zero** times
-in gameplay code. Nothing in progression reads elapsed time.
-
----
-
-## 4. Input
-
-`InputController` registers exactly two Phaser listeners plus context-menu
-suppression:
-
-```ts
-scene.input.mouse?.disableContextMenu();
-scene.input.on('pointerdown', this.onPointerDown, this);
-scene.input.keyboard?.on('keydown', this.onKeyDown, this);
-```
-
-One `keydown` listener reading physical keys (`event.code`: `KeyQ`, `CapsLock`) and
-looking each up in `Keybinds.actionFor(code)`. A bound key gets `preventDefault()` (no
-tab focus, page scroll or browser menu). `Escape` (`KEYBINDS.cancel`) and the restart
-keys are fixed; everything else is rebindable.
-Keyboard-issued commands read `scene.input.activePointer.worldX/Y`.
-
-### Rebinding (`src/game/Keybinds.ts`)
-
-A module singleton, `Keybinds`: one physical key per action (`BINDABLE`: Q, W, E,
-Flash, attack-move click, attack-move, stop, chat mode), defaults from `KEYBINDS`,
-the player's changes on top.
-
-- `set(action, code)` swaps with whichever action held that key, so no action is
-  ever unbound; `Escape` is refused. `reset()` restores the defaults.
-- `onChange` listeners: the ability bar relabels (`AbilityBar.setKeys`; names longer
-  than the slot allows drop to the small font) and the pause menu rows refresh.
-- `captureNext(onKey, onCancel)` puts a **capture-phase** `keydown` listener on
-  `window` that stops the event before Phaser (or the raw APM listener) sees it,
-  so the key you're binding never also casts, and `Escape` cancels the rebind
-  instead of closing the menu. Closing the menu cancels a pending capture.
-- Persistence: `localStorage['warmup.keybinds.v1']`, guarded like `RunHistory`.
-  Saved bindings that put two actions on one key are discarded in favour of the
-  defaults. Swapping `load` / `save` for a profile store is the planned upgrade.
-- Console: `__keybinds`.
-
-### Command surface
-
-`GameScene.commandHandler()` returns the only methods input may call:
-
-```
-commandMove        commandAttackTarget   commandAttackMove   commandStop
-castSkillshot(Q)   castMark(W)           castBlink(E)        castFlash(F)
-targetAt           isRoundRunning        acceptsGameplayInput
-isPaused           togglePause           restartRound
-```
-
-### Key handling order
-
-```
-restart keys (only when the round is over) → restartRound
-if round not running → ignore
-ESC → armed A-mode? cancel it : togglePause()      ← handled ABOVE the pause gate
-if !acceptsGameplayInput() → ignore                ← everything below stops at the menu
-A → toggle attackMovePending
-T → commandAttackMove(cursor, {showRangeHint})
-S → commandStop
-Q/W/E/F → cast* (cursor)
-```
-
-Pointer: right-click cancels any pending A-mode *and* still issues its contextual
-order (attack an enemy / move to ground). Left-click resolves a pending A-mode, else
-attacks an enemy under the cursor.
-
-### The four order types
-
-1. **Move** — hands movement to the player, clears attack orders, cancels an
-   uncommitted windup.
-2. **Direct attack** — commits to one `Enemy` object, chases it anywhere, ignores
-   attack-move selection, does *not* cancel a windup.
-3. **Attack Move (A + click)** — an order at a *location*; targets chosen
-   dynamically from whoever is in range.
-4. **Attack Move Click (T)** — the identical order at the cursor, no targeting mode.
-
-A and T call the **same** `commandAttackMove(x, y)`. There is no T-specific branch
-downstream, so targeting rules, attack timing, cancellation and metrics are identical
-by construction. T passes a cosmetic `showRangeHint` flag; that is the only
-difference.
-
----
-
-## 5. Movement
-
-```ts
-private destX: number | null = null;   // move order, null = standing still
-private rootCount = 0;                 // >0 blocks movement entirely
-```
-
-```
-if (!rooted && dest != null):
-    dist = |dest - position|
-    step = player.moveSpeed * dt            // 280 px/s (PLAYER.moveSpeed, × slow)
-    if dist <= max(step, arriveEpsilon):    // 3px
-        position = dest; stop()             // snap, clear the order
-    else:
-        position += normalize(dest - position) * step
-```
-
-`max(step, arriveEpsilon)` is what prevents overshoot jitter: at 280 px/s and 60fps a
-step is ~4.7px, so a fixed 3px epsilon alone would oscillate. `moveTo()` clamps the
-destination into the playable rect, so the player can never leave the arena.
-
-`blinkTo(x, y)` (E/Flash) sets position directly with the same clamp and calls
-`stop()` — so the player does not walk back toward a stale destination.
-
-**The root is reference-counted**, not a boolean: the attack windup and a cast can
-both hold it, and neither can unlock movement the other still wants held.
-
----
-
-## 6. Auto attacks
-
-```
-        idle ──(target in range && idle)──> WINDUP ──(timer)──> RELEASE ──> RECOVERY ──> idle
-                                             rooted,              missile     free to move
-                                             cancellable          spawns
-```
-
-`AttackState = 'idle' | 'windup' | 'recovery'`. Release is an **event**, not a state:
-the single frame `fireAttack()` runs.
-
-Both deadlines are set once, in `beginWindup()`:
-
-```ts
-this.windupEndsAt = nowMs + this.windupMs;
-this.cycleEndsAt  = nowMs + this.cooldownMs;   // cooldown starts at WINDUP START
-```
-
-That second line is the key design decision — firing never extends the cycle, so
-recovery is free movement time.
-
-### Attack speed
-
-The base cycle is a property of the **stage**, supplied by the `WaveDirector`
-through the `AttackPacing` interface. Elapsed time plays no part: a player who takes
-longer over a stage does not get faster autos for it.
-
-```
-baseCooldownMs = LEVELS.baseAttackCooldownMs / (1 + 0.06 × (level − 1))   (700 → 347ms at 18)
-cooldownMs     = baseCooldownMs / passive.attackSpeedMultiplier      ← authoritative
-windupMs       = windupMsOverride ?? max(minWindupMs, cooldownMs * windupPercent)
-```
-
-With current values (windup 25%, floor 90ms):
-
-| Stage | Stacks | cooldown | windup | recovery | attacks/sec |
-| --- | --- | --- | --- | --- | --- |
-| 1 | 0 | 700ms | 175ms | 525ms | 1.43 |
-| 1 | 5 | 467ms | 117ms | 350ms | 2.14 |
-| 10 | 0 | 420ms | 105ms | 315ms | 2.38 |
-| 10 | 5 | 280ms | 90ms (floor) | 190ms | 3.57 |
-
-### Chasing
-
-`chaseToward()` walks to a point `reach - chaseBufferPx` from the target, re-issued
-every frame. In practice the `inRange` branch calls `player.stop()` the moment the
-range test passes, so the player halts at ~277px against a reach of 278px; the buffer
-only shapes the approach to a target that is actively moving away.
-
-### Four durations that are not the same thing
-
-| Term | @ Stage 1 | What it is |
-| --- | --- | --- |
-| Windup | 175ms | Rooted, cancellable, no damage |
-| Release | instantaneous | The commitment point |
-| Projectile travel | ~226ms from max range | Damage delay only; gates nothing |
-| Cooldown | 700ms | Whole cycle, windup included |
-
----
-
-## 7. Cancellation and orbwalking
-
-The distinction lives in **one condition**, in `onMoveOrder()` / `onStop()`:
-
-```ts
-if (this.state === 'windup' && ATTACK.allowMoveCancel) this.cancelWindup();
-```
-
-`cancelWindup()` nulls `windupTarget`, which is the *only* path to
-`new AutoAttackMissile(...)`.
-
-| | On cancel | After release |
-| --- | --- | --- |
-| `cycleEndsAt` | **reset to 0** — attack instantly available | keeps running |
-| `windupTarget` | nulled → no missile | already nulled |
-| Missiles | none exist | unaffected, keeps flying |
-| Metrics | `attacksCancelled++` | `attacksFired++`, later `attacksLanded++` |
-
-**Which orders cancel a windup**
-
-| Order | Cancels? | Why |
-| --- | --- | --- |
-| Move / `S` | **Yes** | It is a move/stop order |
-| Right-click enemy | No | Attack order; the committed swing resolves |
-| A-click / T | No | Attack order — and T is meant to be spammed while kiting |
-| Q / W / E cast | **Yes** | Casting calls `attacks.onMoveOrder()` |
-| Flash | **Yes** | Same path |
-
-> The cooldown refund on cancel is **total** (`cycleEndsAt = 0`), so cancel-spam is
-> free — but it also deals no damage, so it is a no-op rather than an exploit.
-
----
-
-## 8. Abilities
-
-### Cast windows (`CastSystem`)
-
-Q, W and E commit for a short window anchored to the auto windup:
-
-| | castTimeMs | Measured keypress → effect |
-| --- | --- | --- |
-| Auto windup (reference) | 175ms | — |
-| Q | 165 | **167ms** to projectile spawn |
-| W | 185 | **186ms** to projectile spawn |
-| E | 210 | **211ms** to blink |
-| Flash | — | next frame, no cast state |
-
-`CastSystem` holds one `PendingCast { ability, payload, startedAt, endsAt,
-durationMs }`. `begin()` calls `player.stop()` + `player.root()`; `update()` resolves
-when `now >= endsAt`, releases the root, fires `onResolve`, then replays any buffered
-order. `progress` is derived from the deadline, so the animation can never disagree.
-
-Key properties:
-
-- **The payload is committed at keypress.** Q/W store the aim point, E stores the
-  already-clamped blink destination. Moving the mouse mid-cast cannot re-aim.
-- **Cooldowns start at cast start**, so the window never extends them.
-- **Input lockout**: while casting, Q/W/E/F are ignored entirely.
-- **Order buffering**: a move, attack-move or direct attack order issued mid-cast is
-  stashed as a thunk (latest wins) and replayed *after* the resolve — so E's blink
-  lands before the queued order runs from the new position, and no auto can start
-  during the window. Move/attack-move pings show immediately. `S` mid-cast discards
-  the buffered order (`CastSystem.clearBufferedCommand`) but never cancels the cast.
-- `castTimeMs <= 0` skips the system entirely (`GameScene.beginCastOrResolve`), so
-  any ability can be made instant from config alone.
-
-### Q — damage skillshot
-
-Quick-cast toward the cursor after its window. Straight line, fixed `vx/vy`, dies at
-`maxRange` (450) or on the first enemy touched. On hit: damage 30, passive stack, and
-`cooldowns.reduce(750, ['q','w','e'])`.
-
-### W — mark skillshot
-
-The projectile deals **zero** damage; it calls `target.applyMark(now)` and grants a
-passive stack. The mark stores `markUntil` on the `Enemy` itself, so every archetype
-gets it free and it dies with the enemy.
-
-**Detonation** is centralised in `GameScene.onTargetDamaged()` — the funnel every
-*damaging* hit already passes through (auto, Q, E bolt). W does not call it, so it
-cannot detonate its own mark. `detonateMark()` deliberately does **not** route back
-through that funnel: that would recurse, and a detonation must not grant a second
-stack.
-
-```
-W hits → mark (4s) + 1 stack
-   ↓
-auto / Q / E bolt hits the marked enemy
-   ↓
-their damage → onTargetDamaged → isMarked? → detonateMark()
-   ↓
-clearMark + 45 damage + violet burst   (no extra stack)
-```
-
-Because every wave spawns brand-new enemy objects, an enemy can never inherit a
-mark from an earlier wave.
-
-### E — blink + homing bolt
-
-Destination is computed at keypress: cursor if within `range` (364), else the point
-at max range along that direction, clamped to the arena. After the cast window:
-`onBeforeBlink` (cancels an uncommitted auto) → `player.blinkTo()` → departure/arrival
-rings + a ~100ms streak → bolt acquisition **from the new position**.
-
-```
-inRange   = enemies within boltAcquisitionRange (380) of the NEW position
-marked    = inRange.filter(isMarked)
-pool      = marked.length ? marked : inRange
-target    = nearest of pool
-```
-
-Marked targets win because the mark is an *expiring* damage opportunity — E is the
-tool that guarantees you can cash one in after the target has left auto range. The
-bolt deals 38, grants a stack, and can detonate.
-
-### Flash
-
-Same blink geometry with `FLASH.range` (325). No bolt, no damage, no passive stack,
-and Q never refunds its cooldown. Instant by design: the hierarchy Flash-instant vs
-Q/W/E-committed is deliberate.
-
-### Shared cooldowns (`AbilityCooldowns`)
-
-One `readyAt` table for `q | w | e | flash` plus `DURATIONS` read from config.
-
-```ts
-reduce(ms, ids) { for (id of ids) readyAt[id] = Math.max(now, readyAt[id] - ms); }
-```
-
-It never restarts or extends anything — it only pulls `readyAt` toward now, clamped.
-A landed Q is therefore a single call, and the HUD reads all four slots from the same
-source (measured: W and E each drop ~750ms + elapsed; Flash drops only its natural
-decay).
-
-### Passive (`PassiveSystem`)
-
-Ownership is deliberately narrow: `SkillshotSystem`/`BlinkSystem` decide *when* a hit
-lands, this system owns the count and expiry, `AttackSystem` only reads
-`attackSpeedMultiplier`.
-
-```
-attackSpeedMultiplier = 1 + stacks * 0.10          (max 5 stacks → ×1.5)
-```
-
-One **shared** buff, not per-stack timers: every qualifying hit adds a stack (to the
-cap) and refreshes the whole 6s window; when it lapses, all stacks go together.
-Stacking events: Q hit, W mark landing, E bolt hit. **Not**: W detonation, Flash,
-autos. All three call one helper, `GameScene.grantPassiveStack()`, which also fires
-the player's pulse — so the visual cannot fire without a real stack. The multiplier
-applies on top of whatever base cycle the current stage sets.
-
----
-
-## 9. Enemies and the wave director
-
-### `WaveDirector`
-
-Owns stage/wave progression and the roster of the wave being fought. The run is
-**endless** — it ends only on death. There are no respawns and no refilling slots:
-
-```
-spawnWave() ─► staggered arrivals (packs, maxAlive cap) ─► fight ─► last enemy killed
-     ▲                                                                   │
-     └──── next wave / Wave 1 of the next stage ◄── intermission (GameClock) ◄┘
-```
-
-- **Rosters — `rosterFor(s, w)`.** Stages `1..STAGES.length` (5) are hand-written:
-  the authored mix grows to the stage's `DIFFICULTY.waveSize` by largest remainder
-  (ties to basic), each mob held to its `maxPerWave` (never below its authored
-  count; the excess goes to basics). Every later stage is **generated**
-  (`ENDLESS.wavesPerStage` = 3 waves): a budget of `waveSize` points buys mobs —
-  Wave 1 of a mob's `unlockStage` fields exactly one of it first, then mobs are
-  drawn by `weight` among those unlocked whose `cost` still fits, each capped at
-  `max(1, floor(maxShare × budget / cost))` and its `maxPerWave`, until nothing
-  fits. Generated rosters use a per-run seed (`mulberry32(seed ^ f(stage, wave))`)
-  and are cached, so a wave is fixed once rolled.
-- **`spawnWave()`** destroys the previous, fully dead roster, shuffles the new one
-  and groups it into packs of `DIFFICULTY.packSize`: packs are spaced
-  `arrivalGapMs × packSize` (±`gapJitter`), members `RUN.spawn.packMemberGapMs` (90)
-  apart. The first member of a pack picks a spot by rejection sampling (away from
-  the player: 240px, Pursuers 360, Magus 400; away from other bodies); the rest land
-  40–110px from it, clear of every body.
-- **`beginDueArrivals()`** moves due entries onto the field while fewer than
-  `DIFFICULTY.maxAlive` are alive or arriving; the overflow waits for a slot.
-  `arriveAllNow()` (debug / tests) ignores the cap.
-- **`onEnemyKilled()`** is called from the scene's damage funnel. A dead enemy stays
-  in the roster with `active=false`, so its death animation plays out. When nothing
-  is pending, arriving or active, the wave is cleared **on the spot**: the phase
-  becomes `'intermission'` with `intermissionEndsAt = now + RUN.interWaveDelayMs`
-  (400), or `RUN.interStageDelayMs` (700) after a stage's last wave, which also
-  calls `onStageCleared()` (the scene heals 25 HP).
-- **`update()`** advances once `now >= intermissionEndsAt` — the next wave, or Wave 1
-  of the next stage — then runs enemy AI and separation. The breather is a GameClock
-  deadline, so it freezes with a pause.
-
-Nothing here reads elapsed time; the only way forward is killing the wave.
-`validateConfig()` runs in the constructor and throws on an empty stage or wave, a
-malformed `ENEMIES` entry, or a mob without a class in `ARCHETYPES`.
-
-```ts
-const ARCHETYPES: Record<EnemyArchetype, ArchetypeSpec> = {
-  basic:   { create: ..., radius: 18, minSpawnDistance: 240 },
-  pursuer: { create: ..., radius: 26, minSpawnDistance: 360 },
-  magus:   { create: ..., radius: 20, minSpawnDistance: 400 },
-};
-```
-
-The director is also the single source of stage-scoped tuning for other systems:
-
-| Reader | Through | Value |
-| --- | --- | --- |
-| `EnemyProjectileSystem` | `EnemyFirePressure.isWaveActive` / `fireIntensity` | fire on/off, `STAGE_RAMPS.enemyFire` (0 → 1 by Stage 10, then holds) |
-| itself, at spawn | `pipsFor(id, stage)` | `ENEMIES[id].pips`: `min(max, start + floor((stage−1)/every))` |
-| scene, HUD, tests | `difficulty` / `describeStage(i)` | the stage's `DIFFICULTY` numbers / its pips, pacing, fire and rosters |
-
-**Adding a mob** = its config block + an `ENEMIES` entry (its key becomes a valid
-`EnemyArchetype`) + its `Enemy` subclass and view + one `ARCHETYPES` line. Generated
-stages, the "New threat" chat line and the global speed / projectile / damage scaling
-pick it up with no other change, because everything downstream types against `Enemy`.
-
-**The hand-written intro** (`STAGES`; B = basic, P = Pursuer, M = Magus; fielded, with
-the authored mix in brackets): 1: 4B (3B) · 2: 4B+1P (3B+1P) · 3: 3B+2P (2B+2P) ·
-4: 5B+1P (3B+1P), 4B+2P (3B+2P) · 5: 4B+2P+1M (2B+1P+1M), 3B+4P (2B+3P).
-
-**Separation**: overlapping enemies are pushed apart with the share split by radius,
-so a Pursuer shoves a basic target rather than the reverse.
-
-### `Enemy` lifecycle
-
-```
-ALIVE  hp > 0, drifting/chasing, markable
-  │ takeDamage(): hp -= n, hitFlash, damage number, (mark detonation upstream)
-  ▼ hp == 0
-DEAD   active=false IMMEDIATELY, mark cleared, death anim 300ms, kill scored,
-       director told — stays in the roster, never refilled
-  ▼ the whole wave is dead and the breather has elapsed
-GONE   destroyed by spawnWave() as the next wave's roster is built
-```
-
-`spawnId` is captured by in-flight missiles as a generational guard; a bolt aimed at
-a dead enemy fizzles (its target is inactive) rather than hitting a later wave's
-enemy.
-
-### Pursuer AI
-
-Four states, no separate recovery — the cooldowns are timestamps checked from CHASE,
-so it keeps walking between attacks.
-
-```
-CHASE        walk at the player's CURRENT position at 55% of player speed
-             (facing smoothed via Angle.RotateTo; clamped to the arena)
-             canDash && now >= nextDashAt && player not stunned
-               && 110 <= dist <= 240 → DASH_WINDUP (angle locked, nextDashAt = now + 5000)
-             in reach && now >= nextAttackAt && player not stunned → WINDUP
-WINDUP       rooted, telegraph ring contracts, 400ms
-             on expiry → resolveSwing(): damage ONLY if still in reach
-             nextAttackAt = swing start + 1200ms
-DASH_WINDUP  rooted, crouched, locked path drawn, 350ms → DASH
-DASH         170px along the locked angle over 140ms; back to CHASE at full
-             distance or as soon as the player is in reach. No damage of its own.
-```
-
-`canDash` is set at spawn from the stage (`PURSUER.dash.fromStage`, 4); the first dash
-waits 1s after activation.
-
-### Basic spit
-
-```
-hovering   now >= nextSpitAt && dist <= 400 && attackTokens.tryTake() → WINDUP
-WINDUP     rooted 350ms; aim tracks the player
-           on expiry → fireGlob() at the player's position NOW; release token;
-           nextSpitAt = now + 3000ms × (0.8..1.2)
-```
-
-`canSpit` is set at spawn from the stage (`TARGETS.spit.fromStage`, 2). The first spit
-is staggered 0.3–1× a cooldown after activation. Globs are plain `HostileSpellSystem`
-shots (damage 5, 280px/s, radius 6, range 400), so they fizzle on wave clear.
-
-| Stat | Value |
-| --- | --- |
-| HP | 60 (basic 24 × 2.5) × stage HP multiplier |
-| Move speed | 154 px/s (55% of 280) |
-| Reach | 16px + both radii ≈ 56px centre-to-centre |
-| Damage | 10 |
-| Windup | 400ms |
-| Attack cooldown | 1200ms |
-| Score | 2.25× a basic kill |
-
-Walking or blinking out during the telegraph makes the swing miss — that is the
-intended counterplay, and it is why E/Flash have a cast window at all.
-
-### Magus AI and hostile spells
-
-Six states; everything but `reposition` is a cast, and it never moves while casting.
-
-```
-REPOSITION  hold 360-480px from the player (re-planned every 220ms): walk in beyond
-            the band, back off inside it at 50% of player speed (fanning along a wall
-            if straight back is blocked), otherwise stand still
-            now >= nextCastAt → tryCast():
-              1. Rite  — enemiesRemaining === 1 and not used this life
-              2. Orb   — player within 300px
-              3. random among ready spells whose reach covers the player
-            a cast start sets nextCastAt = now + 1400ms and that spell's cooldown
-LANCE       900ms charge, aim tracks (led by the 450ms lock) → castLine(), enter LOCK
-LOCK        rooted 450ms while the placed line counts down
-EYE         550ms targeting: eyeTarget (led by the 1000ms delay) tracks, then castCircle() there
-ORB         650ms windup, aim tracks (led fully, orb.aimLead 1, by the rest of the windup +
-            the flight time); frozen for the last 250ms (orbLocked) → fireOrb()
-RITE        rooted; 3 circles at 500 / 1300 / 2100ms, each led by its 600ms delay
-```
-
-Aim leads the player: `aimPoint(ctx, impactMs)` = position + velocity ×
-`MAGUS.aimLead` (0.85) × the time until the spell lands, plus the cast's random
-offset (`rollAimOffset`: uniform in a disc of `MAGUS.aimSpreadPx.spell` 50px, or `.orb`
-20px; rolled at cast start, and per circle for the Rite), clamped to the arena. A
-straight-line runner is hit; a direction change or a stop dodges.
-
-`HostileSpellSystem` owns every placed zone and orb, so a zone outlives its caster;
-only a spell still being charged (LANCE, ORB windup, remaining Rite shots) dies with
-it. A zone resolves exactly at its GameClock deadline: line = player centre within
-`halfWidth + radius` of the segment; circle = within `radius + player radius`, sweet
-spot = player centre within `centre.radius`. Orb stun =
-`lerp(250, 750, travelled / range)`. Like edge fire, everything pending is dropped
-the frame after a wave clear.
-
-**Crowd control.** `GameScene.stunPlayer()` stuns the player, cancels an uncommitted
-auto windup (`AttackSystem.interrupt()`, orders kept) and interrupts a cast window
-(`CastSystem.interrupt()`, cooldown refunded via `AbilityCooldowns.refund()`; its
-buffered order moves to the stun buffer). While stunned, `issueOrder()` holds
-move / attack / attack-move orders (latest wins), `canAct` blocks Q/W/E and Flash,
-`AttackSystem` starts no windup, and the Pursuer starts no swing. A slow only scales
-`Player.moveSpeed`.
-
-### Sovereign AI
-
-`Sovereign extends Caster`. States: `reposition`, `sphere` (250ms pose after a Q),
-`grab` (300ms lift), `throw` (500ms flight), `scatter` (350ms cone). Priority on each
-cast check: Scatter if `linedUpSphere()` finds a sphere within the cone radius whose
-flight line passes within 60px of the led player, or the player is inside the cone;
-Q→E (`comboChance` 0.6) with Q and E ready — a sphere 160px toward the player; Force of
-Will if a sphere of hers or a basic slime is within 280px (slime `slimeChance` 0.5 when
-both); else Dark Sphere. Scatter snapshots the spheres inside the cone at cast start
-(`exitLines`) and launches exactly those along her→sphere angle at the end. A thrown slime
-is `held` (no AI, no contact, skipped by separation), moved by her, then released with
-`dazedUntil`; dying mid-throw (`onDeath`) drops it. `EnemyContext.allies` is the roster
-she grabs from.
-
-### Enemy projectiles
-
-Spawned on a random arena edge, aimed at the player's position **at spawn**, with ±3°
-jitter. They never re-aim, so every shot is dodgeable by moving. Fractional volley
-size rounds probabilistically. Collision is circle-vs-circle against the player.
-
-No individual enemy fires them — the volleys belong to the **wave being fought**.
-`EnemyProjectileSystem.update()` only spawns while `isWaveActive`; a wave's first
-volley comes one spawn interval after the wave starts. When a wave is cleared, the
-next update — which runs after every damage source in the frame and before the
-collision test — removes every shot in flight and stops scheduling. A cleared wave
-can therefore never damage the player during the breather.
-
-> **i-frame interaction:** the missile is killed unconditionally on overlap, but
-> `Player.takeDamage()` returns 0 within 250ms of the last hit — so during i-frames a
-> projectile is consumed with no damage and no `projectileHitsTaken` increment.
-
----
-
-## 10. Difficulty
-
-Difficulty is a property of the **stage**, not of the clock. There is no time ramp:
-the stage number sets everything that scales (`DIFFICULTY`, `ENEMIES` pips, `STAGE_RAMPS`).
-
-| What | Column | Stage 1 → Stage 10 |
-| --- | --- | --- |
-| Stage length | `waves.length` | 1 wave (Stages 1–3) → 4 waves (Stage 10) |
-| Wave rosters | `waves` | basic-only → Pursuer-heavy, mixed waves throughout |
-| Enemy HP | `enemyHpMultiplier` | ×1.00 for 1–3, then +0.05 per stage → ×1.35 |
-| Player base auto cycle | `baseAttackCooldownMs` | 700ms → 420ms |
-| Edge fire | `enemyFire` | 0 → 1 |
-
-A stage lasts exactly as long as the player takes to clear its waves — one wave early
-on, four in the final gauntlet; the next one begins only after its last wave is
-cleared plus `interStageDelayMs`. Later stages are
-harder because of what they field — never because transitions arrive faster.
-
-Every enemy-projectile parameter is `lerp(start, end, enemyFire)`:
-
-| Parameter | enemyFire 0 | enemyFire 1 |
-| --- | --- | --- |
-| `spawnIntervalMs` | 2600 | 700 |
-| `speed` | 250 | 520 |
-| `radius` | 10 | 16 |
-| `damage` | 8 | 16 |
-| `volleySize` | 1 | 1.5 |
-
----
-
-## 11. Collision
-
-No physics bodies, no spatial partitioning — explicit math, O(n·m) over tiny n and m.
-
-| Interaction | Method | Math |
-| --- | --- | --- |
-| Auto/E bolt → its target | **Arrival**, not overlap | `step >= dist - target.radius` |
-| Q/W → any enemy | Circle-vs-circle | `(cx-x)² + (cy-y)² <= (r + enemy.radius)²` |
-| Enemy projectile → player | Circle-vs-circle | `… <= (r + 14)²` |
-| Attack range | Squared distance | `d² <= (260 + enemy.radius)²` |
-| Pursuer swing | Distance at resolve | `dist <= radius + playerRadius + 16` |
-| Click hit test | Distance + grace | `dist <= enemy.radius + 10` |
-
-All collision is **discrete** — positions are tested only at frame boundaries. With
-`dt` clamped at 50ms, worst-case travel is 95px for a Q bolt against a 25px collision
-radius, so tunnelling is possible on a badly stuttering frame.
-
----
-
-## 12. Score, metrics, round flow
-
-**Score** (`ScoreSystem`, `SCORE`) never pays for time alive. Every award is × the stage
-multiplier `1 + 0.25 (stage − 1)`, and is tallied in `scoreFrom { kills, speed, hp }`:
-- **kills** — `100 × archetype scoreMultiplier` per kill;
-- **speed** — on each wave clear (`WaveDirector.onWaveCleared`): `50 × enemies ×
-  speedFactor`, where par = the wave's last scheduled arrival + its 300ms window +
-  600ms per health pip, and `speedFactor` is 1 up to par, falling linearly to 0 at 2× par;
-- **hp** — on each stage clear, before the full heal: `10 × HP left`, ×1.5 if the stage
-  cost no damage (flawless).
-`projectileHitsTaken` is tracked but does not affect score. `killsByType` tallies per
-archetype. The run log stores each run's score; its summary carries `bestScore`.
-
-**`KitingMetrics`** — four event counters (`attacksStarted`, `attacksFired`,
-`attacksCancelled`, `attacksLanded`) and two per-frame accumulators:
-
-```ts
-if (attackState === 'idle' && enemyInRange) idleInRangeMs += ms;
-if (attackState === 'recovery' && !playerMoving) wastedRecoveryMs += ms;
-```
-
-Both timing metrics are **approximate**: they quantise to the frame, use the clamped
-`dt`, and measure "opportunity left on the table" rather than mistakes.
-`attacksFired` also counts a release whose target died mid-windup (no missile
-spawns), so `attacksFired - attacksLanded` overstates misses.
-
-**Round flow**
-
-```
-Running ──(!player.isAlive)─────────> Over (defeated)   (no other end: the run is endless)
-Over ──(restartRound)──> scene.restart() → Running at Stage 1 Wave 1
-Running <──> Paused  (setPaused; update() returns early, tweens paused)
-```
-
-There is no timer end: a run lasts until death or the final clear. `endRound()`
-freezes the sim, cancels attacks/casts/pending input, and snapshots an immutable
-`RoundResult` — outcome, stage and wave reached, waves cleared / total, run time,
-score, kills by type and the mechanical metrics. `UIScene.syncOverlay()` notices
-`getRoundResult() !== null`. `scene.restart()` rebuilds a fresh `WaveDirector`, so a
-restarted run starts from Stage 1 Wave 1 with nothing carried over.
-
----
-
-## 13. Pause safety
-
-The hazard: every deadline is an absolute timestamp. If "now" came from the wall
-clock, pausing would let real time run on and every deadline would fire at once on
-resume — windups completing instantly, cooldowns wiped, a breather skipped, a volley
-of projectiles.
-
-So gameplay reads time from `GameClock`, which only advances on frames the simulation
-runs. `setPaused(true)` makes `update()` return before `clock.advance()` and calls
-`tweens.pauseAll()` (tweens are decoration but run on wall time). Nothing is
-rescheduled; every deadline keeps exactly the remaining time it had.
-
-Input is gated separately: `InputController` checks `acceptsGameplayInput()` before
-any pointer event or gameplay key, which is what stops a click on a menu button from
-also issuing a move order underneath. Escape is handled above that gate.
-
-Verified frozen while paused: run clock, player movement, attack windup, cast
-progress (held at 0.50 across 2.5 real seconds), all four ability cooldowns, W mark
-duration, Q/W/E bolts and enemy projectiles, Pursuer movement and swing, passive
-duration, and a wave breather's remaining time.
-
----
-
-## 14. Visuals vs gameplay
-
-> Gameplay state decides what is happening. Visuals read that state and represent it.
-> No animation callback is ever authoritative.
-
-Enforced by shape: `AttackSystem.windupProgress` and `CastSystem.progress` are derived
-from real deadlines; `Player.applyAttackVisual()` / `setCastVisual()` write only to
-visual-only fields and cannot call `root()`, change position, or touch a timer. The
-lean is a render offset applied to the sprite — `this.x/this.y` stay authoritative.
-
-**The view layer.** `PlayerView`, `EnemyView`, `ProjectileView`, `Fx` and
-`Battlefield` own every GameObject. Entities publish state (`Enemy.pose`, the
-player's view state) and emit events (`onHit`, `onDeath`, `strike`); views read them.
-Sprite size never feeds collision or range: enemy radii, Pursuer reach and projectile
-radii stay the gameplay values, and the Pursuer's ground telegraph *reads* its real
-reach. Animation frames are picked from gameplay progress and a view-local clock
-advanced by frame `dt` (so they freeze with the pause) — never from Phaser animation
-callbacks.
-
-**Depth.** Fixed bands from `THEME.depth`: ground → pings → shadows → props (y-sorted)
-→ ground overlays (range ring, telegraph, mark ring) → units (y-sorted by gameplay
-`y`) → projectiles → effects → marks → health bars → reticle → text. Props sit below
-every unit, so decoration never hides a combatant.
-
-One-shot effects (release burst, cancel tag, cast release flash) are driven by
-polling the owning system's timestamp (`lastReleaseAt`, `lastCancelAt`,
-`lastResolveAt`) against a "last shown" value — not by callbacks. If an effect fails
-to play, nothing about the mechanic changes. The stage / wave banners work the same
-way: `UIScene` compares the polled `stage` / `wave` / `wavePhase` with what it last
-saw.
-
-**Cast animation compression.** The charge visuals use
-`t = pow(progress, THEME.cast.anticipationCurve)` (0.55), which front-loads the
-anticipation so a 165ms cast still reads as a windup while still peaking exactly at
-t=1. Retiming `castTimeMs` needs no animation changes.
-
-Measured: the visual windup tracks the configured windup to within a frame, and the
-missile spawns in the same frame the state leaves `windup` — the animation never
-leads or lags the mechanic.
-
----
-
-## 15. Configuration reference
-
-### `ATTACK` (mechanics)
-
-| Variable | Value | Effect of increasing |
-| --- | --- | --- |
-| `range` | 260 | Attack from further; ring grows to match |
-| `windupPercent` / `minWindupMs` | 0.25 / 90 | Longer root, harder kiting |
-| `windupMsOverride` | `null` | Fixes windup, breaks proportional scaling |
-| `damage` | 12 | Faster kills |
-| `allowMoveCancel` | `true` | `false` commits every auto |
-| `chaseOutOfRangeTargets` / `chaseBufferPx` | `true` / 24 | — |
-| `attackMoveTargeting` | `'cursor'` | `'player'` picks nearest to you |
-| `attackMoveChasesAcquiredTarget` | `false` | `true` makes A/T drag you around |
-| `rangeFromPlayerEdge` | `false` | `true` = edge-to-edge (+14px effective) |
-| `projectileSpeed` / `projectileRadius` | 1150 / 6 | Damage lands sooner |
-
-The base attack cycle comes from the player's level (`Progression`, `LEVELS`).
-
-The attack animation knobs live in `THEME.player.attack`: `windupLeanPx` 6,
-`releaseKickPx/Ms` 6/120, `chargeRingStartPad/EndPad` 20/3, `releaseRingRadius/Ms` 30/180.
-
-### Abilities
-
-| | `castTimeMs` | `cooldownMs` | Range | Speed | Damage | Notes |
-| --- | --- | --- | --- | --- | --- | --- |
-| `SKILLSHOT_Q` | 165 | 3000 | 450 | 1250 | 30 | `hitCooldownReductionMs` 750, radius 7 |
-| `SKILLSHOT_W` | 185 | 6000 | 450 | 1000 | 0 / **45** detonation | `markDurationMs` 4000, radius 12 |
-| `BLINK_E` | 210 | 8000 | 364 | bolt 1050 | 38 | `boltAcquisitionRange` 380, `boltRadius` 7 |
-| `FLASH` | — | 20000 | 325 | — | — | — |
-
-Effect sizes and durations for every ability are presentation and live in `THEME.fx`.
-
-`PASSIVE`: `maxStacks` 5, `attackSpeedPerStack` 0.10, `durationMs` 6000.
-
-### The run
-
-`RUN`: `interWaveDelayMs` 400, `interStageDelayMs` 700, `spawn.gapJitter` ⅓, `spawn.manifestMs` 300.
-
-`DIFFICULTY` (each `clamp(base × T^k, min, max)`, `T = growth^(stage−1)`, growth 1.15):
-`waveSize` 6 / k 0.85; `maxAlive` 8 / k 0.6 / 8–40; `arrivalGapMs` 250 / k −0.5 / min 50;
-`moveSpeed` 1 / k 0.1; `projectileSpeed` 1 / k 0.15 (max 650px/s); `damage` 1 / k 0.35;
-`contactDamage` 1 / k 0.5; `attackTokens` 2 / k 0.5 / 2–10; `packSize` 1 / k 0.4 / 1–5;
-`stageClearHeal` 1 (full). Casters (Magus, Sovereign) cost 3 budget points, so each one
-in a wave displaces basics. Per-mob `scaling` blocks: basic `spitCooldownMs` k −0.15 / min 1500;
-Pursuer `dashCooldownMs` k −0.2 / min 2500, `attackCooldownMs` k −0.15 / min 800,
-`maxSpeedFraction` 0.85; Magus `spellGapMs` k −0.3 / min 700. An enemy resolves its
-scaled stats once, at spawn, from the stage it spawned on.
-
-Wave rosters: `WaveDirector.rosterFor(s, w)` keeps the authored mix and grows it to
-`max(authored, waveSize)` by largest remainder (ties to basic), caps Magi at
-each mob's `maxPerWave` (never below authored) and gives the excess to basics; generated
-stages buy their rosters from the same `waveSize` budget (see §9). Arrivals wait while
-`maxAlive` enemies are on the field (`arriveAllNow()`, the debug hook, ignores the cap).
-Enemy damage (swings, spit, Magus spells) goes through `GameScene.onEnemyHit()`, which
-multiplies by the stage's `damage`; edge fire keeps its own ramp. Clearing a stage's
-last wave calls `onStageCleared()`, which heals the player.
-
-`STAGES`: the hand-written intro, one row per stage — `waves`, each a `WaveRoster` mix
-such as `{ basic: 2, pursuer: 2 }`. `ENDLESS.wavesPerStage` 3 for generated stages.
-`STAGE_RAMPS`: `enemyFire` per stage, last value holding. `LEVELS`: max 18, `xp` first 10
-growth 1.2, `abilityHastePerLevel` 5, `baseAttackCooldownMs` 700, `attackSpeedPerLevel`
-0.06, `qRankUp` level 9 → 2 pips. `CONTACT.cooldownMs` 800; `ENEMIES[id].contactDamage`
-(6 / 10 / 6) and `xp` (1 / 2 / 3). `DIFFICULTY.damage` k 0.35, `contactDamage` k 0.5,
-`stageClearHeal` 1 (full). `BALANCE_VERSION` tags the run log.
-`ENEMIES`: per mob `name`, `cost`, `unlockStage`, `weight`, `maxShare`, optional
-`maxPerWave`, `pips { start, every, max }` (basic 1/3/3, Pursuer 2/3/4, Magus 1/3/3).
-`DIFFICULTY.packSize` 1 / k 0.4 / 1–5; `RUN.spawn.packMemberGapMs` 90. Values in §9.
-
-Banner durations are presentation: `THEME.banners` (`stageMs` 1500, `waveMs` 900).
-
-### Enemies
-
-`TARGETS`: radius 18, maxHp 24, drift 45 px/s every 1800ms, minSpawnDistance 240,
-edgeMargin 60. (Hit flash / death pop timings: `THEME.enemy`.)
-
-`PURSUER`: `baseHpMultiplier` 2.5, radius 26, `moveSpeedFraction` 0.55,
-`attackRange` 16, `attackDamage` 10, `windupMs` 400, `attackCooldownMs` 1200,
-`scoreMultiplier` 2.25.
-
-`MAGUS`: radius 20, `scoreMultiplier` 1.5, `moveSpeedFraction` 0.6, `spacing` 360-480,
-`spellGapMs` 1400, `aimLead` 0.85; `lance` / `eye` / `orb` / `rite` blocks hold each
-spell's timings, sizes, damage and cooldown (see §9).
-
-`ENEMY_PROJECTILES` ramps (position set by `STAGE_RAMPS.enemyFire`): interval
-2600→700, speed 250→520, radius 10→16, damage 8→16, volley 1→1.5,
-`aimJitterDegrees` 3, `cullMargin` 80.
+| Scenes | `scenes/GameScene.ts` (792 lines), `scenes/UIScene.ts` (605) |
+| Round | `Run.ts` (lifecycle, clock, result), `RunEvents.ts` (typed event bus) |
+| Saved data | `Keybinds.ts`, `MouseSpeed.ts`, `Settings.ts`, `RunHistory.ts`, `Mode.ts` (views over `src/profile/Profile.ts`) |
+| Mouse | `CursorLock.ts` (pointer lock for Mouse Speed ≠ 1) |
+| Entities | `Player`, `Enemy` (abstract), `Caster` (abstract), `Target` (basic slime), `Pursuer`, `Magus`, `Sovereign`, `Bulwark`, `Projectile`, `AutoAttackMissile` |
+| Systems | `GameClock`, `InputController`, `AttackSystem`, `CastSystem`, `AbilityCooldowns`, `BlinkSystem`, `PlayerProjectileSystem`, `PlayerZoneSystem`, `Combat`, `WaveDirector`, `Difficulty`, `AttackTokens`, `EnemyProjectileSystem`, `HostileSpellSystem`, `Progression`, `ScoreSystem`, `KitingMetrics`, `ApmTracker` |
+| Art | `art/sprites.ts` (text pixel maps), `art/pixel.ts` (rasteriser, seeded RNG), `art/textures.ts` (`TEX` keys, `ensureArt`), `art/font.ts` + `glyphs.ts` (5×7 bitmap font), `art/look.ts` (body + cosmetics composition) |
+| Views | `PlayerView`, `EnemyView` (+ `MagusView`, `SovereignView`, `BulwarkView`), `HostileSpellView`, `PlayerZoneView`, `ProjectileView`, `CastTelegraphView`, `Fx` (pooled effects), `RunFeedback`, `Battlefield`, `PipBar`, `PixelBar`, `pixelDraw`, `motion.ts`, `statusLooks.ts` |
+| UI | `AbilityBar`, `PassiveDisplay`, `PauseMenu`, `ChampionRow`, `ModeRow`, `Tooltip`, `ChatBox`, `EndScreen`, `missionMessages` |
 
 ### Other
 
-`PLAYER`: radius 14, maxHp 100, moveSpeed 340, arriveEpsilon 3,
-hitInvulnerabilityMs 250.
-`SCORE`: 1/damage, 100/kill (× archetype), 5/second.
-`DEBUG`: `attackRangeDisplay` `'contextual'`, `showAttackState`,
-`showCancelFeedback`, `showTargetMarker`, `showDamageNumbers` — all overlay only, the
-first three editable from the pause menu.
-`KEYBINDS` (defaults, physical key codes): `KeyA`, `KeyT`, `KeyS`, `KeyQ`, `KeyW`,
-`KeyE`, `KeyF`, `KeyZ` (chat mode), `Escape` (fixed), `KeyR` / `Space` (restart,
-fixed). The player's bindings live in `Keybinds` (§4).
+- `src/profile/Profile.ts`: the one saved document, sanitising and migrations.
+- `src/cosmetics/catalogue.ts`: hats and skins; `resolveLook(profile)`.
+- `src/main.ts`: creates the `Phaser.Game` and the console handles.
 
 ---
 
-## 16. Formulas
+## 4. Boot and the two scenes
 
-```
-movement        step = moveSpeed * dt;  position += normalize(dest - pos) * step
-attack reach    reach = ATTACK.range + enemy.radius + (rangeFromPlayerEdge ? player.radius : 0)
-                inRange ⟺ (dx² + dy²) <= reach²
-attack speed    cd  = 700 / (1 + 0.06 (level − 1)) / (1 + stacks * 0.10)
-ability cd      cd  = base / (1 + 5 (level − 1) / 100)           Q / W / E only, not Flash
-contact         dmg = ENEMIES[id].contactDamage × T^0.5        ≤ 1 per enemy per 800ms
-                wind= max(90, cd * 0.25)
-cast progress   1 - (endsAt - now) / durationMs          (animation uses pow(·, 0.55))
-cooldown refund readyAt[id] = max(now, readyAt[id] - 750)   for q, w, e
-enemy fire      param = lerp(start, end, STAGE_RAMPS.enemyFire[stage])
-enemy pips      pips = min(max, start + floor((stage - 1) / every))   (ENEMIES[id].pips)
-wave clear      no enemy active → intermissionEndsAt = now + (last wave of stage ? 700 : 400)
-blink dest      d = cursor - player; dest = |d| > range ? player + normalize(d)*range : cursor
-                dest = clamp(dest, arena padding + player radius)
-straight shot   vx,vy = cos/sin(angle) * speed;  dies when travelled >= maxRange
-homing shot     arrives when speed*dt >= |target - pos| - target.radius
-score           Σ damage + Σ (100 × scoreMultiplier) + floor-accumulated(5 × run time)
+`main.ts` builds one `Phaser.Game`:
+
+```ts
+new Phaser.Game({
+  type: Phaser.AUTO,               // WebGL if available, else Canvas
+  width: ARENA.width, height: ARENA.height,   // 1280 × 720 world = screen
+  scale: { mode: Phaser.Scale.FIT, autoCenter: Phaser.Scale.CENTER_BOTH },
+  render: { pixelArt: true },      // nearest-neighbour, no smoothing
+  scene: [GameScene, UIScene],
+  banner: false,
+});
 ```
 
----
+There is no physics config and no asset preload: every texture is generated at runtime
+(§17). The world is exactly one screen, so there is no camera scrolling; the camera is
+used only for its background colour and a hit shake.
 
-## 17. End-to-end traces
+It also blocks the browser context menu page-wide (right-click is the move button) and
+puts the game, the balance module, the profile and the stores on `window` (`__warmup`,
+`__balance`, `__profile`, `__runs`, `__keybinds`, `__mouseSpeed`, `__settings`,
+`__champions`, `__magicBoy`, `__snakeLady`, `__axeMan`, `__theme`). The suites drive the
+game through these same handles.
 
-**Direct auto attack.** right-click enemy → `commandAttack` (source `direct`) →
-`update()` sees out of range → `chaseToward` each frame → in range → `player.stop()` +
-`beginWindup()` → rooted 175ms, charge ring contracts → `fireAttack()`: state
-`recovery`, root released, `AutoAttackMissile` spawned with `target.spawnId` →
-`playReleaseBurst` → missile homes at 1150 px/s → on arrival `onMissileHit` →
-`takeDamage(12)` → hit flash, damage number → `onTargetDamaged` → score, and mark
-detonation if marked → `cycleEndsAt` → `idle` → next windup starts immediately.
+### Two scenes, two lifetimes
 
-**W → auto detonation.** press W → `attacks.onMoveOrder()` (cancels any windup),
-`cooldowns.start('w')`, `cast.begin('w', aim, 185ms)` → rooted, violet orb gathers →
-resolve → `skillshot.fire('w')` → orb flies → touches enemy → `onWHit` →
-`applyMark(now)` + `grantPassiveStack()` (no damage) → later an auto lands →
-`onTargetDamaged` → `isMarked` → `detonateMark()` → `clearMark` + 45 damage + violet
-burst, **no** second stack.
+| | GameScene | UIScene |
+| --- | --- | --- |
+| Started by | first in the scene list | `active: true` in its constructor |
+| Lifetime | **one round**: `scene.restart()` reruns `create()` on every restart, champion pick and mode pick | **the whole page**: `create()` runs once |
+| Owns | the player, the wave, every system, the kit, the `Run` | HUD, ability bar, chat, start card, pause menu, end screen, `CursorLock` |
+| Talks to the other | exposes `getHudState()`, `getRoundResult()`, `startRun()`, `setPaused()`, `restartRound()`, `returnToStart()` | **polls** `getHudState()` every frame |
 
-**E combo.** press E → cooldown starts, destination computed **and clamped now** →
-`cast.begin('e', dest, 210ms)` → rooted, pink ring contracts → resolve →
-`executeBlink`: `onBeforeBlink` → `player.blinkTo(dest)` → departure/arrival rings →
-acquisition from the **new** position, W-marked first → bolt spawns → on impact 38
-damage, a stack, and a detonation if marked. A move order pressed mid-cast replays
-immediately after the blink.
+UIScene polls instead of subscribing to events because GameScene's objects are all
+rebuilt on restart; a HUD wired to the old objects' events kept breaking. Polling a
+plain snapshot cannot go stale. `HudState.round` increments on each `create()`, which is
+how UIScene notices a new round and resets its round-scoped state (`beginRound`).
 
-**Q cooldown refund.** Q lands → `onQHit` → `onTargetDamaged` (+ detonation) →
-`grantPassiveStack()` → `cooldowns.reduce(750, ['q','w','e'])` → the HUD's three kit
-slots all jump down on the next frame; Flash is untouched.
-
-**Wave clear.** the last living enemy takes lethal damage (auto, Q, E bolt or
-detonation) → `onTargetDamaged` → `director.onEnemyKilled` → no enemy active → phase
-`intermission`, `intermissionEndsAt = now + 400` (700 after a stage's last wave) → later that same
-frame `enemyProjectiles.update` sees `!isWaveActive` → every hostile shot removed,
-nothing scheduled → the HUD polls `wavePhase` → "WAVE CLEAR" / "STAGE CLEAR" → at the
-deadline `director.update` → `advance()` → `spawnWave()` destroys the dead roster and
-spawns the next authored one → the HUD sees the new wave or stage → "WAVE N" /
-"STAGE N" banner → the first volley follows one spawn interval later. After the final
-stage's last wave the director also calls `onStageCleared()` (the player heals 25 HP).
-Clearing Stage 5's last wave leads into the first generated stage; there is no last stage.
-
-**Player hit.** Spawn on a random edge → aimed at the player's position at spawn ±3° →
-straight line → overlap with the player → missile killed unconditionally →
-`Player.takeDamage(amount, now)` → 0 within i-frames, else HP drops, camera shake, red
-rim flash → at 0 HP the next frame ends the run (`defeated`).
+The scene instance itself survives `restart()`, so a couple of fields deliberately live
+outside `create()`: `roundId`, and `holdNextRound` (set by "Return to Select" so the next
+round waits on the start card).
 
 ---
 
-## 18. Known simplifications vs League
+## 5. The round: `Run` and `GameClock`
+
+`Run` (no Phaser in it) owns one round:
+
+```
+awaitingStart ──start()──► running ◄──setPaused──► paused
+                              │
+                           finish()
+                              ▼
+                             over
+```
+
+- `clock` is a `GameClock`: a number of milliseconds that only `advance()` changes.
+- `events` is the round's `RunEvents` bus (§12).
+- `isActive` = running, not paused, not awaiting start. **GameScene's `update()` returns
+  immediately unless the run is active**, so nothing advances on the start card, in the
+  pause menu, or after death.
+- `finish(summary)` marks the run over, compares it with logged runs (same champion,
+  mode, `DIFFICULTY.growth` and `BALANCE_VERSION`) to set `previousBest` / `newBest`,
+  builds the immutable `RoundResult`, and records it through `RunHistory`. A restart in the
+  middle of a run never calls `finish`, so only finished runs are logged.
+
+The first round after a page load (and any round after "Return to Select") is created
+with `awaitingStart = true`: the field is built and visible but frozen at time 0 under
+the title card. A click or key **release** calls `startRun()`, so the press that started
+it is never also a move order or a cast.
+
+### Why the clock matters
+
+Every deadline in the game is an absolute timestamp: `windupEndsAt`, `cycleEndsAt`,
+cooldown `readyAt`, a cast's `endsAt`, an enemy's `activeAt`, a zone's `resolveAt`, the
+breather's `intermissionEndsAt`. If "now" came from the wall clock, pausing for ten
+seconds would make all of them fire together on resume. Because "now" is
+`run.clock.now`, and the clock does not advance while paused, every deadline keeps exactly
+the time it had left. Nothing is ever rescheduled.
+
+`setPaused` also calls `tweens.pauseAll()`, because Phaser tweens run on wall time. Tweens
+are only used for decoration (a level-up pop, the hit rim, the start prompt), never for
+gameplay. `scene.time` is not used by gameplay at all.
+
+---
+
+## 6. The frame
+
+`GameScene.update(_time, delta)`:
+
+```
+if (!run.isActive) return                      ← start card, pause, death: nothing below runs
+dt = min(delta, 50) / 1000                     ← clamp: a long frame can't teleport anything
+clock.advance(dt * 1000); now = clock.now
+
+player.tickStatus(now)                         stun / slow timers
+  stun just ended? replay the order held during it
+kit.update(dt, now)                            the champion's own timers, bolts, zones, passive
+cooldowns.update(now)
+cast.update(now)                               a cast window that elapsed resolves → kit.cast()
+                                               then the order buffered behind it replays
+
+attacks.update(now, dt, enemies)        ① GAMEPLAY DECIDES
+   ├─ auto missiles fly; arrivals take a pip → Combat.hit
+   ├─ windup elapsed → fireAttack() (missile spawns, state → recovery)
+   ├─ cycle elapsed → idle
+   ├─ attack-move acquisition / chase / release
+   └─ windup starts if idle and a target is in range
+
+player.applyAttackVisual(...)           ② VISUALS READ IT
+player.setRangeRingState(...)
+player.setPassiveMaxed(...)
+player.setCastVisual(...)               cast charge, read from cast.progress
+castTelegraph.draw(...)                 a slot's ground cone, if it has one
+cast resolved this frame? → playCastRelease
+
+player.update(dt)                       ③ MOVE, THEN REDRAW
+metrics.update(dt, ...)
+one-shot cues (cancel tag, release burst), gated on timestamps
+
+director.update(dt, now, ctx)           breather → next wave; arrivals; every enemy's AI; separation
+projectiles.update(dt, now, enemies)    the player's linear shots
+enemyProjectiles.update(dt, now)        edge fire
+hostileSpells.update(dt, now)           enemy zones, orbs, globs, spheres
+fx.update(dt)                           pooled particles, rings, popups
+
+if (!player.isAlive) endRound()         the run is endless: death is the only end
+```
+
+The ①②③ order is load-bearing. When the attack visual was applied *after*
+`player.update()`, the charge ring drew one frame stale and visibly hung into the
+recovery.
+
+**Time sources.** `dt` (clamped seconds) drives rates: movement, projectile flight, aim
+cursors. `clock.now` (ms) drives every deadline. The 50ms clamp means a stutter can slow
+the game down but never skip a deadline's effects or move anything further than 50ms
+worth in one step.
+
+**A wave clears mid-frame.** The last kill can land inside `attacks`, the kit, or the
+projectile systems. `WaveDirector.onEnemyKilled` flips the phase to `intermission` on the
+spot. `enemyProjectiles` and `hostileSpells` run after every damage source and check
+`isWaveActive` first, so a cleared wave's shots are removed before they can hit the player
+that frame.
+
+---
+
+## 7. Input
+
+### `InputController`: raw input → commands
+
+It registers two Phaser listeners (`pointerdown`, keyboard `keydown`) plus two raw DOM
+listeners for the APM counter (removed on scene shutdown). It knows which physical input
+means what; it calls methods on a `CommandHandler` interface that `GameScene` implements:
+
+```
+commandMove  commandAttackTarget  commandAttackMove  commandStop
+castSlot(slot)  castFlash  targetAt  recordAction
+isRoundRunning  acceptsGameplayInput  isPaused  togglePause  restartRound
+```
+
+Key handling, in order:
+
+```
+repeat? ignore
+restart keys (R / Space) while the round is over → restartRound
+round not running → ignore
+Escape → armed A-targeting? cancel it : togglePause     ← above the pause gate
+!acceptsGameplayInput (paused) → ignore                   ← menu clicks never reach gameplay
+Keybinds.actionFor(event.code) → preventDefault, then:
+  attackMove (A)       toggle targeting mode
+  attackMoveClick (T)  commandAttackMove(cursor, { showRangeHint })
+  stop (S)             commandStop
+  flash (F)            castFlash(cursor)
+  abilityQ/W/E/R       castSlot('q'|'w'|'e'|'r', cursor)
+```
+
+Pointer: right-click on an enemy is a direct attack, on ground a move (and it cancels a
+pending A-mode). Left-click confirms a pending A-mode, or attacks an enemy under it.
+`targetAt` is a distance test with 10px of grace beyond the enemy's radius.
+
+A and T call the **same** `commandAttackMove`. T only adds a cosmetic range-ring hint.
+Targeting, timing, cancelling and metrics are identical by construction.
+
+### Keybinds, Mouse Speed, APM
+
+- **`Keybinds`**: one physical key (`event.code`) per action, defaults from `KEYBINDS`,
+  overrides saved in the profile. `set()` swaps with whichever action held the key, so
+  nothing is ever unbound. `captureNext()` installs a capture-phase `window` listener so
+  the key being bound never also fires the action. Keys are bound per **slot** (Q/W/E/R),
+  shared across champions.
+- **`CursorLock`**: at Mouse Speed 1.0 nothing happens. Otherwise, during play the canvas
+  takes a pointer lock; the class keeps its own cursor position, adds `movementX/Y ×
+  speed`, draws its own cursor, and rewrites every mouse event in the window's capture
+  phase so Phaser sees the game cursor. Losing the lock unasked is treated as Escape.
+- **`ApmTracker`**: every raw key press (not repeat) and mouse-button press, over a
+  rolling 30s window. Informational only.
+
+### Orders while busy: `issueOrder`
+
+```ts
+private issueOrder(run: () => void): void {
+  if (this.cast.isCasting) this.cast.bufferCommand(run);   // replayed when the cast resolves
+  else if (this.player.isStunned) this.stunBuffered = run;  // replayed when the stun ends
+  else run();
+}
+```
+
+Move, attack and attack-move orders are wrapped as closures. Mid-cast or mid-stun, only
+the **latest** one is kept and replayed the instant the player is free: committed, never
+unresponsive. Move/attack-move pings still draw at once so the click feels received. Stop
+discards a held order but can't cancel the cast or stun.
+
+---
+
+## 8. Movement and the root
+
+`Player` holds the authoritative `x`, `y`, `hp`, a move destination, a **reference-counted
+root**, and stun/slow deadlines.
+
+```
+update(dt):
+  if moving (has a destination, not rooted, not stunned):
+    step = moveSpeed × dt
+    if distance ≤ max(step, arriveEpsilon 3px): snap to the destination, clear it
+    else: move step px toward it; publish vx, vy
+```
+
+`max(step, epsilon)` prevents overshoot jitter on fast frames. `moveTo` and `blinkTo` clamp
+into the arena, so the player can never leave it. `blinkTo` also clears the destination,
+so a blink doesn't walk you back to a stale click.
+
+`moveSpeed = champion base × level perk × kit multiplier (Axe Man's W) × (1 − slow)`.
+
+**Root is a counter, not a boolean.** The auto windup and a cast window can both hold it;
+neither can release movement the other still needs held.
+
+`takeDamage` returns 0 within `PLAYER.hitInvulnerabilityMs` (250ms) of the last hit:
+global i-frames.
+
+---
+
+## 9. Auto attacks (`AttackSystem`)
+
+```
+ idle ──(target in range, not stunned)──► WINDUP ──(windupEndsAt)──► RELEASE ──► RECOVERY ──(cycleEndsAt)──► idle
+                                           rooted                     missile       free to move
+                                           cancellable                spawns        (the orbwalk window)
+```
+
+`AttackState = 'idle' | 'windup' | 'recovery'`. Release is an **event** (the one frame
+`fireAttack()` runs), not a state. Both deadlines are set when the windup **starts**:
+
+```ts
+this.windupEndsAt = nowMs + this.windupMs;
+this.cycleEndsAt  = nowMs + this.cooldownMs;   // the cooldown runs from windup START
+```
+
+So firing never lengthens the cycle, and the recovery is free time to move. That single
+line is what makes orbwalking possible.
+
+### Attack speed
+
+```
+baseCooldownMs = champion.attack.baseCooldownMs / (1 + attackSpeedPerLevel × (level − 1))   ← Progression
+cooldownMs     = baseCooldownMs / kit.attackSpeedMultiplier                                 ← passive, W buff
+windupMs       = ATTACK.windupMsOverride ?? max(ATTACK.minWindupMs 90, cooldownMs × 0.25)
+```
+
+Magic Boy, as an example (700ms at level 1, +6% per level, +10% per passive stack):
+
+| Level | Stacks | cycle | windup | recovery |
+| --- | --- | --- | --- | --- |
+| 1 | 0 | 700ms | 175ms | 525ms |
+| 1 | 5 | 467ms | 117ms | 350ms |
+| 18 | 0 | 347ms | 90ms (floor) | 257ms |
+| 18 | 5 | 231ms | 90ms (floor) | 141ms |
+
+Elapsed time plays no part: attack speed comes from level (kills) and the kit.
+
+### Cancelling: the one condition
+
+```ts
+onMoveOrder() { if (this.state === 'windup' && ATTACK.allowMoveCancel) this.cancelWindup(); this.clearOrders(); }
+```
+
+`cancelWindup()` sets the state back to idle, releases the root, nulls `windupTarget`
+(the only path to a missile), and sets `cycleEndsAt = 0`: the attack is available again at
+once. A cancel deals nothing, so cancel-spamming is harmless.
+
+| Order | Cancels a windup? |
+| --- | --- |
+| Move, Stop | **yes** |
+| A cast (unless the slot is `quick`), any blink, Flash | **yes** (they call `onMoveOrder`) |
+| Right-click enemy, A-click, T | no: an attack order lets the committed swing resolve |
+| A stun | yes, via `interrupt()`, but the orders survive |
+
+After release nothing can undo the hit.
+
+### Targets, chasing and attack-move
+
+- A **direct** order (right-click) commits to one enemy and chases it: each frame the
+  player walks to `reach − chaseBufferPx` from it, and stops the moment it is in range.
+- An **attack-move** order is a location. Each frame without a target it looks for the
+  enemy **already in range** that is nearest the click point (`attackMoveTargeting:
+  'cursor'`), so an A-click never becomes a cross-arena sprint. If its acquired target
+  walks out of range it is dropped and the walk resumes. The order persists after
+  arriving, so anything entering range is still attacked until the next command.
+- **Range** is League's model: player centre to the target's edge,
+  `attackReach(range, targetRadius, playerRadius)` in `balance.ts`. The drawn ring uses the
+  same function with the basic slime's radius.
+
+### The missile and the kit's hook
+
+`fireAttack()` asks the kit `autoShot?(target)`: a kit can change this one auto's look and
+add an `onImpact` / `onFizzle` (Axe Man's spinning axe). Then it spawns an
+`AutoAttackMissile` that homes on the target (autos don't miss). On arrival:
+
+```ts
+const killed = target.takeHit();          // one pip, always the engine's
+this.callbacks.onHit(target, killed);     // → Combat.hit
+shot?.onImpact?.(target, killed);         // the kit's extra
+```
+
+If the target dies first, the missile fizzles. Missile travel gates nothing; the next
+windup can start while it is still flying.
+
+---
+
+## 10. Abilities: the champion contract
+
+The engine owns *when*: keys, aim resolution, cooldowns, cast windows, interruption,
+Flash. The champion owns *what*: a `Kit` object that decides what each slot does when it
+resolves. The engine never switches on a champion id.
+
+### The types (`champions/types.ts`)
+
+```ts
+interface Champion {
+  id, name, stats, attack: AttackProfile, levels: LevelPerks, art, autoMotion?, autoLook?,
+  slots: { q: AbilityDef; w: AbilityDef; e: AbilityDef; r?: AbilityDef };
+  notes(): string[];                      // start-screen tooltip
+  createKit(ctx: KitContext): Kit;        // a fresh kit per round
+}
+
+interface AbilityDef {
+  targeting: 'direction' | 'point' | 'unit' | 'self';
+  range?; castTimeMs(pace): number; cooldownMs(): number;   // read live: console edits apply
+  icon, accent, castStyle, fx, telegraph?, motion?;
+  quick?: boolean;      // doesn't cancel an auto in progress (a buff)
+  anchored?: boolean;   // a mid-cast Flash leaves it where it began
+}
+
+interface Kit {
+  canCast(slot, aim): boolean;   commit(slot, aim): Aim;   cast(slot, aim): void;
+  recast?(slot): boolean;        update(dt, now): void;
+  attackSpeedMultiplier;  moveSpeedMultiplier?;  autoShot?(target);
+  passiveHud();  stats();  statRows();  clear();
+}
+```
+
+`KitContext` is the narrow surface a kit may touch: the scene (for drawing), clock,
+events, player, a live enemy list, cooldowns, progression, `BlinkSystem`,
+`PlayerProjectileSystem`, and `combat: { hit, kill, bonus }`.
+
+### A key press, end to end (`GameScene.castSlot`)
+
+```
+castSlot(slot, cursorX, cursorY):
+  def = champion.slots[slot]; no def, mid-cast or stunned → return
+  kit.recast?(slot) used the press? → return        (Axe Man's R recall)
+  cooldown not ready → return
+  aim = resolveAim(def, cursor)                     direction / point (clamped to range) /
+                                                    unit (enemy under cursor, within range) / self
+  !aim or !kit.canCast(slot, aim) → return          (unit out of range flashes the range ring)
+  if !def.quick: attacks.onMoveOrder()              (cancels an uncommitted auto)
+  payload = kit.commit(slot, aim)                   frozen now: a blink's destination, a target
+  cooldowns.start(slot)                             cooldowns run from cast START
+  castTimeMs = def.castTimeMs(pace)
+  castTimeMs ≤ 0 ? kit.cast(slot, payload) now : cast.begin(slot, payload, castTimeMs)
+```
+
+### `CastSystem`: the commitment window
+
+One `PendingCast` at a time. `begin()` stops and roots the player. `update()` resolves
+when `now ≥ endsAt`: release the root, call `kit.cast(slot, payload)`, **then** replay the
+buffered order (so a blink lands before the queued move starts from the new spot).
+`progress = 1 − (endsAt − now) / durationMs` is derived from the deadline, so the
+animation can never disagree with the mechanic.
+
+- **The aim is committed at keypress.** Moving the mouse during the window does nothing.
+- **Other abilities are ignored mid-cast** (`canAct`), but Flash works. A cast then
+  resolves from where Flash put you, shifted by the same offset (`carried()`): Q-Flash,
+  W-Flash and R-Flash carry the spell. An `anchored` slot (Magic Boy's R) stays put and
+  fires from `from`, the spot the key went down.
+- **A stun interrupts** the window: `interrupt()` returns the ability and its buffered
+  order, the scene refunds the cooldown and moves the order to the stun buffer.
+
+### Cooldowns, haste and levels
+
+`AbilityCooldowns` is one `readyAt` table for `q w e r flash`. `start(id)` sets
+`readyAt = now + duration × haste`; `reduce(ms, ids)` only pulls `readyAt` toward now
+(clamped, never extends); `refund(id)` makes it ready. One table means one call for a
+cross-ability effect (a landed Magic Boy Q takes 750ms off Q/W/E/R) and one source for the
+HUD.
+
+`Progression` turns kills into XP (`ENEMIES[id].xp`) and levels (1–18, first level 10 XP,
++20% each). Each level gives the champion's `LevelPerks`:
+
+```
+cooldown multiplier = 100 / (100 + abilityHaste)              abilityHaste = perHaste × (level − 1)
+cast speed          = 1 + LEVELS.castHasteShare (0.5) × haste / 100
+attack speed        = 1 + attackSpeedPerLevel × (level − 1)
+move speed          = 1 + moveSpeedPerLevel × (level − 1)
+```
+
+Flash ignores haste (it is a summoner spell). `Progression` is also the `AttackPacing`
+source `AttackSystem` reads.
+
+### Shared tools a kit builds with
+
+| Tool | What it does |
+| --- | --- |
+| `PlayerProjectileSystem.fire(spec, x, y, from?)` | A straight shot: speed, radius, max range, art, `onHit`, optional `pierce` (each enemy once) |
+| `AutoAttackMissile` | A homing bolt (autos, Magic Boy's E bolt) |
+| `BlinkSystem.destinationFor / blinkTo` | Blink geometry (clamp to range, clamp to arena) and the relocation; Flash lives here too |
+| `PlayerZoneSystem` | Player ground spells: circles/cones that resolve at a deadline, and clouds that tick while enemies stand in them. The mirror of `HostileSpellSystem`. Built by a kit that needs it (Snake Lady) |
+| `enemy.applyStatus(id, now, ms)` + `registerStatusLook(id, look)` | A namespaced timed status on the enemy (`'magicboy.mark'`, `'snakelady.poison'`) and how its view draws it |
+| `enemy.applySlow(id, fraction, now, ms)`, `enemy.stun(now, ms)` | Crowd control (an `unstoppable` enemy ignores both) |
+| `ctx.combat.hit / kill / bonus` | Report pips the kit removed itself, and score awards |
+
+---
+
+## 11. The three champions
+
+Each shows a different use of the contract. Their READMEs describe the kits as a player
+reads them.
+
+**Magic Boy** (default; League's Ezreal shape). Q, W, R are `PlayerProjectileSystem`
+shots; R pierces and is `anchored`. E commits its destination in `commit()`, blinks in
+`cast()`, then picks a bolt target **from the new position**, preferring a W-marked enemy.
+The passive (`PassiveSystem`, kit-private) is one shared 6s buff of up to 5 stacks at +10%
+attack speed each, exposed as `attackSpeedMultiplier`. The W **mark** is the interesting
+part: the kit subscribes to the run's `'hit'` event and, when a counted hit lands on a
+marked enemy that survived it, detonates the mark for one extra pip. The detonation is
+deliberately *not* a counted hit, so it can't trigger itself or grant a second stack.
+
+**Snake Lady**. Uses `PlayerZoneSystem` for a delayed circle (Q), a thrown wall of
+lingering clouds (W) and a cone that strikes as the cast ends (R, which also draws a
+`telegraph` cone during the window). E is `unit`-targeted (point-and-click) and fires a
+`FangBolt`. Poison is a status plus a tick schedule in the kit; on a `spellcaster` mob a
+poison tick can't take the last pip. R stuns enemies whose `heading` faces her and slows
+the rest.
+
+**Axe Man**. Changes autos rather than adding spells: Q and W are `self`-targeted and
+`quick` (they don't cancel a swing). Q readies an axe; `autoShot()` makes the next auto a spinning axe whose `onImpact`
+schedules where it falls; walking into the landing circle catches it. W raises
+`moveSpeedMultiplier` (decaying) and `attackSpeedMultiplier`. R uses `recast()`: pressing R
+again while the axes are out recalls them instead of casting.
+
+---
+
+## 12. Combat: pips, the hit funnel and events
+
+### Enemy health is pips
+
+`Enemy.hp` counts **pips**. `takeHit()` removes exactly one, tells the view, and on the last
+pip flips the lifecycle to `dead`, clears statuses and calls `onDeath()`, all immediately.
+It returns whether that hit killed. There are no damage numbers anywhere on the enemy side;
+a "two-pip" ability calls `takeHit()` twice.
+
+This makes difficulty readable (a Pursuer is "two hits") and keeps scaling honest: later
+stages get more and faster enemies, not damage sponges. The Bulwark (14–18 pips) is the
+deliberate exception.
+
+### `Combat`: every outcome passes through once
+
+```ts
+hit(target, killed)      // after the kit/engine already called takeHit()
+  scoring.addHit(); events.emit('hit', …); if (killed) kill(target)
+
+kill(target)             // every kill, whatever caused it
+  points = scoring.addKill(archetype, scoreMultiplier, stage)
+  director.onEnemyKilled(target, now)                 ← may clear the wave
+  events.emit('kill', …)
+  progression.addXp(xp) → maybe events.emit('levelUp', …)
+
+enemyHit(damage, source, kind)                        ← every enemy attack and body contact
+  mult = kind === 'contact' ? difficulty.contactDamage : difficulty.damage
+  amount = lethal mob ? Infinity : round(damage × mult)
+  playerHit(amount, kind === 'contact' ? source + 'Contact' : source)
+
+playerHit(damage, source)                             ← everything that hurts the player
+  taken = player.takeDamage(damage × mode.damageMultiplier, now)   (0 inside i-frames)
+  log HP actually lost per source; emit 'playerHit'
+
+waveCleared(wave) / stageCleared()                    ← WaveDirector callbacks
+  speed bonus / HP bonus + mode clear bonus, then heal to full
+```
+
+A kit that removes a pip itself calls `target.takeHit()` then `combat.hit(target,
+killed)`; for extra pips that aren't "counted hits" it calls `combat.kill` only if one of
+them kills. Either way every pip scores once and every kill reaches the director exactly
+once.
+
+### `RunEvents`: a typed bus
+
+```ts
+interface RunEventMap {
+  hit, kill, markDetonated, levelUp, waveCleared, stageCleared, kitBonus, playerHit
+}
+on<K>(name: K, fn: (e: RunEventMap[K]) => void): () => void   // returns unsubscribe
+emit<K>(name: K, e: RunEventMap[K]): void
+```
+
+Gameplay emits from the one place each thing is decided. `RunFeedback` (kill gold coins,
+the level-up ring, stage-clear popups, the hit shake and red rim) only listens. A fresh
+`Run` (and so a fresh bus) is created per round, so old listeners die with the old round.
+
+> **One exception to "one-way".** The bus's doc comment says nothing that listens reaches
+> back into gameplay. Magic Boy's kit does: its `'hit'` listener detonates the W mark,
+> which calls `takeHit()` and possibly `combat.kill()`. It is safe today because it is the
+> only gameplay listener and it runs only when the triggering hit did not kill, but a
+> second gameplay listener on `'hit'` would make listener order matter.
+
+---
+
+## 13. Enemies
+
+### The base class (`Enemy`)
+
+```
+spawning ──(clock reaches activeAt)──► active ──(last pip)──► dead
+```
+
+Only an **active** enemy exists for gameplay: targetable, hittable, moving, attacking,
+counted as a threat. A **spawning** enemy sits on its spot for `RUN.spawn.manifestMs`
+(300ms) as a closing ring. A **dead** one stays in the roster so its death animation plays.
+
+`Enemy.update()` does the shared work before and after the subclass AI:
+
+1. Activate at `activeAt` (a clock deadline, never an animation).
+2. Run `updateAi()` and `checkContact()` unless `held` (being thrown by a Sovereign) or
+   dazed/stunned (`dazedUntil`).
+3. Update `heading` from the frame's movement, or toward the player while winding up
+   (Snake Lady's R reads it).
+4. Move the **aim cursor** toward the player unless a cast is tracking somewhere else.
+5. `view.sync()`.
+
+**Enemies aim with a cursor that has to travel.** `Enemy.aim` moves toward its goal at
+`DIFFICULTY.aimSpeed` px/s (900 at Stage 1, up to 1800, × the mode's multiplier). Walking is
+always tracked, but a blink leaves the cursor behind for a moment. Every enemy attack reads
+`aim` (or `trackAim()` for a cast that sweeps), never the player's position directly. This
+is the rule that makes Flash a real dodge. Movement still reads the player.
+
+Shared state on the base class: namespaced **statuses** (`statusUntil` map), **slows** by
+id (the strongest live one counts), **stun** (`dazedUntil`, never shortened), `held`,
+`unstoppable` (ignores stuns and slows), and **body contact**: an active enemy overlapping
+the player deals `ENEMIES[id].contactDamage` through `Combat.enemyHit(…, 'contact')`, at most
+once per 800ms per enemy.
+
+`Caster` (abstract, for Magus and Sovereign) adds a spacing band, a lead aim
+(`aimPoint`: where you'll be when the spell lands, at `aimLead` of the way, using a
+"seen velocity" that turns toward your real one at a capped rate so clicking back and forth
+doesn't instantly re-aim) and a per-cast random offset.
+
+### The five mobs
+
+Each is a small state machine whose timings are `GameClock` deadlines. Cooldowns are
+timestamps checked from the walking state, so a mob keeps moving between attacks.
+
+| Mob | Class | States | Role |
+| --- | --- | --- | --- |
+| Slime (`basic`) | `Target` | approach / retreat / strafe; spit windup | Hovers 150–230px away inside your range; from Stage 2 spits a glob (needs an attack token) |
+| Pursuer | `Pursuer` | chase, windup, dashWindup, dash | Melee brute at 55% of your speed; the swing lands only if you're still in reach when it resolves; from Stage 4 dashes along a locked path |
+| Magus | `Magus extends Caster` | reposition, lance, lock, eye, orb, rite | Artillery (Xerath-like): a sweeping line, a delayed circle with a sweet spot, a stunning orb, and a last-enemy Rite |
+| Sovereign | `Sovereign extends Caster` | reposition, sphere, grab, throw, scatter | Sphere mage (Syndra-like): places Dark Spheres, throws a sphere **or another mob** (Force of Will), flings spheres in a cone (Scatter) |
+| Bulwark | `Bulwark` | chase, strike, recover, brace, ram, winded, flare | The capstone tank (K'Sante-like): 14 pips at its Stage 8 debut, up to 18; lethal hits, unstoppable ram, All Out at ⅔ pips |
+
+No mob starts an attack while the player is stunned.
+
+### `AttackTokens`
+
+A shared pool sized by `DIFFICULTY.attackTokens` (2 at Stage 1, up to 10). A basic must
+hold a token to start a spit windup and returns it when the glob leaves; tokens of
+inactive enemies are reclaimed. A crowd takes turns instead of firing in unison.
+
+### `HostileSpellSystem`
+
+Owns everything an enemy places: **line**, **circle** and **cone** zones that resolve at a
+deadline (with optional sweet spot, slow, stun), straight **shots** (Magus orb, basic glob,
+flung spheres), and the Sovereign's persistent **Dark Spheres** (owner, lifetime, cap;
+removed when their owner dies). Because the system owns them, a zone already placed lands
+even if its caster dies; a spell still being *charged* lives on the caster and dies with
+it. When `isWaveActive` goes false, everything is cleared.
+
+### `EnemyProjectileSystem`: edge fire
+
+Shots that belong to the **wave**, not to any enemy: spawned on a random arena edge, aimed
+at the player's position at spawn (±3°), never re-aimed. Interval, speed, size and damage
+are `lerp(start, end, STAGE_RAMPS.enemyFire[stage])`. Nothing fires during a breather.
+
+---
+
+## 14. The wave director
+
+`WaveDirector` owns stage/wave progression and the current wave's enemies:
+
+```
+spawnWave() ─► pending queue ─► arrivals (spawning) ─► active ─► killed ─► wave cleared
+     ▲                                                                       │
+     └──── next wave, or Wave 1 of the next stage ◄── breather (clock) ◄─────┘
+```
+
+**Rosters (`rosterFor`).**
+- *Hand-written stages* (the mode's `stages` table: Normal 5, Easy 6, Hard 4): the authored
+  **mix** is grown to the stage's wave size by largest remainder (ties go to the first mob,
+  the basic), then each mob is held to its `maxPerWave` with the excess given to basics.
+- *Generated stages* (every stage after, `ENDLESS.wavesPerStage` = 3 waves): a **budget**
+  of `waveSize` points buys mobs. A mob's debut (Wave 1 of its `unlockStage`) fields exactly
+  one of it first; the last wave of a stage fields every unlocked **capstone** first; then
+  mobs are drawn by `weight` among those unlocked whose `cost` fits, each capped by
+  `maxShare` and `maxPerWave`, skipping any mob a fielded one `crowdsOut`. The RNG is
+  `mulberry32(runSeed ^ f(stage, wave))` and results are cached, so a wave is fixed once
+  rolled.
+
+**Arrivals.** `spawnWave()` destroys the previous (all-dead) roster, shuffles the new list
+and groups it into packs of `DIFFICULTY.packSize`. Pack starts are `arrivalGapMs ×
+packSize` apart (±⅓ jitter); members 90ms apart. `beginDueArrivals()` moves due entries
+onto the field while fewer than `DIFFICULTY.maxAlive` are on it; the rest wait for a slot.
+The first member of a pack picks a spot by rejection sampling (away from the player by the
+mob's `minSpawnDistance`, away from other bodies); the rest land 40–110px from it.
+
+**Clearing.** `onEnemyKilled` (from `Combat.kill`) checks whether nothing is pending,
+spawning or alive. If so it reports the wave (and the stage, on its last wave) through
+callbacks, sets `phase = 'intermission'`, and sets `intermissionEndsAt` to now + 400ms (or
+700ms after a stage). `update()` advances when the clock passes it. Time alone never
+advances a wave.
+
+**Separation.** Overlapping active enemies are pushed apart, the push split by radius so
+big bodies shove small ones. Held enemies are skipped.
+
+**Adding a mob** = its config block + an `ENEMIES` entry (its key becomes a valid
+`EnemyArchetype` type everywhere) + an `Enemy` subclass and view + one line in `ARCHETYPES`.
+`validateConfig()` throws at startup, in every mode, on an empty stage, a malformed
+registry entry or a mob with no class.
+
+Par time for the speed bonus is set at spawn: last scheduled arrival + 300ms + 600ms per
+health pip in the wave.
+
+---
+
+## 15. Difficulty and modes
+
+### One curve
+
+```
+T(stage) = DIFFICULTY.growth ^ (stage − 1)        growth 1.15: +15% per stage, compounding
+value    = clamp(base × T ^ k, min, max)          k says how strongly a number follows T
+```
+
+`Difficulty.ts` is pure functions over the live config: `threat`, `scaled(curve, stage)`,
+`stageDifficulty(stage)` (wave size, max alive, arrival gap, move speed, projectile speed,
+damage, contact damage, attack tokens, pack size). A negative `k` shrinks a value (gaps,
+cooldowns). Each enemy resolves its scaled stats **once, at spawn**, from its own stage.
+Telegraph durations are never scaled, so every attack stays reactable.
+
+### Modes are only numbers
+
+`MODES.easy | normal | hard` each carry: `damageMultiplier` (Hard 2), `waveSizeMultiplier`
+(Easy 0.75), `aimSpeedMultiplier`, `stageClearBonus`, their own intro `stages`, and
+per-mob **overrides** of `ENEMIES` fields (`unlockStage`, `weight`, `maxShare`,
+`maxPerWave`). Every mode-dependent registry read goes through
+`enemyEntry(id, mode) = { ...ENEMIES[id], ...mode.enemies[id] }`. Normal has no overrides,
+so Normal is exactly the un-overridden game. The engine never tests a mode's id.
+
+---
+
+## 16. Score, the run log and the profile
+
+**Score** (`ScoreSystem`) never pays for time alive. Every award is × `1 + 0.25 × (stage −
+1)` and tallied by source in `scoreFrom { kills, speed, hp, clear, kit }`:
+
+- **kills**: 100 × the mob's `scoreMultiplier`;
+- **speed**: on a wave clear, 50 per enemy × a factor that is 1 up to par and falls to 0
+  at 2× par;
+- **hp**: on a stage clear, 10 per HP left before the heal, +50% if the stage cost no
+  damage;
+- **clear**: the mode's flat stage-clear bonus;
+- **kit**: a champion's own small awards (Magic Boy's E bolt, Axe Man's catches).
+
+`ScoreSystem` also keeps damage taken per source over the run and per stage, and the
+source of the killing blow, which the end screen shows ("What killed me").
+
+**Run log** (`RunHistory`): every finished run is appended to the profile (capped at 500),
+tagged with champion, mode, `DIFFICULTY.growth` and `BALANCE_VERSION`. "Best" only
+compares runs with the same four tags, so retuning the game bumps the version instead of
+leaving old runs unbeatable.
+
+**Profile** (`src/profile/Profile.ts`): one JSON document under `warmup.profile.v1`
+holding champion, mode, keybinds, mouse speed, settings, currency, cosmetics and runs.
+`Keybinds`, `MouseSpeed`, `Settings` and `RunHistory` are views over it with their old
+APIs. Loading is defensive: every field is validated and falls back to its default;
+`localStorage` access is wrapped in try/catch (private windows); old champion ids
+(`ezreal`, `cassiopeia`) and keybind action names are renamed on load; a missing profile is
+built by migrating the four keys used before the profile existed, which are then removed.
+`update(fn)` mutates and saves in one write.
+
+---
+
+## 17. Rendering: how Phaser is used
+
+### What Phaser does here, and what it doesn't
+
+| Phaser feature | Used for |
+| --- | --- |
+| `Game`, `Scene`, `update()` | The loop and the two scenes |
+| `Scale.FIT` | Letterboxing the 1280×720 world to any window |
+| Input plugin | `pointerdown` / `keydown` events, `activePointer.worldX/Y` |
+| `GameObjects.Image` | Every sprite (bodies, shadows, projectiles, props, icons, particles) |
+| `GameObjects.Graphics` | Rings, telegraphs, zones, bars, panels: anything drawn from shapes each frame |
+| `GameObjects.BitmapText` | All HUD text, in the generated 5×7 pixel font |
+| `Rectangle`, `Container`, `Zone` | Scrims, the start card, menu hit areas |
+| Texture manager | `textures.addCanvas(key, canvas)` for generated art |
+| Tweens | Decoration only: the start prompt pulse, the level pop, the hit rim fade |
+| Camera | Background colour and `shake()` |
+| `Phaser.Math` | `Clamp`, `Linear`, `Distance`, `Angle.Wrap`, random helpers |
+
+Not used: Arcade/Matter physics, the loader (no asset files), Phaser animations, the
+scene's timer events, cameras that move. Animation frames are chosen from gameplay
+progress and a view-local clock advanced by the frame's `dt`, so they freeze with the
+pause.
+
+### Art is code
+
+`art/sprites.ts` holds every sprite as rows of characters with a palette:
+
+```ts
+{ rows: ['..mm..', '.mLLm.', ...], pal: { m: 0x2b4a8c, L: [0xffffff, 0.6] } }
+```
+
+`spriteToCanvas` writes those into `ImageData` (1 art pixel = 1 canvas pixel) and
+`addPixelTexture` registers the canvas as a Phaser texture. `ensureArt()` does this once per
+game (textures outlive scene restarts). Sprites are drawn at `THEME.art.scale` (3×) with
+`pixelArt: true`, so they stay crisp. Ragged rows or unmapped characters throw at load.
+`TEX` holds every texture key, so swapping in real PNGs later is key-for-key.
+
+The 5×7 font is built the same way: a glyph sheet on a canvas plus generated BitmapText
+font data. The battlefield ground is painted once into a canvas with a fixed seed and a
+4×4 Bayer dither; props are decoration with no collision.
+
+### The player's look
+
+A champion authors only its body frames (`idle`, `squash`, `stretch`, `charge`, `cast`, plus
+extras its motions use). `art/look.ts` composes the body with cosmetics (`resolveLook`
+from the profile: a hat layer, a skin palette override) into new textures keyed by
+champion and look, and builds glow masks for pixels a motion can light. It throws at load
+if a motion names a frame the art doesn't have.
+
+### Motions
+
+A `Motion` is keyframes over a windup (0→1 through the real window) and a follow-through
+(ms after release): frame, squash/stretch, lean along the aim, hop, tremble, glow, with
+easing. `sampleMotion()` is pure. Because the windup is keyed to the real window's
+progress, the body can't run ahead of or lag the mechanic, and it speeds up with attack
+speed and haste. Keys with `minWindowMs` drop out of short windows instead of flickering.
+
+### Views
+
+Each entity has a view (`player.view`, `enemy.view`) that owns its Phaser objects and only
+reads state: `Enemy.pose` (moving, facing, windup progress, reach), `hp`, statuses, the
+lifecycle. Entities tell their view about events (`onHit`, `onDeath`) and the view plays
+them; a kill has already registered by the time the death pop plays. Sprite size never
+feeds collision.
+
+`Fx` pools particles, rings, shapes, damage numbers and popups (reused objects, advanced in
+`fx.update(dt)`). Projectile sprites are created and destroyed per shot.
+
+**Depth bands** (`THEME.depth`): ground 0 → pings → shadows → props → ground overlays (range
+ring, telegraphs) 8 → actors 10 (y-sorted by gameplay `y`) → projectiles 20 → effects →
+marks → bars → reticle → text → screen 60; the HUD sits at 100+, the start card at 300.
+
+**One-shot cues** (release burst, cancel tag, cast release) are not callbacks. Each frame
+the scene compares the owning system's timestamp (`lastReleaseAt`, `lastCancelAt`,
+`lastResolveAt`) with the last one it showed. If an effect failed to play, nothing about
+the mechanic would change.
+
+### UIScene
+
+Builds the HUD plates once, a per-champion ability bar and passive display (rebuilt when a
+round starts as someone else), the chat feed (mission briefings and "New threat" lines,
+derived from the polled stage), the pause menu with settings and rebinding, the start card
+(`ChampionRow`, `ModeRow`, tooltips) and the `EndScreen`. Banners and chat lines are
+derived by comparing the polled snapshot with what it last saw, timed on the run's clock
+(`hud.runTime`), so they freeze with the pause. `EndScreen` draws from the `RoundResult`
+and exposes its lines as plain text for the suites.
+
+---
+
+## 18. Collision and range
+
+No physics bodies, no spatial partitioning: explicit circle math, O(n·m) over small n and m.
+
+| Interaction | Test |
+| --- | --- |
+| Auto / homing bolt → its target | arrival: `step ≥ distance − target.radius` |
+| Player straight shot → enemy | circle vs circle, first touched (or each once if piercing) |
+| Player zone / cloud → enemy | enemy body overlaps the circle; cone adds the enemy's angular half-width |
+| Enemy zone / shot → player | player centre or body vs the shape at the deadline |
+| Attack range | `dx² + dy² ≤ (range + target.radius)²` |
+| Pursuer swing, Bulwark strike | distance / line test at the moment it resolves |
+| Body contact | circles overlap, once per 800ms per enemy |
+| Click hit test | `distance ≤ radius + 10` |
+
+All tests are **discrete**: positions are checked at frame boundaries only. With `dt`
+clamped at 50ms, a fast shot can move ~60px per frame, so a badly stuttering frame could
+tunnel past a small target.
+
+---
+
+## 19. Tests
+
+29 Playwright suites in `tests/e2e/` (`npm test`, ~5 minutes, one worker, no retries).
+Each is a **characterization script**: one long sequential scenario per area that records
+`pass` / `fail` / `warn` lines. `fail` is a soft assertion, so one failure doesn't hide the
+rest, but the test still fails at the end.
+
+The suites reach straight into the live game through the console handles, e.g.
+`window.__warmup.scene.getScene('GameScene').director`, `.attacks`, `.kit`, and through
+debug hooks such as `WaveDirector.arriveAllNow()`. `startSuite(page, testInfo, settleMs,
+{ champion, mode })` boots past the start card; `waitForGame` waits on **game time**
+(`clock.now ≥ settle`), not wall time. Headless Edge can tick at 300+ fps, so thresholds
+are in px/s or ms, never "per frame".
+
+`mouse-speed.spec.ts` takes a real pointer lock (it grabs the OS cursor on Windows even
+headless) and is skipped unless `PW_POINTER_LOCK=1`.
+
+`npm run typecheck` checks `src` and `tests` (`tests/tsconfig.json`) and should run before
+the suites.
+
+---
+
+## 20. Build and deploy
+
+`npm run build` type-checks and has Vite bundle to `dist/` (target ES2022). `wrangler.jsonc`
+deploys `dist/` as a Cloudflare Worker with **assets only**: no server code, and
+`not_found_handling: single-page-application` so unknown paths serve the game.
+`npx wrangler deploy` uploads it. The site is live at handsdiff.com.
+
+---
+
+## 21. Known simplifications vs League
 
 | Mechanic | League | Here |
 | --- | --- | --- |
-| Cancel refund | Strict rules | Total refund; cancel-spam is free (and damage-free) |
-| Attack speed | Stat with a cap | Per-stage base cycle × passive stacks |
-| Auto projectiles | Dodgeable by some abilities | Perfect homing; only target death stops them |
-| Target acquisition | Acquisition range > attack range, priority rules | Only in-range enemies; nearest-to-cursor or nearest-to-player |
-| Attack-move | Sticks to and chases the acquired target | Drops it when it leaves range (configurable) |
-| Attack-move order | Ends on arrival | Persists as a stance until the next command |
-| Movement | Pathfinding, unit collision, turn rate | Straight line, instant direction changes |
-| Hitboxes | Per-unit, some non-circular | Uniform circles |
-| Q | Ezreal: ~0.25s cast, on-hit effects, cooldown refund on hit | 165ms cast, no on-hit, refunds Q/W/E |
-| W | Targets specific unit types, damages on mark application | Marks any `Enemy`, damage is entirely on detonation |
-| E | Blink + bolt, on-hit effects | Blink + bolt, no on-hit |
-| Flash | Multi-minute cooldown | 20s, so it comes up repeatedly during a run |
-| Casting | Spell queueing, buffered casts | Hard ability lockout; move, attack-move and attack orders are buffered |
+| Enemy health | HP and damage numbers | Pips: every hit removes one |
+| Cancel refund | Rules per case | Total refund; cancel-spam is free and deals nothing |
+| Attack speed | A stat with a cap | Level perk × kit multiplier; windup floored at 90ms |
+| Autos | Can be blocked or dodged by some abilities | Perfect homing; only the target dying stops one |
+| Target acquisition | Acquisition range > attack range | Only enemies already in range; nearest the click |
+| Attack-move | Ends on arrival | Persists as a stance until the next command |
+| Movement | Pathfinding, unit collision, turn rate | Straight lines, instant turns; enemies push each other, not you |
+| Hitboxes | Per unit | Circles |
+| Casting | Spell queueing | Other abilities ignored mid-cast; move/attack orders buffered; Flash allowed |
+| Flash | 300s cooldown | 20s, so it comes up repeatedly |
 | i-frames | Not a League concept | 250ms after any hit |
+| Enemy aim | Players aim | A cursor that travels at a capped speed; casters lead your movement |
 
-Where it *does* match: cooldown starting at windup start, centre-to-hitbox-edge range,
-contextual right-click, attack orders not cancelling committed swings, move orders
-cancelling uncommitted ones, and cast windows committing their aim at keypress.
+Where it does match: cooldown from windup start, centre-to-edge range, contextual
+right-click, attack orders not cancelling a committed swing, move orders cancelling an
+uncommitted one, cast aim committed at keypress, Flash carrying a cast (and R staying
+anchored).
 
 ---
 
-## 19. Technical debt
+## 22. Technical debt (verified 2026-10-05)
 
-### Important
+### Worth fixing
 
-1. *(Resolved in the pixel-art pass.)* Colours and effect timings now live only in
-   `theme.ts`; the dead `balance.ts` colours, the `UI` block, `INDICATORS`,
-   `BANNERS` and the visual-only ability/enemy fields were removed.
-2. **`stopsOnFirstHit` is now dead.** Both `SKILLSHOT_Q.stopsOnFirstHit` and
-   `SKILLSHOT_W.stopsOnFirstHit` are documented but unread — the generalised
-   `SkillshotSystem` kills the missile unconditionally on contact. Setting either
-   `false` does not produce a piercing shot.
-3. **`GameScene` is ~800 lines** and has become the ability orchestrator by accident:
-   arena drawing, command handling, hit testing, ping effects, cast routing,
-   detonation, passive granting, round lifecycle and the HUD snapshot all live there.
-4. **In-flight projectiles freeze on round end.** `update()` returns early when the
-   round is over, so missiles hang mid-air under the end overlay.
-5. **Discrete collision, no swept test.** At the `dt` clamp a Q bolt moves 95px per
-   frame against a 25px collision radius.
+1. **`Enemy.spawnId` is always 0.** It is declared as a "generational guard" and
+   captured by every homing missile, but nothing ever assigns it (only `FangBolt` copies
+   it). It is harmless today because missiles hold the enemy *object* and every wave
+   creates new objects, so `target.active` does the real guarding. Either assign it in
+   `WaveDirector.spawnEnemy` or delete it.
+2. **`RunEvents` is not strictly one-way** (§12): Magic Boy's mark detonates from a
+   `'hit'` listener. Fine with one gameplay listener; fragile with two.
+3. **`stopsOnFirstHit` is dead config** in `champions/magicboy/balance.ts` (Q and W). The
+   real switch is `ShotSpec.pierce`; setting the old flag does nothing.
+4. **In-flight projectiles freeze on death.** `update()` stops when the run ends, and
+   `endRound` cancels attacks and casts but doesn't clear missiles, so shots hang under the
+   end screen.
+5. **Discrete collision** (§18): no swept test for fast shots on a stuttering frame.
+6. **i-frames are global.** A swing and a glob landing within 250ms of each other: the
+   second is silently eaten.
 
 ### Minor
 
-6. **Dead public API**: `AttackSystem.hasFired`, `AttackSystem.cooldownRemaining`,
-   `Projectile.team` are read by nothing in `src/`.
-7. **`Projectile.isOutOfBounds()` uses `ENEMY_PROJECTILES.cullMargin`** for the
-   player's Q and W too — correct behaviour, misleading constant.
-8. **The drawn range ring assumes all enemies share `TARGETS.radius`.** With the
-   Pursuer at radius 26, the ring is exact for basic targets and conservative for
-   Pursuers; the per-target reticle is the accurate cue.
-9. *(Resolved.)* Shared enemy feedback timings moved to `THEME.enemy`.
-10. **`attacksFired` counts releases with no missile** (target died mid-windup).
-11. **i-frames are global**, so a Pursuer swing and a projectile landing together
-    means one is silently eaten.
-12. **`HudState` is ~35 fields** — one grab-bag for every HUD region.
-13. **Small animation constants remain inline in the views** (hit-squash amount,
-    ghost-bar drain rate, bob/pulse speeds, spark speeds). Colours no longer do.
-14. **`AbilityId` / `CastAbility` unions are declared in three places** (cooldown
-    durations, cast system, HUD).
+7. `AttackSystem.hasFired` is unused anywhere.
+8. `Projectile.isOutOfBounds()` uses `ENEMY_PROJECTILES.cullMargin` for player shots too:
+   correct behaviour, misleading name.
+9. The drawn range ring uses the basic slime's radius; it is exact for slimes and
+   conservative for bigger mobs. The target reticle is the per-target truth.
+10. `GameScene.update()` calls `attacks.hasTargetInRange()` for the metrics, repeating the
+    range scan `attacks.update()` already did.
+11. `AttackMoveOrder.destX/Y` and `cursorX/Y` are always set to the same point.
+12. `KitingMetrics.attacksFired` counts a release whose target died mid-windup (no
+    missile), so `fired − landed` overstates misses.
 
-### Future cleanup
+### Resolved since the last report
 
-15. Particles, rings, pings and damage numbers are pooled in `Fx`; projectile sprites
-    are still created/destroyed per shot. Fine at current densities.
-16. `GameScene.update()` calls `attacks.hasTargetInRange(enemies)` purely for metrics,
-    duplicating the range scan `attacks.update()` already did.
-17. **No tests live in the repository.** The eleven browser suites that validate every
-    system live in the session scratchpad, not in `src/` or `tests/`, so they are not
-    runnable from a clean checkout. This is the single biggest gap.
-18. `AttackMoveOrder.dest` / `.cursor` are always set to the same point.
+The browser suites now live in the repo (29 of them) and run with `npm test`;
+`SkillshotSystem` and the global `PassiveSystem` were replaced by
+`PlayerProjectileSystem` and kit-owned passives; enemy HP became pips; `GameScene` lost
+the round lifecycle (`Run`), the hit funnel (`Combat`) and presentation reactions
+(`RunFeedback`); keybinds and settings moved into the one profile document.
 
 ---
 
-## 20. Extending it
+## 23. Extending it
 
-**More abilities (R).** `SkillshotSystem`'s `SPECS` table is the seam: one projectile
-loop, per-ability config + on-hit effect. Add a config block, a `SPECS` entry, an
-`AbilityId`, a keybind, a `CommandHandler` method and an `AbilityBar` slot. Cast
-windows come free via `beginCastOrResolve`.
-
-**More enemies.** Its config block + an `ENEMIES` entry + one `Enemy` subclass and view
-+ one `ARCHETYPES` line in `WaveDirector`. Generated stages pick it up from its
-`unlockStage`. Nothing else changes.
-
-**More stages or waves.** Edit `STAGES` to change the hand-written intro (any stage past
-it is generated), or `ENDLESS.wavesPerStage` for generated stages. `validateConfig()`
-rejects empty stages and malformed registry entries at startup.
-
-**Drill types / persistence.** `RoundResult` is a flat serialisable snapshot built in
-one place; the stage table and `ScoreSystem` are independent enough to swap per
-drill.
+- **A champion**: a folder under `src/champions/<id>/` (balance, art, motions, kit, index,
+  README) and one line in `CHAMPIONS`. Statuses via `applyStatus` + `registerStatusLook`.
+  Add a suite. See the README's "Adding a champion".
+- **A mob**: config block, `ENEMIES` entry, entity + view, one `ARCHETYPES` line, and its
+  end-screen colour and portrait. Generated stages pick it up from its `unlockStage`. See
+  the README's "Adding a mob".
+- **A mode**: an entry in `MODES` (numbers, an intro table, registry overrides).
+- **Stages**: edit a mode's intro table; everything past it is generated.
+- **Something that reacts to the run** (sound cues, currency): a `RunEvents` listener,
+  like `RunFeedback`.
+- **A tuning change that changes difficulty**: bump `BALANCE_VERSION` so "best" comparisons
+  stay fair.
 
 ---
 
-## 21. Accuracy notes
+## 24. How this was checked
 
-Verified while writing: config values quoted from source; the frame order transcribed
-from `GameScene.update()`; dead-config claims established by grepping each symbol
-across `src/` excluding `balance.ts`; measured timings (167/186/211ms cast→effect,
-750ms cooldown refund, 277px chase stop, 449px Q travel) taken from browser test
-runs, not from reading config.
-
-Where code and comments disagree, or a config value has no effect, it is listed in
-§19 rather than described as working.
+Written from the source at `a4a8da9`: the frame order is transcribed from
+`GameScene.update()`; the champion contract from `champions/types.ts`; formulas from
+`AttackSystem`, `Progression`, `Difficulty`, `ScoreSystem` and `Combat`; config values
+from `balance.ts` and `champions/magicboy/balance.ts`. Debt items were confirmed by
+searching each symbol across `src/` and `tests/` (e.g. `spawnId` has no writer;
+`hasFired` has no reader; `cooldownRemaining` and `Projectile.team` are read by the suites
+and so are not dead). Phaser usage was counted by searching every `add.*` call and
+`Phaser.*` reference.
