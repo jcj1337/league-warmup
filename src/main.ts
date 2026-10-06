@@ -35,7 +35,16 @@ const game = new Phaser.Game({
   },
   // GameScene simulates; UIScene runs on top of it and only reads state.
   scene: [GameScene, UIScene],
+  // No "Phaser vX" line in the player's console.
+  banner: false,
 });
+
+// Right-click is the move button: no browser menu anywhere on the page, letterbox included.
+// Added once here, not per round, so restarts never stack listeners.
+document.addEventListener('contextmenu', (event) => event.preventDefault());
+
+// The script has loaded and the game is booting: drop the HTML loading line.
+document.getElementById('loading')?.remove();
 
 // Handy while playtesting, from the browser console:
 //   __warmup.scene.getScene('GameScene').getHudState()

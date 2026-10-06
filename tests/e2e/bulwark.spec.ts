@@ -1,7 +1,7 @@
 import { test } from '@playwright/test';
 import { startSuite } from './support/harness';
 
-test('bulwark: capstone roster, walk, Strike + Heavy Strike, Path Maker (unstoppable, winded), All Out, stun breaks a Strike', async ({ page }, testInfo) => {
+test('bulwark: capstone roster, walk, Strike + Heavy Strike, Path Maker (unstoppable, winded), All Out, stun breaks a Strike, every hit lethal', async ({ page }, testInfo) => {
   const { pass, fail, section, finish } = await startSuite(page, testInfo, 400);
 
   const cfg = await page.evaluate(() => ({
@@ -11,21 +11,37 @@ test('bulwark: capstone roster, walk, Strike + Heavy Strike, Path Maker (unstopp
   }));
   const STAGE = cfg.E.bulwark.unlockStage;
 
-  /** Quiet arena on the Bulwark's unlock stage, player parked at (px, py), healthy, free of crowd control. */
-  const calm = (px = 640, py = 360) => page.evaluate(({ px, py, stage }) => {
+  /**
+   * Quiet arena on the Bulwark's unlock stage, player parked at (px, py), healthy, free of crowd control.
+   * Every Bulwark hit is lethal, so a section that let one land ended the run: a fresh one first.
+   */
+  const calm = async (px = 640, py = 360) => {
+    if (await page.evaluate(() => window.__warmup.scene.getScene('GameScene').getRoundResult() !== null)) {
+      await page.evaluate(() => window.__warmup.scene.getScene('GameScene').restartRound());
+      await page.waitForFunction(() => window.__warmup.scene.getScene('GameScene').getRoundResult() === null);
+      await page.waitForTimeout(200);
+    }
+    await page.evaluate(({ px, py, stage }) => {
+      const g = window.__warmup.scene.getScene('GameScene');
+      const d = g.director;
+      d.stageIndex = stage - 1; d.waveIndex = 0; d.currentPhase = 'wave';
+      g.enemyProjectiles.clear(); g.enemyProjectiles.nextSpawnAt = Number.POSITIVE_INFINITY;
+      g.hostileSpells.clear();
+      d.enemies.forEach((e) => e.destroy()); d.enemies.length = 0; d.pending.length = 0;
+      g.enemies = d.enemies;
+      g.player.hp = 100; g.player.lastHitAt = Number.NEGATIVE_INFINITY;
+      g.player.stunnedUntil = 0; g.player.slowUntil = 0; g.player.slowFraction = 0;
+      g.stunBuffered = null;
+      g.player.x = px; g.player.y = py; g.player.stop();
+      g.attacks.cancel(); g.attacks.state = 'idle'; g.attacks.clearMissiles(); g.projectiles.clear();
+    }, { px, py, stage: STAGE });
+  };
+  /** How the run stands: over or not, who the log blames, the player's HP. */
+  const outcome = () => page.evaluate(() => {
     const g = window.__warmup.scene.getScene('GameScene');
-    const d = g.director;
-    d.stageIndex = stage - 1; d.waveIndex = 0; d.currentPhase = 'wave';
-    g.enemyProjectiles.clear(); g.enemyProjectiles.nextSpawnAt = Number.POSITIVE_INFINITY;
-    g.hostileSpells.clear();
-    d.enemies.forEach((e) => e.destroy()); d.enemies.length = 0; d.pending.length = 0;
-    g.enemies = d.enemies;
-    g.player.hp = 100; g.player.lastHitAt = Number.NEGATIVE_INFINITY;
-    g.player.stunnedUntil = 0; g.player.slowUntil = 0; g.player.slowFraction = 0;
-    g.stunBuffered = null;
-    g.player.x = px; g.player.y = py; g.player.stop();
-    g.attacks.cancel(); g.attacks.state = 'idle'; g.attacks.clearMissiles(); g.projectiles.clear();
-  }, { px, py, stage: STAGE });
+    const r = g.getRoundResult();
+    return { over: r !== null, killedBy: r ? r.killedBy : null, hp: g.player.hp };
+  });
   /** A Bulwark at (x, y) with nothing ready; `ready` names what it may start ('strike', 'path'). */
   const place = (x: number, y: number, ready: string[] = [], set: Record<string, number> = {}) => page.evaluate(({ x, y, ready, set }) => {
     const g = window.__warmup.scene.getScene('GameScene');
@@ -49,7 +65,8 @@ test('bulwark: capstone roster, walk, Strike + Heavy Strike, Path Maker (unstopp
         state: b?.state, x: b?.x, y: b?.y, pips: b?.hp, heavy: b?.strikeHeavy, allOut: b?.allOut, unstoppable: b?.unstoppable,
         tel: b ? { ...b.view.telegraph } : null,
       });
-      if (g.clock.now - t0 >= ms) res(out); else requestAnimationFrame(tick);
+      // A lethal hit ends the run and freezes the clock: stop there instead of waiting for a time that never comes.
+      if (g.clock.now - t0 >= ms || g.getRoundResult() !== null) res(out); else requestAnimationFrame(tick);
     };
     tick();
   }), ms);
@@ -57,7 +74,6 @@ test('bulwark: capstone roster, walk, Strike + Heavy Strike, Path Maker (unstopp
     (s) => window.__warmup.scene.getScene('GameScene').director.enemies.find((e) => e.archetype === 'bulwark')?.state === s,
     state, { timeout: 4000 },
   );
-  const hit = (base: number) => page.evaluate((b) => Math.round(b * window.__warmup.scene.getScene('GameScene').director.difficulty.damage), base);
   /** Teleport the player (a sidestep mid-telegraph). */
   const movePlayer = (x: number, y: number) => page.evaluate(({ x, y }) => {
     const p = window.__warmup.scene.getScene('GameScene').player;
@@ -117,14 +133,14 @@ test('bulwark: capstone roster, walk, Strike + Heavy Strike, Path Maker (unstopp
   const strike = await watch(cfg.B.strike.windupMs + 200);
   {
     const winding = strike.filter((f) => f.state === 'strike');
-    const dmg = await hit(cfg.B.strike.damage);
     winding.length > 0 && winding.every((f) => f.tel.kind === 'strike' && f.tel.length === cfg.B.strike.length && Math.abs(Math.abs(f.tel.angle) - Math.PI) < 0.01 && f.hp === 100)
       ? pass(`within ${cfg.B.strike.length}px it roots and draws a ${cfg.B.strike.length}px line at you, locked`)
       : fail(`strike windup: ${JSON.stringify(winding[0])}`);
     const windupMs = winding.at(-1).t - winding[0].t;
-    Math.abs(windupMs - cfg.B.strike.windupMs) < 60 && strike.at(-1).hp === 100 - dmg && strike.at(-1).slowed && !strike.at(-1).stunned
-      ? pass(`it lands after ${cfg.B.strike.windupMs}ms: ${dmg} damage and a slow`)
-      : fail(`strike result: ${JSON.stringify({ windupMs, hp: strike.at(-1).hp, slowed: strike.at(-1).slowed })}`);
+    const landed = await outcome();
+    Math.abs(windupMs - cfg.B.strike.windupMs) < 60 && strike.at(-1).hp === 0 && landed.over && landed.killedBy === 'bulwark'
+      ? pass(`it lands after ${cfg.B.strike.windupMs}ms and kills outright, from full HP`)
+      : fail(`strike result: ${JSON.stringify({ windupMs, hp: strike.at(-1).hp, landed })}`);
   }
   // Sidestep during the windup.
   await calm();
@@ -143,13 +159,13 @@ test('bulwark: capstone roster, walk, Strike + Heavy Strike, Path Maker (unstopp
   const heavy = await watch(cfg.B.heavy.windupMs + 200);
   {
     const winding = heavy.filter((f) => f.state === 'strike');
-    const dmg = await hit(cfg.B.heavy.damage);
     winding.length > 0 && winding.every((f) => f.heavy && f.tel.kind === 'heavy' && f.tel.length === cfg.B.heavy.length)
       ? pass(`every ${cfg.B.strike.heavyEvery}rd Strike is Heavy: started from ${cfg.B.heavy.triggerRange - 20}px away, a ${cfg.B.heavy.length}px line`)
       : fail(`heavy windup: ${JSON.stringify(winding[0] ?? heavy[0])}`);
-    heavy.at(-1).hp === 100 - dmg && heavy.some((f) => f.stunned)
-      ? pass(`it lands for ${dmg} and stuns`)
-      : fail(`heavy result: ${JSON.stringify({ hp: heavy.at(-1).hp, stunned: heavy.some((f) => f.stunned) })}`);
+    const landed = await outcome();
+    heavy.at(-1).hp === 0 && landed.over && landed.killedBy === 'bulwark'
+      ? pass('it lands and kills outright')
+      : fail(`heavy result: ${JSON.stringify({ hp: heavy.at(-1).hp, landed })}`);
   }
   // A plain Strike does not reach that far.
   await calm();
@@ -180,34 +196,34 @@ test('bulwark: capstone roster, walk, Strike + Heavy Strike, Path Maker (unstopp
   braced.unstoppable && !braced.stunTook && braced.slowFactor === 1 && braced.lost === 1
     ? pass('braced, it is unstoppable: a stun does not take and a slow does not count, and a hit still removes its pip')
     : fail(`brace: ${JSON.stringify(braced)}`);
-  const path = await watch(cfg.B.pathMaker.braceMs + cfg.B.pathMaker.durationMs + cfg.B.pathMaker.windedMs + 300);
+  const path = await watch(cfg.B.pathMaker.braceMs + cfg.B.pathMaker.durationMs + 300);
   {
     const bracing = path.filter((f) => f.state === 'brace');
-    const dmg = await hit(cfg.B.pathMaker.damage);
     bracing.every((f) => f.tel.kind === 'path' && Math.abs(f.x - 940) < 1)
       ? pass('its whole path is drawn while it braces, rooted')
       : fail(`brace telegraph: ${JSON.stringify(bracing[0])}`);
-    const caught = path.find((f) => f.stunned);
-    caught && caught.hp === 100 - dmg
-      ? pass(`the ram catches you standing on the path: ${dmg} damage and a stun`)
-      : fail(`ram: ${JSON.stringify({ stunned: !!caught, hp: path.at(-1).hp })}`);
-    const winded = path.filter((f) => f.state === 'winded');
-    const windedMs = winded.length ? winded.at(-1).t - winded[0].t : 0;
-    winded.length > 0 && winded.every((f) => !f.unstoppable && Math.abs(f.x - winded[0].x) < 1) && Math.abs(windedMs - cfg.B.pathMaker.windedMs) < 60
-      ? pass(`then it stands winded for ${cfg.B.pathMaker.windedMs}ms, stoppable again`)
-      : fail(`winded: ${JSON.stringify({ frames: winded.length, windedMs })}`);
+    const caught = path.find((f) => f.hp === 0);
+    const landed = await outcome();
+    caught && landed.over && landed.killedBy === 'bulwark' && path.at(-1).state === 'winded'
+      ? pass('the ram catches you standing on the path: lethal, and it stops there')
+      : fail(`ram: ${JSON.stringify({ caught: !!caught, landed, state: path.at(-1).state })}`);
   }
-  // Off the path, it runs its full length past you.
+  // Off the path, it runs its full length past you, then stands winded.
   await calm();
   await place(940, 360, ['path']);
   await untilState('brace');
   await movePlayer(640, 520);
-  const missed = await watch(cfg.B.pathMaker.braceMs + cfg.B.pathMaker.durationMs + 200);
+  const missed = await watch(cfg.B.pathMaker.braceMs + cfg.B.pathMaker.durationMs + cfg.B.pathMaker.windedMs + 200);
   {
-    const travelled = 940 - missed.at(-1).x;
-    missed.at(-1).hp === 100 && !missed.some((f) => f.stunned) && Math.abs(travelled - cfg.B.pathMaker.distance) < 3 && Math.abs(missed.at(-1).y - 360) < 1
+    const winded = missed.filter((f) => f.state === 'winded');
+    const travelled = winded.length ? 940 - winded[0].x : 0;
+    missed.at(-1).hp === 100 && !missed.some((f) => f.stunned) && Math.abs(travelled - cfg.B.pathMaker.distance) < 3 && winded.length > 0 && Math.abs(winded[0].y - 360) < 1
       ? pass(`step off the path and it rams ${cfg.B.pathMaker.distance}px straight down it, past you`)
       : fail(`missed ram: ${JSON.stringify({ hp: missed.at(-1).hp, travelled })}`);
+    const windedMs = winded.length ? winded.at(-1).t - winded[0].t : 0;
+    winded.length > 0 && winded.every((f) => !f.unstoppable && Math.abs(f.x - winded[0].x) < 1) && Math.abs(windedMs - cfg.B.pathMaker.windedMs) < 60
+      ? pass(`then it stands winded for ${cfg.B.pathMaker.windedMs}ms, stoppable again`)
+      : fail(`winded: ${JSON.stringify({ frames: winded.length, windedMs })}`);
   }
 
   // === 6. All Out ==============================================================
@@ -264,6 +280,17 @@ test('bulwark: capstone roster, walk, Strike + Heavy Strike, Path Maker (unstopp
   held.every((f) => f.state === 'chase')
     ? pass('it starts nothing while you are stunned')
     : fail(`started ${held.find((f) => f.state !== 'chase')?.state} on a stunned player`);
+
+  // === 8. Lethal contact =======================================================
+  section('8. Lethal contact');
+  await calm();
+  // It stops short of you on its own (BULWARK.standOffPx), so this is you stepping into it: bodies overlapping, nothing ready.
+  await place(640 + cfg.B.radius, 360);
+  const touched = await watch(1500);
+  const contact = await outcome();
+  touched.some((f) => f.hp === 0) && contact.over && /^bulwark/.test(contact.killedBy ?? '')
+    ? pass(`its body touching yours is lethal too (logged as ${contact.killedBy})`)
+    : fail(`contact: ${JSON.stringify({ hp: touched.at(-1).hp, contact })}`);
 
   await finish();
 });

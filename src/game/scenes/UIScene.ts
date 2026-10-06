@@ -367,7 +367,9 @@ export class UIScene extends Phaser.Scene {
       (id) => this.pickChampion(id),
     );
     this.modeRow = new ModeRow(this, cx, cy + 140, Object.values(MODES), modeOf(Profile.data.mode).id, (id) => this.pickMode(id));
-    const prompt = pixelText(this, cx, cy + 188, 'CLICK OR PRESS ANY KEY', 3, THEME.ui.text).setOrigin(0.5);
+    // A touch-only device (no mouse at all) cannot right-click to move: say so instead of inviting a tap.
+    const touchOnly = typeof window.matchMedia === 'function' && !window.matchMedia('(any-pointer: fine)').matches;
+    const prompt = pixelText(this, cx, cy + 188, touchOnly ? 'NEEDS A MOUSE AND KEYBOARD' : 'CLICK OR PRESS ANY KEY', 3, THEME.ui.text).setOrigin(0.5);
 
     // UIScene's tweens never pause, so the prompt keeps breathing while the run is held.
     this.tweens.add({

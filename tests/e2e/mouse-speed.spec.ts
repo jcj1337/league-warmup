@@ -62,7 +62,7 @@ test('mouse speed: pause-menu slider, League-style cursor multiplier under point
     const sl = await slider();
     await page.mouse.click(sl.x0 - 4, sl.y);
     let s = await state();
-    s.speed === 0 && s.shown === '0.0' ? pass('clicking the track start sets 0.0') : fail(`min: ${JSON.stringify(s)}`);
+    s.speed === 0.1 && s.shown === '0.1' ? pass('clicking the track start sets 0.1 (MOUSE.minSpeed)') : fail(`min: ${JSON.stringify(s)}`);
     await page.mouse.click(sl.x0 + sl.width + 4, sl.y);
     s = await state();
     s.speed === 10 && s.shown === '10.0' ? pass('clicking the track end sets 10.0') : fail(`max: ${JSON.stringify(s)}`);

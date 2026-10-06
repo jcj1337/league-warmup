@@ -52,11 +52,9 @@ export const AXE_MAN: Champion = {
     const heals: number[] = [];
     for (let heal = H.base; heal < H.max; heal += H.perCatch) heals.push(heal);
     return [
-      'Q readies an axe; your next auto throws it',
-      'Stand in the circle where it lands to catch it',
       `Each catch in a row heals more: ${[...heals, H.max].join(', ')} HP`,
       `Miss one and the next catch heals ${H.base} again`,
-      `A catch also readies W and scores +${Q.catchScoreBonus}`,
+      `A catch scores +${Q.catchScoreBonus}`,
     ];
   },
   createKit: (ctx) => new AxeManKit(ctx),

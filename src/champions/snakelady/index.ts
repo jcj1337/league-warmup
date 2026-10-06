@@ -56,8 +56,7 @@ export const SNAKE_LADY: Champion = {
     `E on a poisoned enemy takes ${R.poisonedFangCooldownReductionMs}ms off R's cooldown`,
     `E removes ${E.pipsOnPoisoned} pips from a poisoned enemy`,
     `A kill with E scores +${E.killScoreBonus}`,
-    "Poison can't finish a Magus or Sovereign",
-    'R stuns enemies facing her, slows the rest',
+    "Poison DOT can't last hit spellcaster mobs",
   ],
   createKit: (ctx) => new SnakeLadyKit(ctx),
 };

@@ -1,4 +1,4 @@
-import { DIFFICULTY, ENEMIES, type Mode } from '../../config/balance';
+import { DIFFICULTY, ENEMIES, enemyEntry, type Mode } from '../../config/balance';
 import type { DamageKind, Enemy, EnemyArchetype } from '../entities/Enemy';
 import type { Player } from '../entities/Player';
 import type { RunEvents } from '../RunEvents';
@@ -65,7 +65,9 @@ export class Combat {
   enemyHit(damage: number, source: EnemyArchetype, kind: DamageKind = 'attack'): void {
     const diff = this.director.difficulty;
     const mult = kind === 'contact' ? diff.contactDamage : diff.damage;
-    this.playerHit(Math.round(damage * mult), kind === 'contact' ? `${source}Contact` : source);
+    // A lethal mob (ENEMIES[id].lethal) kills with any hit, contact included: its damage number is ignored.
+    const amount = enemyEntry(source, this.mode).lethal ? Number.POSITIVE_INFINITY : Math.round(damage * mult);
+    this.playerHit(amount, kind === 'contact' ? `${source}Contact` : source);
   }
 
   /**

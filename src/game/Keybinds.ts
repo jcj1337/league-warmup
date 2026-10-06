@@ -136,9 +136,18 @@ class KeybindStore {
 
 export const Keybinds = new KeybindStore();
 
-/** Keys that can never be bound to an action. */
+/**
+ * Keys that can never be bound to an action: Escape, and keys the browser or
+ * OS acts on before the page can stop it, or that the page can only stop
+ * during play (reload, fullscreen, devtools, address bar, the Windows key,
+ * media and launcher keys). Bound, they would reload or leave the page from
+ * the menus. The pattern lives inside the function: `Keybinds` is built (and
+ * calls this) while the module is still loading, before any module-level
+ * const below it exists.
+ */
 export function isReserved(code: string): boolean {
-  return code === KEYBINDS.cancel;
+  return code === KEYBINDS.cancel
+    || /^(F5|F6|F11|F12|Meta(Left|Right)|OS(Left|Right)|ContextMenu|Browser\w+|Launch\w+|Media\w+|Audio\w+|Unidentified)$/.test(code);
 }
 
 function defaults(): Record<BindableAction, string> {

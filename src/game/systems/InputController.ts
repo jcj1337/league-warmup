@@ -71,9 +71,7 @@ export class InputController {
     private readonly scene: Phaser.Scene,
     private readonly cmd: CommandHandler,
   ) {
-    // No browser context menu on right-click inside the canvas.
-    scene.input.mouse?.disableContextMenu();
-
+    // The browser context menu is blocked page-wide, once, in main.ts.
     scene.input.on('pointerdown', this.onPointerDown, this);
     // One keyboard listener + a binding table, so keys stay rebindable.
     scene.input.keyboard?.on('keydown', this.onKeyDown, this);
@@ -145,6 +143,7 @@ export class InputController {
   }
 
   private onKeyDown(event: KeyboardEvent): void {
+    if (event.repeat) return;
     const code = event.code;
 
     if (KEYBINDS.restart.includes(code) && !this.cmd.isRoundRunning()) {

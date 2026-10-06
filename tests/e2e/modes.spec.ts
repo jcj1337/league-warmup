@@ -298,7 +298,7 @@ test('modes: the profile picks the mode, damage, stage-clear bonus, rosters (whe
       said[t.id] = ((await page.evaluate(() => window.__warmup.scene.getScene('UIScene').championRow.tooltipText as string[] | null)) ?? []).join(' | ');
     }
     /^Magic Boy \| E's bolt scores \+10 when it hits/.test(said.magicboy) && /^Snake Lady \| E on a poisoned enemy takes 500ms off R's cooldown/.test(said.snakelady) && /A kill with E scores \+10/.test(said.snakelady)
-      && !/comes back through/.test(said.magicboy) && /A catch also readies W and scores \+10/.test(said.axeman)
+      && !/comes back through/.test(said.magicboy) && /A catch scores \+10/.test(said.axeman) && !/readies/.test(said.axeman) && !/R stuns/.test(said.snakelady)
       && /^Axe Man \| .*heals more: 5, 10, 15, 20 HP/.test(said.axeman) && (await picker()).champion === s.champion
       ? pass('hovering a champion shows its own rules, with the live numbers; hovering picks nothing')
       : fail(`champion tooltips: ${JSON.stringify(said)}`);

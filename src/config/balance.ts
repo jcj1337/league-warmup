@@ -186,7 +186,8 @@ export const KEYBINDS = {
  */
 export const MOUSE = {
   defaultSpeed: 1,
-  minSpeed: 0,
+  /** Not 0: at 0 the locked cursor cannot move at all. */
+  minSpeed: 0.1,
   maxSpeed: 10,
   step: 0.1,
 };
@@ -523,8 +524,10 @@ export const SOVEREIGN = {
  * capstone of a stage (ENEMIES.bulwark.capstone): one in the last wave. It
  * walks you down and never keeps its distance. Everything it does is a
  * telegraph, and it loses pips like anything else while it does it: the drill
- * is staying on one target for seconds without tunnelling. Damage is flat,
- * stage-scaled like every enemy attack (DIFFICULTY.damage).
+ * is staying on one target for seconds without tunnelling. Every hit it lands
+ * kills outright (ENEMIES.bulwark.lethal); the damage numbers below only
+ * apply to a mode that turns that off, flat and stage-scaled like every
+ * enemy attack (DIFFICULTY.damage).
  */
 export const BULWARK = {
   radius: 34,
@@ -738,6 +741,13 @@ export interface EnemyEntry {
   pips: { start: number; every: number; max: number };
   /** Damage when its body touches yours (×DIFFICULTY.contactDamage), at most once per CONTACT.cooldownMs. */
   contactDamage: number;
+  /**
+   * Every hit it lands kills outright, body contact included: its damage
+   * numbers (contactDamage, its moves' damage) are ignored, and so is the
+   * mode's damage multiplier. Applied in Combat.enemyHit, the one place enemy
+   * damage reaches the player.
+   */
+  lethal?: boolean;
   /** XP the player earns for killing one (see LEVELS). */
   xp: number;
   /**
@@ -799,6 +809,10 @@ export const ENEMIES = {
     // 14 at its Stage 8 debut, 16 from Stage 14, 18 from Stage 20.
     pips: { start: 12, every: 3, max: 18 },
     contactDamage: 12,
+    // Slow and telegraphed, so every hit it does land is the run: a Strike, the
+    // ram, or just its body touching yours. The numbers above and in BULWARK
+    // only apply to a mode that turns this off.
+    lethal: true,
     xp: 6,
   },
 } satisfies Record<string, EnemyEntry>;

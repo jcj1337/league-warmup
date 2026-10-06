@@ -280,6 +280,8 @@ export class PursuerView extends EnemyView {
   /** Plain readout of the dash path telegraph, for inspection. */
   readonly dashPath = { visible: false, angle: 0 };
   private swingAge = Number.POSITIVE_INFINITY;
+  /** visualMs of the last dash-trail puff. */
+  private lastTrailAt = Number.NEGATIVE_INFINITY;
 
   constructor(scene: Phaser.Scene, private readonly pursuer: Pursuer, art: EnemyArt) {
     super(scene, pursuer, art);
@@ -351,7 +353,9 @@ export class PursuerView extends EnemyView {
       return;
     }
     this.dashPath.visible = false;
-    if (p.state === 'dash') {
+    // One puff per 24ms, not per frame, so the trail looks the same at 60Hz and 240Hz (as BulwarkView's ram).
+    if (p.state === 'dash' && this.visualMs - this.lastTrailAt >= 24) {
+      this.lastTrailAt = this.visualMs;
       Fx.of(this.scene).trail(p.x, p.y, { color: D.trail, life: 180, size: 9 });
     }
   }

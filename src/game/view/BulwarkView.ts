@@ -85,7 +85,8 @@ export class BulwarkView extends EnemyView {
     for (const along of [0.35, 0.7, 1]) {
       fx.sparks(b.x + Math.cos(angle) * length * along, b.y + Math.sin(angle) * length * along, L.dust, 4, 110, L.ms * 1.3, 3);
     }
-    if (landed) this.scene.cameras.main.shake(L.shakeMs, L.shakeIntensity * (heavy ? 1.5 : 1));
+    // force: the generic hit shake (RunFeedback) has already started this frame and would swallow this one.
+    if (landed) this.scene.cameras.main.shake(L.shakeMs, L.shakeIntensity * (heavy ? 1.5 : 1), true);
   }
 
   /** The ram caught the player. */
@@ -94,7 +95,7 @@ export class BulwarkView extends EnemyView {
     fx.flashDisc(x, y, 40, 220, T.ram.hit, 0.5);
     fx.wave(x, y, 8, 52, 280, T.ram.hit, 1, 3);
     fx.sparks(x, y, T.slam.dust, 8, 200, 320, 3);
-    this.scene.cameras.main.shake(T.slam.shakeMs, T.slam.shakeIntensity * 1.5);
+    this.scene.cameras.main.shake(T.slam.shakeMs, T.slam.shakeIntensity * 1.5, true);
   }
 
   /** It goes All Out: rings off the body, its plates thrown clear. */

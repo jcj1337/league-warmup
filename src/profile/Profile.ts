@@ -27,7 +27,7 @@ const KEYBIND_RENAMES: Record<string, string> = { skillshotQ: 'abilityQ', skills
 /** Saved bindings under their current action names. */
 function upgradeKeybinds(raw: Record<string, string>): Record<string, string> {
   const out: Record<string, string> = {};
-  for (const [action, code] of Object.entries(raw)) out[KEYBIND_RENAMES[action] ?? action] = code;
+  for (const [action, code] of Object.entries(raw)) out[Object.hasOwn(KEYBIND_RENAMES, action) ? KEYBIND_RENAMES[action] : action] = code;
   return out;
 }
 
@@ -35,7 +35,7 @@ function upgradeKeybinds(raw: Record<string, string>): Record<string, string> {
 const CHAMPION_RENAMES: Record<string, string> = { ezreal: 'magicboy', cassiopeia: 'snakelady' };
 
 function upgradeChampion(id: string): string {
-  return CHAMPION_RENAMES[id] ?? id;
+  return Object.hasOwn(CHAMPION_RENAMES, id) ? CHAMPION_RENAMES[id] : id;
 }
 
 /** Keys the stores used before the profile existed; read once and removed by `migrate`. */

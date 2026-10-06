@@ -18,7 +18,8 @@ export type ChampionId = keyof typeof CHAMPIONS;
 export const DEFAULT_CHAMPION: ChampionId = 'magicboy';
 
 export function isChampionId(id: string): id is ChampionId {
-  return id in CHAMPIONS;
+  // Own keys only: `in` would also accept 'constructor', 'toString', ... from Object.prototype.
+  return Object.hasOwn(CHAMPIONS, id);
 }
 
 /** The champion the next run uses: the profile's pick, or the default if that's unknown. */

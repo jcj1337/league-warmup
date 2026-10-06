@@ -37,20 +37,20 @@ makes it fail). Run it with `PW_POINTER_LOCK=1` when you're not using the machin
 | `T` | Attack Move Click — the same order as A + left-click, issued at the cursor |
 | `A` then left-click | Attack Move toward that point |
 | Left-click an enemy | Direct attack order (convenience) |
-| `Q` | Damage skillshot toward the cursor |
-| `W` | Mark skillshot — marks on contact, detonates on your next hit |
-| `E` | Blink toward the cursor, then a homing bolt |
+| `Q` / `W` / `E` | The champion's abilities, aimed at the cursor (see [Champions](#champions)) |
+| `R` | The champion's ultimate, during a run |
 | `F` | Flash: instant summoner blink, no damage |
 | `S` | Stop: freeze in place, drop all orders |
 | `Z` | Chat feed: light / dark |
 | `Esc` | Back out of armed A-targeting, else open/close the pause menu |
-| `R` / `Space` | Restart from the end screen |
+| `R` / `Space` | Restart, on the end screen only |
 
 **Rebinding.** Every key above except `Esc` and the restart keys can be rebound from the
 pause menu: click a row, press the new key (`Esc` backs out). Picking a key that's
 already in use **swaps** the two, so nothing is left unbound; **Reset keys** restores the
 defaults. Keys are physical keys, so Shift and Caps Lock don't change them, and Caps
-Lock, Tab, Shift, digits and so on are all bindable. The ability bar shows your keys.
+Lock, Tab, Shift, digits and so on are all bindable. Keys the browser or OS acts on
+first (F5, F6, F11, F12, the Windows key, media keys) are refused. The ability bar shows your keys.
 Bindings are **saved in this browser** (localStorage): they survive closing the tab
 and restarting the browser, on this device, until profiles exist. On macOS, the browser only reports Caps Lock when it
 switches on, so a Caps Lock bind fires every other press there; it's fine on Windows.
@@ -457,13 +457,15 @@ same red ground, outlined in void lavender instead of the Magus's gold. Tuned in
 A stage's capstone: big, slow and many-pipped, with every move a telegraph. It is the one
 enemy that lives long enough for sustained damage on a single target to matter, so the
 drill is **staying on it for seconds without tunnelling**. It loses a pip to every hit
-whatever it is doing; nothing it does reduces damage.
+whatever it is doing; nothing it does reduces damage. In return, **every hit it lands is
+lethal**: a Strike, the ram, or just its body touching yours ends the run from full HP,
+in every mode (`ENEMIES.bulwark.lethal`).
 
 | Move | Telegraph | Hit |
 | --- | --- | --- |
-| Strike (Q) | within 150px it roots for 450ms with a red line **locked** toward where you stood (150 long, 30 either side), then slams | 14 + 30% slow for 800ms. At most once per 1.8s |
-| Heavy Strike | every **third** Strike: a 300px line with a white-hot outline and a `!`, 600ms. Started from up to 280px away | 14 + a **400ms stun** |
-| Path Maker (W) | from 180–380px, every 8s: it braces for 700ms behind crossed clubs, its whole path (300px, as wide as its body) drawn with chevrons running down it, then rams down it in 350ms | its body catching you: 20 + a **500ms stun**, and it stops there |
+| Strike (Q) | within 150px it roots for 450ms with a red line **locked** toward where you stood (150 long, 30 either side), then slams | **lethal**. At most once per 1.8s |
+| Heavy Strike | every **third** Strike: a 300px line with a white-hot outline and a `!`, 600ms. Started from up to 280px away | **lethal** |
+| Path Maker (W) | from 180–380px, every 8s: it braces for 700ms behind crossed clubs, its whole path (300px, as wide as its body) drawn with chevrons running down it, then rams down it in 350ms | its body catching you: **lethal**, and it stops there |
 | All Out (R) | at two thirds of its pips, a 400ms flare: its plates fly off | for the rest of its life: 1.5× speed (never above 0.8× yours), cooldowns ×0.6, every **second** Strike Heavy. Windups never change |
 
 **Unstoppable** from the start of the brace to the end of the ram, and through the All Out
@@ -515,13 +517,13 @@ saves it, and `PREFERENCES` in [balance.ts](src/config/balance.ts) holds the
 focus-loss default. From the console: `__settings.all()`,
 `__settings.pauseOnFocusLoss = false`.
 
-**Mouse Speed** (0.0–10.0, default 1.0; click or drag the track, scroll over it for ±0.1)
+**Mouse Speed** (0.1–10.0, default 1.0; click or drag the track, scroll over it for ±0.1)
 works like League's: a multiplier on how far the cursor moves, on top of your OS pointer
 speed. At 1.0 the game uses your normal cursor, untouched. At any other value the game
 takes a pointer lock while you play: it draws its own cursor, moves it by speed × your
 mouse movement, and keeps it inside the game. The lock is released whenever play stops
 (pause menu, end screen) and comes back on Resume or your next click. `Esc` still backs
-out of A-targeting or opens the menu. At 0.0 the cursor doesn't move. Saved in this browser,
+out of A-targeting or opens the menu. Saved in this browser,
 like key bindings. While the lock is held, losing focus always pauses (the browser drops
 the lock, which counts as `Esc`), whatever Pause on Focus Loss says. From the console: `__mouseSpeed.set(2.5)`, `.reset()`.
 Defaults in `MOUSE` in [balance.ts](src/config/balance.ts); the lock is

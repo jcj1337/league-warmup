@@ -5,6 +5,19 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='12' fill='%234ea1ff'/%3E%3C/svg%3E" />
     <title>hands diff by qwer</title>
+    <!-- What a pasted link shows (Discord, X, iMessage, search results). The image is public/preview.png;
+         link-preview crawlers need its full address, so these name the live domain. -->
+    <meta name="description" content="MUST... NOT... SPACEGLIDE IN CLASS !!!" />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://handsdiff.com/" />
+    <meta property="og:title" content="hands diff" />
+    <meta property="og:description" content="MUST... NOT... SPACEGLIDE IN CLASS !!!" />
+    <meta property="og:image" content="https://handsdiff.com/preview.png" />
+    <meta property="og:image:width" content="1280" />
+    <meta property="og:image:height" content="672" />
+    <meta property="og:image:alt" content="The hands diff start screen: pick a champion and a difficulty." />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="theme-color" content="#0d0b0c" />
     <style>
       html, body {
         margin: 0;
@@ -21,11 +34,24 @@
         width: 100%;
         height: 100%;
       }
-      /* Phaser also blocks this, but belt-and-braces: no context menu anywhere. */
+      /* A block canvas: no inline baseline gap under it. */
       canvas { display: block; }
+      /* Shown while the script downloads; main.ts removes it as the game boots. */
+      #loading, noscript p {
+        position: fixed;
+        inset: 0;
+        margin: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        letter-spacing: 0.1em;
+        color: #9c8f7a;
+      }
     </style>
   </head>
   <body>
+    <p id="loading">hands diff · loading…</p>
+    <noscript><p>hands diff needs JavaScript to run.</p></noscript>
     <div id="game"></div>
     <script type="module" src="/src/main.ts"></script>
   </body>

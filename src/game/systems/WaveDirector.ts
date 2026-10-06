@@ -462,7 +462,11 @@ export class WaveDirector implements EnemyFirePressure {
     if (this.currentPhase === 'wave') this.beginDueArrivals(nowMs);
 
     // Each enemy activates itself at its own activeAt before its AI runs.
-    for (const enemy of this.roster) enemy.update(deltaSeconds, nowMs, ctx);
+    for (const enemy of this.roster) {
+      // A corpse whose death pop has finished is already hidden: nothing left to run until the roster is replaced.
+      if (enemy.dead && !enemy.view.dying) continue;
+      enemy.update(deltaSeconds, nowMs, ctx);
+    }
     this.separate();
   }
 
