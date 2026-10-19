@@ -304,7 +304,7 @@ export class GameScene extends Phaser.Scene {
       castSlot: (slot, x, y) => this.castSlot(slot, x, y),
 
       // Flash stays instant, deliberately: it should feel more immediate than a
-      // blink slot. It cannot break a stun — dodging the orb is the counterplay.
+      // blink slot. It cannot break a stun; dodging the orb is the counterplay.
       // It can go off mid-cast, and the cast resolves from where she lands
       // (W-Flash, R-Flash: see CastSystem).
       castFlash: (x, y) => {
@@ -395,7 +395,7 @@ export class GameScene extends Phaser.Scene {
    * cannot act: mid-cast it is buffered in the CastSystem (see
    * CastSystem.bufferCommand), and while stunned it waits here. Either way
    * only the latest order survives, and it replays the instant the player is
-   * free — committed, never unresponsive.
+   * free, so it is committed but never unresponsive.
    */
   private issueOrder(run: () => void): void {
     if (this.cast.isCasting) this.cast.bufferCommand(run);
@@ -406,8 +406,8 @@ export class GameScene extends Phaser.Scene {
   /**
    * A Magus orb connected. Stunned: no movement, no attacks, no abilities
    * (Flash included). Whatever the player was committing to is interrupted
-   * with nothing lost but time — an uncommitted auto windup and a cast window
-   * both refund their cooldown — and the order queued behind the cast is kept
+   * with nothing lost but time. An uncommitted auto windup and a cast window
+   * both refund their cooldown, and the order queued behind the cast is kept
    * to replay when the stun ends.
    */
   private stunPlayer(ms: number): void {
@@ -421,7 +421,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   /**
-   * Start a cast window, or resolve immediately when castTimeMs is 0 — so any
+   * Start a cast window, or resolve immediately when castTimeMs is 0, so any
    * ability can be made instant from config alone.
    */
   private beginCastOrResolve(ability: CastAbility, payload: CastPayload, castTimeMs: number, anchored: boolean): void {
@@ -511,7 +511,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   /**
-   * The browser dropped the Mouse Speed pointer lock on its own — the player
+   * The browser dropped the Mouse Speed pointer lock on its own, because the player
    * pressed Escape (which the page usually never sees) or switched away.
    * Treated exactly like Escape: back out of A-targeting, else pause.
    */
@@ -583,7 +583,7 @@ export class GameScene extends Phaser.Scene {
     this.attacks.update(now, dt, this.enemies);
 
     // 2. ...then the visuals read it. This runs BEFORE player.update() so the
-    //    animation drawn this frame reflects this frame's attack state — a
+    //    animation drawn this frame reflects this frame's attack state; a
     //    frame of lag here would show the charge ring during recovery.
     const aimTarget = this.attacks.currentTarget;
     this.player.applyAttackVisual({

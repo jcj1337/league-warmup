@@ -21,7 +21,7 @@ test('waves: stage/wave progression, variable waves per stage, finite rosters, b
   // Progression is under test here, not survival: Pursuer swings land for 0, so
   // banner and arrival waits beside a live Pursuer can never kill the player.
   await page.evaluate(() => { window.__balance.PURSUER.attackDamage = 0; });
-  // Every count below comes from the stage table — nothing assumes a fixed number of waves.
+  // Every count below comes from the stage table; nothing assumes a fixed number of waves.
   const waveCounts: number[] = cfg.stages.map((s) => s.waves.length);
   const wavesTotal = waveCounts.reduce((sum, n) => sum + n, 0);
   const lastStage = cfg.stages.length;
@@ -101,7 +101,7 @@ test('waves: stage/wave progression, variable waves per stage, finite rosters, b
   }, [stage, wave]);
 
   /**
-   * Kill living enemies through the real kill path — Enemy.takeHit() and then
+   * Kill living enemies through the real kill path: Enemy.takeHit() and then
    * the scene's hit funnel, which scores the kill and reports it to the
    * director, exactly as an auto, Q or E bolt does. Optionally put a couple of
    * hostile volleys in the air first. `count` limits how many die.
@@ -211,7 +211,7 @@ test('waves: stage/wave progression, variable waves per stage, finite rosters, b
   idle.every((f) => f.stage === 1 && f.wave === 1 && f.phase === 'wave' && sameIds(f.ids, idle[0].ids))
     ? pass(`${((idle[idle.length - 1].clock - idle[0].clock) / 1000).toFixed(1)}s of play: still Stage 1 Wave 1, same ${idle[0].ids.length} enemies`)
     : fail(`progression moved without kills: ${JSON.stringify(idle.find((f) => f.stage !== 1 || f.wave !== 1 || f.phase !== 'wave' || !sameIds(f.ids, idle[0].ids)))}`);
-  // Jump the run clock two minutes ahead — far past the old 60s round.
+  // Jump the run clock two minutes ahead, far past the old 60s round.
   const beforeJump = await S();
   await page.evaluate(() => { window.__warmup.scene.getScene('GameScene').clock.ms += 120_000; });
   await waitFor((c) => window.__warmup.scene.getScene('GameScene').clock.now > c + 100, beforeJump.clock + 120_000);
@@ -295,7 +295,7 @@ test('waves: stage/wave progression, variable waves per stage, finite rosters, b
     await jumpTo(multi, 1);
     // The jump itself is a stage change, so the UI raises its "STAGE N" banner.
     // Let that finish first: an in-progress banner outranks "WAVE CLEAR". Wait
-    // for it to appear before waiting for it to go — polled straight after the
+    // for it to appear before waiting for it to go. Polled straight after the
     // jump, the UI may not have raised it yet, and "not visible" would pass early.
     await waitFor((text) => {
       const ui = window.__warmup.scene.getScene('UIScene');

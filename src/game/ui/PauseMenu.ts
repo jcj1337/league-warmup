@@ -68,7 +68,7 @@ const SETTING_ROW_H = 30;
  * and the key bindings.
  *
  * It lives in UIScene, which is never paused, so its buttons keep working while
- * the simulation is frozen. It owns no gameplay state — buttons call into
+ * the simulation is frozen. It owns no gameplay state. Buttons call into
  * `actions`, settings rows read/write through the stores they're given
  * (`Settings`, `MouseSpeed`), and key rows read/write `Keybinds`.
  *

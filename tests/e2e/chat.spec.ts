@@ -1,7 +1,7 @@
 import { test } from '@playwright/test';
 import { startSuite } from './support/harness';
 
-test('chat: system messages, missions + new threats, Z light/dark toggle, bottom-edge drag + input isolation, restart', async ({ page }, testInfo) => {
+test('chat: system messages, missions + new threats, Z light/dark toggle, bottom-edge drag + input isolation, edge resize, restart', async ({ page }, testInfo) => {
   const { pass, fail, section, finish } = await startSuite(page, testInfo, 400);
 
   const cfg = await page.evaluate(() => ({
@@ -226,6 +226,80 @@ test('chat: system messages, missions + new threats, Z light/dark toggle, bottom
     ? pass(`dragging past the bottom-right clamps the panel inside the viewport (${c.x},${c.y})`)
     : fail(`bottom-right clamp: ${c.x},${c.y}`);
 
+  // === 3b. Resizing from the other borders ===================================
+  section('3b. Resizing from the top and side borders');
+  await page.evaluate(() => window.__warmup.scene.getScene('UIScene').chat.moveTo(300, 300));
+  const r0 = await chat();
+  const gr0 = await game();
+  const bottomOf = (b) => b.y + b.h;
+  const rightOf = (b) => b.x + b.w;
+
+  await drag({ x: r0.x + 120, y: r0.y }, { x: r0.x + 120, y: r0.y + 40 });
+  let r = await chat();
+  r.y === r0.y + 40 && r.h === r0.h - 40 && bottomOf(r) === bottomOf(r0) && r.x === r0.x && r.w === r0.w && !r.dragging
+    ? pass(`dragging the top border down shrinks the panel (${r0.h} -> ${r.h} tall); the bottom stays put`)
+    : fail(`top shrink: ${JSON.stringify({ r0, r })}`);
+  await drag({ x: r.x + 120, y: r.y - 2 }, { x: r.x + 120, y: r.y - 62 });   // grabbed just above the line
+  let prev = r;
+  r = await chat();
+  r.y === prev.y - 60 && bottomOf(r) === bottomOf(prev)
+    ? pass('dragging it up grows it again, grabbed from just outside the border')
+    : fail(`top grow: ${JSON.stringify({ prev, r })}`);
+
+  prev = r;
+  await drag({ x: rightOf(r) - 1, y: r.y + 50 }, { x: rightOf(r) - 51, y: r.y + 50 });
+  r = await chat();
+  r.w === prev.w - 50 && r.x === prev.x && r.y === prev.y && r.h === prev.h
+    ? pass(`dragging the right border left narrows it (${prev.w} -> ${r.w}); the left stays put`)
+    : fail(`right resize: ${JSON.stringify({ prev, r })}`);
+  prev = r;
+  await drag({ x: r.x, y: r.y + 50 }, { x: r.x + 30, y: r.y + 50 });
+  r = await chat();
+  r.x === prev.x + 30 && r.w === prev.w - 30 && rightOf(r) === rightOf(prev) && r.h === prev.h
+    ? pass('dragging the left border right narrows it; the right stays put')
+    : fail(`left resize: ${JSON.stringify({ prev, r })}`);
+  prev = r;
+  await drag({ x: r.x + 1, y: r.y + 1 }, { x: r.x - 19, y: r.y - 9 });
+  r = await chat();
+  r.x === prev.x - 20 && r.y === prev.y - 10 && rightOf(r) === rightOf(prev) && bottomOf(r) === bottomOf(prev)
+    ? pass('the top-left corner resizes both ways at once')
+    : fail(`corner resize: ${JSON.stringify({ prev, r })}`);
+
+  // A minimum size, so it can't be shrunk away.
+  prev = r;
+  await drag({ x: r.x + 120, y: r.y }, { x: r.x + 120, y: bottomOf(r) + 200 });
+  await drag({ x: rightOf(prev) - 1, y: bottomOf(prev) - 20 }, { x: prev.x - 200, y: bottomOf(prev) - 20 });
+  r = await chat();
+  r.h === cfg.chat.minHeight && r.w === cfg.chat.minWidth && bottomOf(r) === bottomOf(prev) && r.x === prev.x
+    ? pass(`shrinking past the minimum stops at ${r.w}x${r.h}`)
+    : fail(`minimum: ${JSON.stringify({ prev, r, min: [cfg.chat.minWidth, cfg.chat.minHeight] })}`);
+  await page.waitForTimeout(40);
+  const shown = await page.evaluate(() => {
+    const c = window.__warmup.scene.getScene('UIScene').chat;
+    const newest = c.messages[c.messages.length - 1];
+    return { newest, visible: c.lines.filter((l) => l.visible).map((l) => ({ text: l.text, bottom: l.y + l.height, right: l.x + l.width })) };
+  });
+  shown.visible.some((l) => l.text === shown.newest) && shown.visible.every((l) => l.bottom <= bottomOf(r) && l.right <= rightOf(r))
+    ? pass(`at the minimum the newest message still shows, wrapped inside the panel ("${shown.newest}")`)
+    : fail(`text at minimum: ${JSON.stringify(shown)}`);
+
+  // Growing is clamped to the viewport.
+  prev = r;
+  await drag({ x: r.x + 40, y: r.y + 3 }, { x: r.x + 40, y: 1 });
+  r = await chat();
+  r.y === 0 && bottomOf(r) === bottomOf(prev) ? pass('dragging the top border past the viewport stops at its edge') : fail(`top clamp: ${JSON.stringify(r)}`);
+  const gr1 = await game();
+  !gr1.target && !gr1.aMove && !gr1.moving && gr1.px === gr0.px && gr1.py === gr0.py
+    ? pass('resize drags issue no gameplay command')
+    : fail(`resize leaked into gameplay: ${JSON.stringify({ gr0, gr1 })}`);
+
+  // Settle on a custom size for the restart check.
+  await drag({ x: r.x + 40, y: r.y }, { x: r.x + 40, y: bottomOf(r) - 90 });
+  await drag({ x: rightOf(r) - 1, y: bottomOf(r) - 20 }, { x: r.x + 299, y: bottomOf(r) - 20 });
+  c = await chat();
+  const sized = { w: c.w, h: c.h };
+  sized.w === 300 && sized.h === 90 ? pass('panel resized to 300x90') : fail(`custom size: ${JSON.stringify(c)}`);
+
   // Park it somewhere custom for the restart check.
   const custom = { x: 600, y: 150 };
   from = edgeOf(c, 20);
@@ -235,7 +309,7 @@ test('chat: system messages, missions + new threats, Z light/dark toggle, bottom
 
   // === 4. Mission messages ===================================================
   section('4. Mission messages');
-  await jumpTo(1, 1);                       // fresh Stage 1 roster — same stage, no new briefing
+  await jumpTo(1, 1);                       // fresh Stage 1 roster, same stage, no new briefing
   await page.waitForTimeout(100);
   const beforeKill = (await chat()).messages.length;
   await page.evaluate(() => {
@@ -319,6 +393,9 @@ test('chat: system messages, missions + new threats, Z light/dark toggle, bottom
   after.x === custom.x && after.y === custom.y
     ? pass(`the dragged position survives the restart (${after.x},${after.y})`)
     : fail(`position after restart: ${after.x},${after.y}, want ${custom.x},${custom.y}`);
+  after.w === sized.w && after.h === sized.h
+    ? pass(`the resized size survives the restart (${after.w}x${after.h})`)
+    : fail(`size after restart: ${after.w}x${after.h}, want ${sized.w}x${sized.h}`);
   darkBefore && after.dark && after.fill === cfg.chat.darkFillAlpha
     ? pass('the selected dark mode survives the restart')
     : fail(`mode after restart: dark=${after.dark} fill=${after.fill} (set before: ${JSON.stringify(darkBefore)})`);

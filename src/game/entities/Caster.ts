@@ -18,7 +18,7 @@ export interface CasterTuning {
 
 /**
  * Shared ground for the ranged casters (Magus, Sovereign): holding a spacing
- * band around the player, and aiming like a player would — where you're
+ * band around the player, and aiming like a player would, at where you're
  * heading when the spell lands (`aimLead`), plus a random offset rolled once
  * per cast (`rollAimOffset`) so the telegraph stays steady. That is where it
  * WANTS to aim; where it aims is its cursor (Enemy.aim), which has to travel.

@@ -167,7 +167,7 @@ test('visuals: pixel-art setup, no tether line, command markers, sprite units + 
   });
   await page.mouse.move(980, 520);
   await page.keyboard.press('q');
-  // Q has a cast window — wait for the bolt to actually spawn.
+  // Q has a cast window, so wait for the bolt to actually spawn.
   await page.waitForFunction(
     () => window.__warmup.scene.getScene('GameScene').projectiles.missiles.length > 0,
     null,

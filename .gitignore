@@ -1,6 +1,7 @@
 node_modules
 dist
 .vite
+docs/
 
 # Playwright output
 test-results/

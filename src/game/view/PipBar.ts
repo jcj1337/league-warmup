@@ -21,7 +21,7 @@ export interface PipCell {
  * Dark plate, two-tone filled segments (bright top, darker bottom) in the enemy
  * red, hollow dark segments for lost pips, and a brief pale flash on a pip as it
  * is lost. When whole pixels cannot split the width exactly, segments differ by
- * at most 1px. Pure view — handed the numbers every frame, never changes them.
+ * at most 1px. Pure view; it gets the numbers every frame and never changes them.
  */
 export class PipBar {
   /** Readouts for inspection: segments drawn, how many are filled, total inner width and each segment. */

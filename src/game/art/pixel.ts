@@ -23,7 +23,7 @@ export function spriteToCanvas(key: string, sprite: PixelSprite): HTMLCanvasElem
   const img = ctx.createImageData(canvas.width, canvas.height);
 
   sprite.rows.forEach((row, y) => {
-    // Authoring guard: a ragged row means a mistyped sprite — fail loudly.
+    // Authoring guard: a ragged row means a mistyped sprite, so fail loudly.
     if (row.length !== w) throw new Error(`pixel sprite "${key}" row ${y} is ${row.length} wide, expected ${w}`);
     for (let x = 0; x < w; x++) {
       const ch = row[x];

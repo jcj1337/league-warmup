@@ -29,7 +29,7 @@ test('orbwalk: movement, direct attack, attack-move, targeting, cancel, post-fir
     };
   });
 
-  // Quiet arena: no projectiles, no drift, full hp — mechanics only.
+  // Quiet arena: no projectiles, no drift, full hp, mechanics only.
   const calm = () => page.evaluate(() => {
     const s = window.__warmup.scene.getScene('GameScene');
     s.enemyProjectiles.clear();
@@ -95,7 +95,7 @@ test('orbwalk: movement, direct attack, attack-move, targeting, cancel, post-fir
   // === 7. Range ring matches the hit test =====================================
   section('7. Range ring matches the hit test');
   {
-    // The range ring is contextual now — force it on to compare it with the
+    // The range ring is contextual now, so force it on to compare it with the
     // hit test. This changes nothing about the range calculation itself.
     await page.evaluate(() => { window.__balance.DEBUG.attackRangeDisplay = 'always'; });
     await page.waitForTimeout(60);

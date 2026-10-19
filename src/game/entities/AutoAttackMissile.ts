@@ -61,7 +61,7 @@ export class AutoAttackMissile {
   update(deltaSeconds: number): void {
     if (!this.alive) return;
 
-    // The target may have died mid-flight — fizzle quietly.
+    // The target may have died mid-flight, so fizzle quietly.
     if (!this.target.active || this.target.spawnId !== this.targetSpawnId) {
       this.kill();
       this.onFizzle?.();

@@ -62,7 +62,7 @@ export class BlinkSystem {
   }
 
   /**
-   * F: the same blink geometry with no payload — no hit, no passive stack, and
+   * F: the same blink geometry with no payload: no hit, no passive stack, and
    * no champion ability ever refunds its cooldown.
    */
   castFlash(worldX: number, worldY: number): boolean {

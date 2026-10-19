@@ -46,7 +46,7 @@ export interface RoundResult {
   mode: string;
   kit: Record<string, number>;
   kitRows: KitStat[];
-  /** Mechanical counters for the kiting drill — see KitingMetrics. */
+  /** Mechanical counters for the kiting drill. See KitingMetrics. */
   attacksStarted: number;
   attacksFired: number;
   attacksCancelled: number;

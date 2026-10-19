@@ -18,7 +18,7 @@ export function speedFactor(elapsedMs: number, parMs: number): number {
 /**
  * Score and round tallies.
  *
- * Score only comes from doing things well — never from time alive, so
+ * Score only comes from doing things well, never from time alive, so
  * kiting one enemy forever earns nothing:
  *   kills   SCORE.pointsPerKill × the mob's scoreMultiplier
  *   speed   clearing a wave near its par time (see speedFactor)

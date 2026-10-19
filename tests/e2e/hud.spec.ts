@@ -296,22 +296,22 @@ test('hud: contextual range ring, pause freeze + input gate, Q slot, settings me
   await page.waitForTimeout(40);
   (await apm()).total === 0 ? pass('mouse movement records no actions') : fail(`mouse movement counted: ${(await apm()).total}`);
 
-  // An unbound key counts.
+  // Z only flips the chat feed, but that is the game acting on it: it counts.
   await page.keyboard.press('z');
   await page.waitForTimeout(40);
   const aZ = await apm();
-  aZ.total === 1 ? pass('unbound key Z counts as one action') : fail(`Z counted ${aZ.total}, want 1`);
+  aZ.total === 1 ? pass('chat toggle Z counts as one action') : fail(`Z counted ${aZ.total}, want 1`);
 
-  // Several different keys each count, bound or not (Q W E F A T S, X, 1).
-  const keys = ['q', 'w', 'e', 'f', 'a', 't', 's', 'x', '1'];
-  for (const k of keys) {
+  // Every bound key counts (Q W E F A T S); keys the game ignores (X, 1, 9) don't.
+  const keys = ['q', 'w', 'e', 'f', 'a', 't', 's'];
+  for (const k of [...keys, 'x', '1', '9']) {
     await page.keyboard.press(k);
     await page.waitForTimeout(30);
   }
   await page.waitForTimeout(40);
   const aKeys = await apm();
   aKeys.total === 1 + keys.length
-    ? pass(`${keys.length} different key presses each count (${aZ.total} -> ${aKeys.total})`)
+    ? pass(`${keys.length} bound key presses each count, X 1 9 add nothing (${aZ.total} -> ${aKeys.total})`)
     : fail(`keys counted ${aKeys.total - aZ.total}, want ${keys.length}`);
 
   // Clicks count even when they issue nothing meaningful: empty-ground left click
@@ -323,7 +323,7 @@ test('hud: contextual range ring, pause freeze + input gate, Q slot, settings me
   a1.total === aKeys.total + 2
     ? pass('left and right clicks on empty space each count')
     : fail(`clicks counted ${a1.total - aKeys.total}, want 2`);
-  // 12 actions, under 10s since reset, so the window floor applies: 12 / 10s * 60 = 72.
+  // 10 actions, under 10s since reset, so the window floor applies: 10 / 10s * 60 = 60.
   a1.value === Math.round((a1.total / 10000) * 60000)
     ? pass(`early APM is normalised over the 10s floor (${a1.total} actions -> ${a1.value})`)
     : fail(`early APM ${a1.value} for ${a1.total} actions`);
@@ -357,6 +357,7 @@ test('hud: contextual range ring, pause freeze + input gate, Q slot, settings me
     : fail(`held key: +${held.total - repeats} actions, ${held.repeats} repeat events seen`);
 
   // UI clicks count too: open the menu (Esc is a key press) and click a setting.
+  // Q behind the menu casts nothing, so it adds nothing.
   const beforeMenu = (await apm()).total;
   await page.keyboard.press('Escape');
   await page.waitForTimeout(80);
@@ -368,11 +369,13 @@ test('hud: contextual range ring, pause freeze + input gate, Q slot, settings me
     await page.mouse.click(settingValue.x, settingValue.y);
     await page.waitForTimeout(30);
   }
+  await page.keyboard.press('q');
+  await page.waitForTimeout(30);
   await page.keyboard.press('Escape');
   await page.waitForTimeout(80);
   const a2 = await apm();
   a2.total === beforeMenu + 4
-    ? pass('menu open/close keys and settings clicks each count (+4)')
+    ? pass('menu open/close keys and settings clicks each count (+4), Q while paused does not')
     : fail(`menu inputs counted +${a2.total - beforeMenu}, want +4`);
 
   // Mouse movement after all that still adds nothing.

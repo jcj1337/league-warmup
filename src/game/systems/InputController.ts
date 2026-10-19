@@ -34,9 +34,9 @@ export interface CommandHandler {
   targetAt(x: number, y: number): Enemy | null;
 
   /**
-   * One raw player input for the APM readout: any physical key press (not
-   * auto-repeat) or mouse-button press, bound or not, gameplay or UI. Never
-   * called for mouse movement or anything the game generates itself.
+   * One raw player input for the APM readout: a press (not auto-repeat) of a
+   * key the game acts on, or any mouse-button press, gameplay or UI. Never
+   * called for unbound keys, mouse movement or anything the game generates itself.
    */
   recordAction(): void;
 
@@ -77,16 +77,30 @@ export class InputController {
     scene.input.keyboard?.on('keydown', this.onKeyDown, this);
 
     // APM counts RAW input straight from the DOM, before Phaser decides who (if
-    // anyone) handles it — so menu clicks and unbound keys count too. These
-    // listeners outlive the scene unless removed, so drop them on shutdown.
+    // anyone) handles it — so menu clicks count too; keys go through
+    // `isActionKey`. These listeners outlive the scene unless removed, so drop
+    // them on shutdown.
     window.addEventListener('keydown', this.onRawKeyDown);
     scene.game.canvas.addEventListener('pointerdown', this.onRawPointerDown);
     scene.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.destroy());
   }
 
   private readonly onRawKeyDown = (event: KeyboardEvent): void => {
-    if (!event.repeat) this.cmd.recordAction();
+    if (!event.repeat && this.isActionKey(event.code)) this.cmd.recordAction();
   };
+
+  /**
+   * Whether a key press counts for APM: only keys the game acts on right now,
+   * so mashing unbound keys (or gameplay keys behind the pause menu) adds
+   * nothing. Mirrors `onKeyDown` and UIScene's chat toggle.
+   */
+  private isActionKey(code: string): boolean {
+    const action = Keybinds.actionFor(code);
+    if (action === 'chatMode') return true;
+    if (!this.cmd.isRoundRunning()) return KEYBINDS.restart.includes(code);
+    if (code === KEYBINDS.cancel) return true;
+    return action !== null && this.cmd.acceptsGameplayInput();
+  }
 
   private readonly onRawPointerDown = (): void => {
     this.cmd.recordAction();

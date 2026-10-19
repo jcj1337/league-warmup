@@ -14,11 +14,11 @@ import type { GameClock } from '../systems/GameClock';
  * Sovereign AI states. Everything but `reposition` is a cast, and she never
  * moves while casting.
  *
- *   reposition — hold the spacing band; start a spell when the gap allows
- *   sphere     — brief cast pose after placing a Dark Sphere (Q)
- *   grab       — Force of Will (W): lifting a sphere or another mob over her head
- *   throw      — the thrown thing in flight toward where it lands
- *   scatter    — Scatter (E): the cone fills; the spheres in it fly at the end
+ *   reposition:  hold the spacing band; start a spell when the gap allows
+ *   sphere:      brief cast pose after placing a Dark Sphere (Q)
+ *   grab:        Force of Will (W), lifting a sphere or another mob over her head
+ *   throw:       the thrown thing in flight toward where it lands
+ *   scatter:     Scatter (E); the cone fills and the spheres in it fly at the end
  */
 export type SovereignState = 'reposition' | 'sphere' | 'grab' | 'throw' | 'scatter';
 
@@ -51,8 +51,8 @@ const ART: EnemyArt = {
  * The Sovereign: an indigo-black sphere mage with a Syndra-style kit.
  *
  * She holds you just inside your Q range and builds a board of Dark Spheres
- * (Q), then uses it: Force of Will (W) throws a sphere — or any other mob of
- * her wave, which lands live — at where you're heading; Scatter (E) flings
+ * (Q), then uses it: Force of Will (W) throws a sphere, or any other mob of
+ * her wave, which lands live, at where you're heading; Scatter (E) flings
  * every sphere in a short cone outward along the line from her, stunning what
  * it hits. She hunts that angle: she casts Scatter when a sphere lines up with
  * you, and sometimes drops a sphere between you and her first (Q→E).
@@ -155,10 +155,10 @@ export class Sovereign extends Caster {
 
   /**
    * Pick a spell, in priority order:
-   *   1. Scatter — a sphere lines up with you, or you're inside the cone
-   *   2. Q→E    — Scatter and Dark Sphere ready: sometimes a sphere between you and her
-   *   3. Force of Will — something to grab
-   *   4. Dark Sphere — you're in reach
+   *   1. Scatter: a sphere lines up with you, or you're inside the cone
+   *   2. Q→E: Scatter and Dark Sphere ready, sometimes a sphere between you and her
+   *   3. Force of Will: something to grab
+   *   4. Dark Sphere: you're in reach
    * @returns whether a spell started.
    */
   private tryCast(nowMs: number, dist: number, ctx: EnemyContext): boolean {

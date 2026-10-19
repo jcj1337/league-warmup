@@ -66,7 +66,7 @@ test('controls: Q quick-cast, T attack-move-click, targeting modes, T orbwalk, T
   await page.keyboard.press('q');
   await page.waitForTimeout(40);
   // Q now has a short cast window (SKILLSHOT_Q.castTimeMs) before the bolt
-  // leaves — still one keypress, no click.
+  // leaves, still one keypress and no click.
   await page.waitForTimeout(260);
   const q1 = await G();
   q1.qFired === q0.qFired + 1 && q1.qMissiles > 0
@@ -123,7 +123,7 @@ test('controls: Q quick-cast, T attack-move-click, targeting modes, T orbwalk, T
     ? pass(`bolt dies at its max range (travelled ~${Math.round(travel.maxSeen)}px, cap ${cfg.qRange})`)
     : fail(`travelled ${Math.round(travel.maxSeen)}px vs cap ${cfg.qRange}`);
 
-  // Hits the first enemy only — no pierce.
+  // Hits the first enemy only, no pierce.
   await setup([{ x: 800, y: 360 }, { x: 900, y: 360 }], { qReady: true, hp: 9999 });
   await page.mouse.move(1100, 360);
   await page.waitForTimeout(60);

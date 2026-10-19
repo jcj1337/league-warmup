@@ -140,7 +140,7 @@ test('kit: W mark + detonation, E blink + bolt priority, Flash, Q cooldown refun
     ? pass('E / Flash cooldowns unchanged (8000 / 20000ms)')
     : fail(`cooldowns changed: E ${cfg.e.cooldownMs}, F ${cfg.f.cooldownMs}`);
   await setup([{ type: 'basic', x: 200, y: 120 }]);
-  await page.mouse.move(760, 360);          // 120px right — inside E range
+  await page.mouse.move(760, 360);          // 120px right, inside E range
   await page.keyboard.press('e');
   await page.waitForTimeout(castWait);
   const eNear = await G();
@@ -154,7 +154,7 @@ test('kit: W mark + detonation, E blink + bolt priority, Flash, Q cooldown refun
     : fail(`E score bonus with no bolt: ${noBoltBonus}`);
 
   await setup([{ type: 'basic', x: 200, y: 120 }]);
-  await page.mouse.move(1270, 360);         // 630px right — beyond E range
+  await page.mouse.move(1270, 360);         // 630px right, beyond E range
   await page.keyboard.press('e');
   await page.waitForTimeout(castWait);
   const eFar = await G();
@@ -210,7 +210,7 @@ test('kit: W mark + detonation, E blink + bolt priority, Flash, Q cooldown refun
       const e = window.__warmup.scene.getScene('GameScene').director.enemies[0];
       e.goalX = e.x; e.goalY = e.y; e.nextPlanAt = Number.POSITIVE_INFINITY;
     });
-    await page.mouse.move(500, 360);          // 140px left — inside E range, lands exactly here
+    await page.mouse.move(500, 360);          // 140px left, inside E range; lands exactly here
     await page.keyboard.press('e');
     return page.waitForFunction(() => {
       const g = window.__warmup.scene.getScene('GameScene');
@@ -242,7 +242,7 @@ test('kit: W mark + detonation, E blink + bolt priority, Flash, Q cooldown refun
   });
   await page.mouse.move(660, 360);
   await page.keyboard.press('e');
-  // Sample as soon as the blink resolves — the bolt is short-lived.
+  // Sample as soon as the blink resolves; the bolt is short-lived.
   await page.waitForFunction(() => {
     const g = window.__warmup.scene.getScene('GameScene');
     return !g.cast.isCasting && g.kit.bolts.length > 0;

@@ -12,7 +12,7 @@ export type { AttackVisual } from '../view/PlayerView';
  * Attacking lives in AttackSystem and casting in CastSystem; they talk to the
  * player through `root()` / `releaseRoot()` so that "can I move right now?"
  * has exactly one owner. Everything the player LOOKS like lives in its
- * PlayerView, which is only ever fed state — the visual entry points below
+ * PlayerView, which is only ever fed state. The visual entry points below
  * forward to it and cannot change timing or position.
  */
 export class Player {

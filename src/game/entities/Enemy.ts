@@ -177,7 +177,7 @@ export abstract class Enemy {
   private nextContactAt = 0;
 
   /**
-   * Picked up by a Sovereign's Force of Will: no AI and no contact while held —
+   * Picked up by a Sovereign's Force of Will: no AI and no contact while held;
    * the holder moves it. It stays targetable, so you can pop it in her hands.
    */
   held = false;
@@ -332,7 +332,7 @@ export abstract class Enemy {
 
   update(deltaSeconds: number, nowMs: number, ctx: EnemyContext): void {
     this.now = nowMs;
-    // Activation happens at the GameClock deadline — never on an animation.
+    // Activation happens at the GameClock deadline, never on an animation.
     if (this.spawning && nowMs >= this.activeAt) this.lifecycle = 'active';
     const fromX = this.x;
     const fromY = this.y;

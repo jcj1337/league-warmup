@@ -713,10 +713,19 @@ export const THEME = {
     darkFillAlpha: 0.97,
     darkFrameAlpha: 1,
     darkTextAlpha: 1,
-    /** Drag handle: a hit strip this tall over the bottom border, reaching handleOverhang px below the panel. */
+    /**
+     * Move handle (bottom border) and resize grips (the other borders): hit
+     * strips this thick, reaching handleOverhang px outside the panel.
+     */
     handleHitHeight: 10,
     handleOverhang: 4,
     handleHoverAlpha: 0.55,
+    /**
+     * Smallest size a resize leaves: every message still wraps to at most two
+     * lines, and the panel still fits two.
+     */
+    minWidth: 240,
+    minHeight: 56,
     colors: { welcome: P.gold, mission: P.cream, complete: P.good, threat: P.danger } as Record<string, number>,
   },
 

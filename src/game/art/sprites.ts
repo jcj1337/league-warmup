@@ -8,7 +8,7 @@ import type { PixelSprite } from './pixel';
  * carries its own small character → PALETTE map, so colours stay in theme.ts.
  * Sprites are rasterised once at boot (see textures.ts) and displayed at
  * THEME.art.scale. To swap in real art later, load PNGs under the same texture
- * keys and delete the matching entries here — nothing else needs to change.
+ * keys and delete the matching entries here. Nothing else needs to change.
  */
 
 const SHADOW = [P.shadow, 0.4] as const;
@@ -508,7 +508,7 @@ export const SPRITES: Record<string, PixelSprite> = {
     pal: { k: P.fireDark, r: P.fire, o: P.fireOrange, y: P.fireCore },
   },
 
-  /** Basic spit: a small dark-red slime glob — smaller and darker than the orange edge fireball. */
+  /** Basic spit: a small dark-red slime glob, smaller and darker than the orange edge fireball. */
   proj_glob: {
     rows: ['.kkk.', 'kdrdk', 'krwrk', 'kdrdk', '.kkk.'],
     pal: { k: P.ink, d: P.redDeep, r: P.red, w: P.redShine },
@@ -518,7 +518,7 @@ export const SPRITES: Record<string, PixelSprite> = {
     rows: ['..ggg..', '.gkkkg.', 'gkdddkg', 'gkdddkg', 'gkdddkg', '.gkkkg.', '..ggg..'],
     pal: { g: P.voidGlow, k: P.voidRim, d: P.voidCore },
   },
-  /** Magus orb: a crackling white-gold sphere — paler and spikier than the edge fireball. */
+  /** Magus orb: a crackling white-gold sphere, paler and spikier than the edge fireball. */
   proj_orb_0: {
     rows: ['...a...', '..kak..', '.kaWak.', 'aaWWWaa', '.kaWak.', '..kak..', '...a...'],
     pal: { k: P.arcaneDeep, a: P.arcane, W: P.arcaneCore },
@@ -565,7 +565,7 @@ export const SPRITES: Record<string, PixelSprite> = {
     rows: ['..kkkk..', '.kSSssk.', 'kSSsssgk', 'kssssggk', '.kgggkk.', '..kkkk..'],
     pal: { k: P.ink, s: P.rock, S: P.rockLight, g: P.rockDark },
   },
-  /** A small basalt rock split by a dim ember seam — the only warm prop. */
+  /** A small basalt rock split by a dim ember seam, the only warm prop. */
   prop_ember_rock: {
     rows: ['..kkkk..', '.kSSosk.', 'kSSoysgk', 'kssoyggk', '.kgogkk.', '..kkkk..'],
     pal: { k: P.ink, s: P.rock, S: P.rockLight, g: P.rockDark, o: P.lavaGlow, y: P.ember },

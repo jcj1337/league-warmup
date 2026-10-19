@@ -4,7 +4,7 @@ import type { Enemy } from '../entities/Enemy';
  * Attack tokens: a crowd takes turns. An enemy must hold a token to start a
  * token-gated attack (the basic spit) and hands it back when the attack
  * leaves, so at most `capacity` of them (DIFFICULTY.attackTokens for the
- * stage) are ever winding up at once — the fire grows with the crowd without
+ * stage) are ever winding up at once, so the fire grows with the crowd without
  * turning into a bullet hell.
  *
  * A token held by an enemy that is no longer active (killed mid-windup, or

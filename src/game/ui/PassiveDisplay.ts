@@ -8,7 +8,7 @@ import { TEX } from '../art/textures';
  * sitting just above the ability bar.
  *
  * Pure view. It is handed the live stack count and remaining fraction each
- * frame and derives nothing — PassiveSystem stays the only authority.
+ * frame and derives nothing; PassiveSystem stays the only authority.
  */
 export class PassiveDisplay {
   private readonly pips: Phaser.GameObjects.Image[] = [];

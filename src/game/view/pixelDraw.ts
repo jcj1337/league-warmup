@@ -179,7 +179,7 @@ export function dottedWedge(
   }
 }
 
-/** A filled disc built from `cell`-sized squares — a chunky pixel orb. */
+/** A filled disc built from `cell`-sized squares, a chunky pixel orb. */
 export function pixelDisc(
   g: Phaser.GameObjects.Graphics,
   cx: number,

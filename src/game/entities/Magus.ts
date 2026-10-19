@@ -11,14 +11,14 @@ import type { GameClock } from '../systems/GameClock';
 
 /**
  * Magus AI states. Everything but `reposition` is a cast, and it never moves
- * while casting — those windows are when you close the gap.
+ * while casting, and those windows are when you close the gap.
  *
- *   reposition — hold the spacing band; start a spell when the gap allows
- *   lance      — charging: the line sweeps after you at its aim speed (Enemy.aim)
- *   lock       — the line is placed and about to land; still rooted
- *   eye        — targeting: a reticle tracks where the circle will land, then it goes down
- *   orb        — windup: an aim line tracks you, locks for the last MAGUS.orb.lockMs, then the orb leaves
- *   rite       — the last stand: rooted, calling circles down one after another
+ *   reposition:  hold the spacing band; start a spell when the gap allows
+ *   lance:       charging, the line sweeps after you at its aim speed (Enemy.aim)
+ *   lock:        the line is placed and about to land; still rooted
+ *   eye:         a reticle tracks where the circle will land, then it goes down
+ *   orb:         an aim line tracks you, locks for the last MAGUS.orb.lockMs, then the orb leaves
+ *   rite:        the last stand, rooted, calling circles down one after another
  */
 export type MagusState = 'reposition' | 'lance' | 'lock' | 'eye' | 'orb' | 'rite';
 
@@ -40,8 +40,8 @@ const ART: EnemyArt = {
  * The Magus: a brass-masked artillery slime with a Xerath-style kit.
  *
  * It keeps you at the edge of your Q range and drops telegraphed spells on
- * you — a tracking line (Lance), a delayed circle with a hot centre (Eye) and
- * a stunning orb (Orb) — one at a time, never closer together than
+ * you: a tracking line (Lance), a delayed circle with a hot centre (Eye) and
+ * a stunning orb (Orb). It casts one at a time, never closer together than
  * MAGUS.spellGapMs. If it is ever the last enemy in the wave it plants itself
  * and calls down its Rite. Spells it has already placed belong to the
  * HostileSpellSystem and land even if it dies; a spell it is still charging
@@ -210,8 +210,8 @@ export class Magus extends Caster {
 
   /**
    * Pick a spell, in priority order:
-   *   1. Rite — it is the last enemy standing (once per life)
-   *   2. Orb  — you are inside its trigger range: its answer to being dived
+   *   1. Rite: it is the last enemy standing (once per life)
+   *   2. Orb: you are inside its trigger range, its answer to being dived
    *   3. any ready spell whose reach covers you, at random
    * @returns whether a spell started.
    */

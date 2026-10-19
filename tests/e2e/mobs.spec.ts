@@ -127,7 +127,7 @@ test('mobs: passive stacks, Q cooldown refund, Pursuer AI, stage pips + segmente
   monotonic ? pass(`attack speed rises per stack (${stackTable.map((r) => r.aps.toFixed(2)).join(' -> ')}/s)`)
     : fail('attack speed did not rise with stacks');
 
-  // Cooldown must be stage base / multiplier — sampled in ONE snapshot.
+  // Cooldown must be stage base / multiplier, sampled in ONE snapshot.
   const formula = await page.evaluate(() => {
     const a = window.__warmup.scene.getScene('GameScene').attacks;
     const p = window.__warmup.scene.getScene('GameScene').kit.passive;

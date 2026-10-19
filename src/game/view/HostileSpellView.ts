@@ -12,14 +12,14 @@ const TAU = Math.PI * 2;
  * with a second fill racing across it as the countdown. A pure read of the
  * zone list and its deadlines.
  *
- *   line   — a strip filling from the caster outward, a bright seam down its
+ *   line:    a strip filling from the caster outward, a bright seam down its
  *            middle thickening as it charges; it lands as the fill reaches the
  *            far end
- *   circle — a disc with a ring closing in from the edge. Arcane: a sigil of
+ *   circle:  a disc with a ring closing in from the edge. Arcane: a sigil of
  *            arcs turning inside it, and the Eye's sweet spot ringed in
  *            white-hot. Void: a Dark Sphere dropping onto it, its shadow
  *            growing underneath
- *   cone   — a wedge from the caster, filling outward
+ *   cone:    a wedge from the caster, filling outward
  *
  * It also draws the Sovereign's Dark Spheres resting on the ground: near-black
  * orbs with a pale rim that pop open where they land, breathe, and shrink

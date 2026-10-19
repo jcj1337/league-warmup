@@ -9,7 +9,7 @@ import type { KitingMetrics } from './KitingMetrics';
 
 /**
  * Where the base auto cycle comes from. The player's Progression supplies it
- * from their level, so attack speed grows with kills — never with time.
+ * from their level, so attack speed grows with kills, never with time.
  */
 /** How fast the auto cycles, and how far it reaches (the champion's, read live). */
 export interface AttackPacing {
@@ -18,9 +18,9 @@ export interface AttackPacing {
 }
 
 /**
- * idle     — no attack in progress; may start one the moment a target is in range
- * windup   — rooted, damage NOT yet committed, cancellable by move/A-move/stop
- * recovery — the attack has fired, damage is committed, free to move (orbwalk window)
+ * idle:      no attack in progress; may start one the moment a target is in range
+ * windup:    rooted, damage NOT yet committed, cancellable by move/A-move/stop
+ * recovery:  the attack has fired, damage is committed, free to move (orbwalk window)
  */
 export type AttackState = 'idle' | 'windup' | 'recovery';
 
@@ -40,7 +40,7 @@ interface AttackMoveOrder {
   /** Where the player walks while looking for something to hit. */
   destX: number;
   destY: number;
-  /** Where the A-click happened — used by 'cursor' target selection. */
+  /** Where the A-click happened, used by 'cursor' target selection. */
   cursorX: number;
   cursorY: number;
 }
@@ -55,18 +55,18 @@ interface AttackMoveOrder {
  *
  * windup + recovery == the CURRENT cooldown: the stage's base cycle divided by
  * the passive multiplier (see cooldownMs). The cooldown starts when the WINDUP
- * starts, so firing does not extend the cycle — that is what makes recovery the
+ * starts, so firing does not extend the cycle. That is what makes recovery the
  * orbwalk window.
  *
  * Movement ownership, which is what keeps orbwalking honest:
  *   - While an order is active (attack target or attack move), this system
  *     drives the player's movement.
- *   - A plain move order or Stop clears the order and hands movement back —
+ *   - A plain move order or Stop clears the order and hands movement back;
  *     see `onMoveOrder()` / `onStop()`.
  */
 export class AttackSystem {
   public state: AttackState = 'idle';
-  /** True when the current target is in range — read by the scene for the ring. */
+  /** True when the current target is in range. The scene reads it for the ring. */
   public targetInRange = false;
   public currentTarget: Enemy | null = null;
   public targetSource: TargetSource = 'direct';
@@ -76,7 +76,7 @@ export class AttackSystem {
   private windupEndsAt = 0;
   /** When the whole cycle ends and the next attack may start. */
   private cycleEndsAt = 0;
-  /** The target this swing committed to — may differ from currentTarget. */
+  /** The target this swing committed to. It may differ from currentTarget. */
   private windupTarget: Enemy | null = null;
   /** True while we are driving the player's movement toward a target. */
   private chasing = false;
@@ -154,7 +154,7 @@ export class AttackSystem {
 
   /**
    * Windup duration in ms. As a ratio of the (scaling) cooldown it shrinks with
-   * attack speed, keeping the cancel window proportional — floored by
+   * attack speed, keeping the cancel window proportional, floored by
    * minWindupMs so it never becomes too short to read or react to.
    */
   get windupMs(): number {
@@ -166,7 +166,7 @@ export class AttackSystem {
     return Math.max(0, this.cycleEndsAt - this.now);
   }
 
-  /** True once the attack has fired — the point from which you can kite away. */
+  /** True once the attack has fired, the point from which you can kite away. */
   get hasFired(): boolean {
     return this.state === 'recovery';
   }
@@ -179,7 +179,7 @@ export class AttackSystem {
 
   /**
    * Direct attack command (right-click on an enemy). Commits to this exact
-   * enemy and will chase it. Does NOT cancel a windup already in progress —
+   * enemy and will chase it. Does NOT cancel a windup already in progress;
    * the committed swing still resolves.
    */
   commandAttack(target: Enemy): void {
@@ -192,12 +192,12 @@ export class AttackSystem {
   /**
    * Attack Move. Walks toward the point, attacking the first valid enemy that
    * is in range along the way. Issued by A + left-click and by the T
-   * attack-move-click binding — both land here, so they behave identically.
+   * attack-move-click binding. Both land here, so they behave identically.
    *
    * This is an ATTACK order, not a move order, so it deliberately does NOT
    * cancel a windup already in progress: the committed swing resolves and the
    * new order takes over afterwards. That matters because T is meant to be
-   * spammed while kiting — cancelling on every press would mean never landing
+   * spammed while kiting, and cancelling on every press would mean never landing
    * an auto at all. Plain move orders and Stop still cancel.
    *
    * The order stays active after arriving, so the player keeps auto-acquiring
@@ -235,7 +235,7 @@ export class AttackSystem {
 
   /**
    * Crowd control (stun). An uncommitted windup is lost and its cooldown
-   * refunded, like a move-cancel — but the orders survive, so attacking
+   * refunded, like a move-cancel, but the orders survive, so attacking
    * resumes the moment the stun ends.
    */
   interrupt(): void {
@@ -262,7 +262,7 @@ export class AttackSystem {
   update(nowMs: number, deltaSeconds: number, targets: Enemy[]): void {
     this.now = nowMs;
 
-    // Missiles fly independently of the attack cycle — they are never a gate.
+    // Missiles fly independently of the attack cycle and are never a gate.
     this.updateMissiles(deltaSeconds);
 
     // 1. Commit a windup that has completed.
@@ -418,7 +418,7 @@ export class AttackSystem {
     this.state = 'idle';
     this.windupTarget = null;
     this.player.releaseRoot();
-    // Cancelled attacks refund the cooldown — that is what makes animation
+    // Cancelled attacks refund the cooldown. That is what makes animation
     // cancelling a real skill expression rather than a downside.
     this.cycleEndsAt = 0;
     this.lastCancelAt = this.now;

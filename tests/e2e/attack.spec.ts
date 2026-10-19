@@ -74,7 +74,7 @@ test('attack: ground move, direct attack + chase, windup/recovery, cancel, post-
   await page.waitForTimeout(60);
   const ring = (await state()).ring;
   // The ring is drawn at the full reach (range + target radius), i.e. the locus
-  // of attackable target CENTERS — see attackReach() in balance.ts.
+  // of attackable target CENTERS; see attackReach() in balance.ts.
   const expectedRing = await page.evaluate(() => {
     const s = window.__warmup.scene.getScene('GameScene');
     return window.__balance.attackReach(window.__warmup.scene.getScene('GameScene').attackRange, window.__balance.TARGETS.radius, s.player.radius);
@@ -119,8 +119,8 @@ test('attack: ground move, direct attack + chase, windup/recovery, cancel, post-
     ? pass('attack target is set and marked')
     : fail('no attack target / marker after right-clicking an enemy');
 
-  // Let the chase resolve: wait until the chased target takes its first auto —
-  // proof the player arrived, stopped and attacked — instead of a fixed 2.5s
+  // Let the chase resolve: wait until the chased target takes its first auto,
+  // proof the player arrived, stopped and attacked, instead of a fixed 2.5s
   // sleep sized against the chase length. Bounded; on timeout fall through so
   // the checks below report what happened.
   await page.waitForFunction(() => {
@@ -220,7 +220,7 @@ test('attack: ground move, direct attack + chase, windup/recovery, cancel, post-
   } else {
     // Record the attack state at the instant the click reaches the page. A
     // window capture-phase listener runs before Phaser's canvas mousedown
-    // handler, which applies the move order synchronously — so this shows
+    // handler, which applies the move order synchronously, so this shows
     // whether the cancel really arrived during the windup or after the commit.
     await page.evaluate(() => {
       const s = window.__warmup.scene.getScene('GameScene');

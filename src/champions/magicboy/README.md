@@ -1,71 +1,73 @@
 # Magic Boy
 
-The ADC the trainer was built around: autos to orbwalk with, a linear poke (Q), a mark
-to cash in (W), a committed blink (E) and a global wave (R). Every number is in [balance.ts](balance.ts);
-what each slot does is [kit.ts](kit.ts). Keys are per slot and shared across champions:
-see the main README's [Controls](../../../README.md#controls).
+Magic Boy is the ADC the trainer was built around: autos to orbwalk with, a linear poke
+(Q), a mark to cash in (W), a committed blink (E) and a global wave (R). Every number is
+in [balance.ts](balance.ts), and [kit.ts](kit.ts) defines what each slot does. Keys are
+per slot and shared across champions. You can rebind them in the pause menu.
 
 | | Cast time | Cooldown | Range | Projectile speed | Pips removed |
 | --- | --- | --- | --- | --- | --- |
-| Auto | 175ms windup\* | 700→347ms\* | 260 | 1150 px/s (homing) | 1 |
+| Auto | 175ms windup\* | 700 to 347ms\* | 260 | 1150 px/s (homing) | 1 |
 | Q | 165ms | 3000ms† | 450 | 1250 px/s | 1 (2 from level 9) |
 | W | 185ms | 6000ms† | 450 | 1000 px/s | 0 on contact, **+1 on detonation** |
 | E | 210ms | 8000ms† | 225 blink / 380 bolt acquisition | 1050 px/s bolt | 1 |
-| R | 1000ms÷attack speed, rooted | 30000ms† | global (the whole arena), 40 either side of its line | 950 px/s, pierces | **2 to the first enemy, 1 to each after** |
-| F | instant | 20000ms | 190 | — | — |
+| R | 1000ms divided by attack speed, rooted | 30000ms† | global (the whole arena), 40 either side of its line | 950 px/s, pierces | **2 to the first enemy, 1 to each after** |
+| F | instant | 20000ms | 190 | none | 0 |
 
-\* the auto cooldown is set by your level (700ms at level 1, +6% attack speed per level,
-347ms at 18); the windup is a quarter of it, and both shrink further as the passive stacks.
-† at level 1; ability haste (+5 per level) shortens Q / W / E / R to ×0.54 at level 18.
-Q / W / E cast windows shrink with haste at half that rate (×0.70 at 18); R's charge
-follows attack speed instead.
+\* Your level sets the auto cooldown, from 700ms at level 1 to 347ms at level 18 (+6%
+attack speed per level). The windup is a quarter of the cooldown, and both shrink further
+as the passive stacks. † At level 1. Each level gives +5 ability haste, which brings the
+Q, W, E and R cooldowns down to ×0.54 at level 18. Haste shrinks the Q, W and E cast
+windows at half that rate, to ×0.70 at level 18. R's charge follows attack speed instead.
 
-An E whose bolt lands also pays a little score: 10 × the stage multiplier
-(`BLINK_E.scoreBonus`). The blink alone pays nothing, so there is nothing to farm by
-keeping a mob alive and blinking around it.
+When E's bolt lands it also pays 10 × the stage multiplier in score
+(`BLINK_E.scoreBonus`). The blink alone pays nothing, so keeping a mob alive and blinking
+around it earns nothing.
 
-**Cast windows.** Q/W/E commit for a short window anchored to the auto windup
-(auto 175 ≈ Q 165 < W 185 < E 210). The aim (Q/W) or destination (E) is frozen at
-keypress, so moving the mouse mid-cast cannot re-aim the spell. The player is rooted
-for the window and other ability inputs are ignored. Move, attack-move and attack orders
-(right- or left-clicking an enemy) are **buffered** — the latest one wins — and replay the
-instant the cast resolves, so no auto starts mid-cast. `S` discards a buffered order.
-Cooldowns start at cast *start*, so the window never extends them. Flash stays instant,
-deliberately.
+**Cast windows.** Q, W and E each commit you to a short window close to the auto windup:
+auto 175ms, Q 165ms, W 185ms, E 210ms. The game locks the aim (Q, W) or the destination
+(E) when you press the key, so moving the mouse mid-cast doesn't re-aim the spell. You're
+rooted for the window, and the game ignores other ability keys. It holds any move,
+attack-move or attack order you give (right- or left-clicking an enemy) and replays the
+latest one the instant the cast resolves, so no auto starts mid-cast. `S` discards a held
+order. Cooldowns start when the cast starts, so the window never lengthens them. Flash
+stays instant on purpose.
 
-**His body says what's coming** ([motions.ts](motions.ts)). He wears his gauntlet, a gold
-cuff on his facing side, and its gem lights up in the slot's colour before anything
-leaves it. His auto hunkers, leans in and kicks back. Q is a quick-draw: a flinch back, a
-stretch at the aim, a sharp kick. W gathers low and round, then shoves forward and holds
-there a beat, so it never reads as Q. E squashes, pulls tall and thin and vanishes, then
-pops in squashed where he lands. R plants wide with teeth gritted, trembles harder as the
-charge builds, pulls back, and the wave knocks him back. Every windup is keyed to the real
-window, so the R charge plays its full brace, tremble and recoil whether it takes 1000ms or
-330ms.
+**Motions** ([motions.ts](motions.ts)). His body shows each cast before it fires. He
+wears a gauntlet, a gold cuff on his facing side, and its gem lights up in the slot's
+colour before anything leaves it. On an auto he hunkers, leans in and kicks back. Q is a
+quick draw: he flinches back, stretches toward the aim and kicks sharply. For W he
+gathers low and round, then shoves forward and holds there a beat, so it looks different
+from Q. For E he squashes, pulls tall and thin and vanishes, then pops in squashed where
+he lands. For R he plants wide with teeth gritted and trembles harder as the charge
+builds, then pulls back, and the wave knocks him back. Each windup follows the real cast
+window, so the R charge plays its full brace, tremble and recoil whether it takes 1000ms
+or 330ms.
 
-**Passive.** Any landed ability hit — Q, the W mark landing, or the E bolt — grants a
-stack (max 5, +10% attack speed each) and refreshes a shared 6s timer. All stacks
-expire together. A W *detonation* grants none (the stack came when the mark landed),
-and Flash never does.
+**Passive.** A Q hit, a W mark landing or an E bolt hit each grants a stack and refreshes
+a shared 6s timer. Each stack gives +10% attack speed, up to 5 stacks, and they all
+expire together. A W *detonation* grants no stack, because the stack came when the mark
+landed. Flash never grants one.
 
 ```
 cooldownMs = stageBaseCooldown / (1 + stacks * 0.10)
 ```
 
-**Cooldown refund.** A landed Q takes 750ms off the *remaining* cooldown of Q, W, E and
-R, as in League — never Flash, and never by restarting a cooldown. Each slot it cuts
-flashes grey for half a second. That's what brings R
-back: there's no stage refresh, so the more Qs you land, the more often you have it.
+**Cooldown refund.** A Q that lands takes 750ms off the *remaining* cooldowns of Q, W, E
+and R, as in League. It never touches Flash and never restarts a cooldown. Each slot it
+cuts flashes grey for half a second. This is how R comes back. Nothing refreshes it
+between stages, so the more Qs you land, the more often you have R.
 
-**R.** As in League: a long charge (1s, rooted; divided by his attack
-speed, level and passive alike, so ~625ms at level 11 and ~495ms at 18), then one wave that crosses the whole arena and passes through every enemy
-in its path, 40px either side of its line. The first enemy it touches loses two pips and
-every one after loses one, so it clears a line of slimes and softens the rest. Every enemy
-it hits is a passive stack, and it detonates W marks like any other hit. As in League,
-Flash during the charge doesn't take the wave with you: it still leaves from where you
-began, toward where you clicked, while you land somewhere else.
+**R.** As in League, R is a long rooted charge followed by one wave that crosses the
+whole arena. The charge is 1s divided by his attack speed, which counts levels and the
+passive alike, so it takes about 625ms at level 11 and 495ms at 18. The wave passes
+through every enemy within 40px of its line. The first enemy it touches loses two pips
+and each one after loses one, so it clears a line of slimes and softens the rest. Every
+enemy it hits grants a passive stack, and it detonates W marks like any other hit. Also
+as in League, Flash during the charge leaves the wave behind. It still fires from where
+you began, toward where you clicked.
 
-**W combo.** W marks on contact and removes no pips. The next auto, Q or E bolt hit on
-that enemy removes its own pip plus one more from the detonation (W → Q = 2 pips); an
-unused mark lapses harmlessly after 4s.
-E's bolt prefers a marked target, so W → E cashes the mark in.
+**W combo.** W marks the enemy it touches and removes no pips. The next auto, Q or E bolt
+to hit that enemy removes its own pip plus one more from the detonation, so W then Q
+removes 2 pips. An unused mark lapses after 4s. E's bolt prefers a marked target, so W
+then E cashes the mark in.

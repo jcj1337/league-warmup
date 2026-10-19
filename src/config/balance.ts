@@ -231,8 +231,9 @@ export const DEBUG = {
 };
 
 /**
- * APM readout: raw player inputs (every key press and mouse-button press,
- * bound or not) per minute over a rolling window. Informational only — it never feeds scoring or gameplay.
+ * APM readout: raw player inputs (every mouse-button press, and every press of
+ * a key the game acts on; unbound keys don't count) per minute over a rolling
+ * window. Informational only — it never feeds scoring or gameplay.
  */
 export const APM = {
   /** Only inputs this recent count. */

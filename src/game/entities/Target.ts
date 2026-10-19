@@ -22,10 +22,10 @@ const ART: EnemyArt = {
 /**
  * Basic AI modes, re-decided at each plan tick.
  *
- *   APPROACH — outside the pressure band: head for the band edge nearest the
+ *   APPROACH:  outside the pressure band, head for the band edge nearest the
  *              player, re-reading the player often
- *   RETREAT  — inside the band's inner edge: ease back out to it
- *   STRAFE   — in the band: sidestep around the player, sometimes reversing
+ *   RETREAT:   inside the band's inner edge, ease back out to it
+ *   STRAFE:    in the band, sidestep around the player, sometimes reversing
  */
 export type BasicMode = 'approach' | 'retreat' | 'strafe';
 
@@ -34,7 +34,7 @@ export type BasicMode = 'approach' | 'retreat' | 'strafe';
  *
  * Always aggroed. It walks toward the player, then hovers in a pressure band
  * inside the player's attack range and shuffles sideways, so it crowds spacing
- * and target selection without becoming a second melee threat — that job
+ * and target selection without becoming a second melee threat. That job
  * belongs to the Pursuer.
  *
  * From TARGETS.spit.fromStage it also spits: rooted for a short windup (only

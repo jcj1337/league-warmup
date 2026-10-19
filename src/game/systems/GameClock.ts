@@ -5,7 +5,7 @@
  * respawn, enemy spawn ticks, hit flashes) is an absolute timestamp compared
  * against "now". If "now" came from Phaser's wall clock, pausing would let real
  * time run on underneath us and every one of those deadlines would fire at once
- * the instant we resumed — windups completing instantly, cooldowns wiped, a
+ * the instant we resumed: windups completing instantly, cooldowns wiped, a
  * volley of enemy projectiles all at once.
  *
  * So gameplay reads time from HERE instead, and this only advances on frames the

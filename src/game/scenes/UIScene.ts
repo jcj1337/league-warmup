@@ -85,7 +85,7 @@ export class UIScene extends Phaser.Scene {
   private modeRow!: ModeRow;
 
   constructor() {
-    // active: true so the HUD boots alongside GameScene — Phaser only
+    // active: true so the HUD boots alongside GameScene. Phaser only
     // auto-starts the first scene in the config array.
     super({ key: 'UIScene', active: true });
   }
@@ -412,7 +412,7 @@ export class UIScene extends Phaser.Scene {
   /**
    * GameScene started a new round. UIScene itself is never restarted, so
    * round-scoped HUD state is re-initialised here from the new round's own
-   * snapshot — the first round goes through this exact path too.
+   * snapshot. The first round goes through this exact path too.
    */
   private beginRound(hud: Hud): void {
     this.observedRound = hud.round;
@@ -472,7 +472,7 @@ export class UIScene extends Phaser.Scene {
     }
 
     // Every slot is handed the real numbers from AbilityCooldowns and derives
-    // nothing — which is why a Q hit refunding W/E shows up instantly on all three.
+    // nothing, which is why a Q hit refunding W/E shows up instantly on all three.
     const cd = hud.abilityCooldowns;
     const castOf = (id: string) => (hud.castingAbility === id ? hud.castProgress : 0);
     const champion = this.hudChampion ?? CHAMPIONS[DEFAULT_CHAMPION];
@@ -544,11 +544,11 @@ export class UIScene extends Phaser.Scene {
 
   /**
    * Mission messages, derived purely from the polled snapshot (the same state
-   * the stage banner reads — no gameplay events):
+   * the stage banner reads, with no gameplay events):
    *   hud.stage changes            → "Mission N: Clear W waves." (W = hud.wavesInStage),
    *                                  then a "New threat: …" line for each mob or attack
    *                                  that stage introduces
-   *   the stage's last wave clears → "Mission N complete!" — the breather before the
+   *   the stage's last wave clears → "Mission N complete!", in the breather before the
    *                                  next stage
    * Kills, hits and ordinary wave clears say nothing.
    */

@@ -47,14 +47,14 @@ export const SKILLSHOT_Q = {
   radius: 7,
   /**
    * Hard cap on travel; the missile dies here.
-   * 450 == 1.73 x ATTACK.range (260) — clearly longer than an auto, nowhere
+   * 450 == 1.73 x ATTACK.range (260), clearly longer than an auto, nowhere
    * near able to cross the 1280px arena.
    */
   maxRange: 450,
   cooldownMs: 3000,
   /**
    * A landed Q takes this much off the REMAINING cooldown of Q, W, E AND R (as
-   * in League, where it lowers every cooldown) — never Flash, and it never
+   * in League, where it lowers every cooldown), but never Flash, and it never
    * restarts a cooldown. Missing gives nothing.
    */
   hitCooldownReductionMs: 750,
@@ -64,14 +64,14 @@ export const SKILLSHOT_Q = {
    * weaving Q between autos feels like the same rhythm. Set 0 for instant.
    */
   castTimeMs: 165,
-  /** Missile stops on the first target it hits — no pierce. */
+  /** Missile stops on the first target it hits and does not pierce. */
   stopsOnFirstHit: true,
 };
 
 /**
  * W: an Essence-Flux-flavoured MARK skillshot.
  *
- * The projectile itself removes no pips — it marks whatever it touches. The
+ * The projectile itself removes no pips. It marks whatever it touches. The
  * mark detonates the next time that enemy takes a hit from an auto, Q, or the
  * E bolt, removing one extra pip on top of that hit's own.
  */
@@ -89,7 +89,7 @@ export const SKILLSHOT_W = {
   cooldownMs: 6000,
   /** Marks last this long before lapsing harmlessly. */
   markDurationMs: 4000,
-  /** Marks stop on the first enemy touched — no pierce. */
+  /** Marks stop on the first enemy touched and do not pierce. */
   stopsOnFirstHit: true,
 };
 
@@ -103,7 +103,7 @@ export const BLINK_E = {
   /**
    * Commitment window before the blink fires. The destination is committed at
    * keypress, so this is a real decision rather than a reflex escape.
-   * The heaviest of the three, because it is a blink — but still short enough
+   * The heaviest of the three, because it is a blink, but still short enough
    * to weave: AUTO 175 ~ Q 165 < W 185 < E 210.
    */
   castTimeMs: 210,
@@ -115,7 +115,7 @@ export const BLINK_E = {
   range: 225,
   /**
    * Post-blink search radius for the bolt, measured from where E lands.
-   * ~1.46x attack range. Provisional — was 455; tune after playtesting.
+   * ~1.46x attack range. Provisional. It was 455; tune after playtesting.
    */
   boltAcquisitionRange: 380,
   boltSpeed: 1050,
@@ -164,7 +164,7 @@ export const ULT_R = {
  * bolt. A W DETONATION does not (the stack was already granted when the mark
  * landed), and Flash never does.
  *
- * One shared timed buff, not per-stack timers — every hit adds a stack (to the
+ * One shared timed buff, not per-stack timers. Every hit adds a stack (to the
  * cap) AND refreshes the whole buff. When it expires, all stacks go at once.
  */
 export const PASSIVE = {

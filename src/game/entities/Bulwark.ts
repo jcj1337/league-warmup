@@ -8,14 +8,14 @@ import type { GameClock } from '../systems/GameClock';
 /**
  * Bulwark AI states.
  *
- *   chase   — walk at the player; start a Strike or a Path Maker when one is
+ *   chase:    walk at the player; start a Strike or a Path Maker when one is
  *             off cooldown and in range; go All Out once its pips say so
- *   strike  — rooted, its line LOCKED and drawn; the slam lands at the end
- *   recover — the slam held for a beat
- *   brace   — rooted and unstoppable, its path LOCKED and drawn
- *   ram     — down the locked path, unstoppable; stops where it catches you
- *   winded  — standing still after a ram: the window to punish it
- *   flare   — going All Out: plates off, unstoppable for the flare
+ *   strike:   rooted, its line LOCKED and drawn; the slam lands at the end
+ *   recover:  the slam held for a beat
+ *   brace:    rooted and unstoppable, its path LOCKED and drawn
+ *   ram:      down the locked path, unstoppable; stops where it catches you
+ *   winded:   standing still after a ram, the window to punish it
+ *   flare:    going All Out; plates off, unstoppable for the flare
  *
  * Cooldowns are timestamps checked from `chase`, as the Pursuer's are.
  */

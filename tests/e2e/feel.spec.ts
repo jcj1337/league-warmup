@@ -84,7 +84,7 @@ test('feel: windup animation timing, release/impact, cancel, kill feedback + no 
     tick();
   }));
 
-  // Take only the FIRST contiguous windup run — the player keeps attacking.
+  // Take only the FIRST contiguous windup run; the player keeps attacking.
   const firstIdx = samples.findIndex((s) => s.state === 'windup');
   const windupFrames = [];
   for (let i = firstIdx; i >= 0 && i < samples.length && samples[i].state === 'windup'; i++) {

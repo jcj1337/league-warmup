@@ -62,7 +62,7 @@ export class PassiveSystem {
   update(nowMs: number): void {
     this.now = nowMs;
     if (this.stacks > 0 && nowMs >= this.expiresAt) {
-      // All stacks expire together — never one at a time.
+      // All stacks expire together, never one at a time.
       this.stacks = 0;
     }
   }

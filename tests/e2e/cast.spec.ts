@@ -422,7 +422,7 @@ test('cast: Q/W/E cast windows, committed aim, buffered orders, lockout, Flash m
   await setup([{ type: 'basic', x: 760, y: 360 }]);
   await page.mouse.click(760, 360, { button: 'right' });
   await page.waitForFunction(() => window.__warmup.scene.getScene('GameScene').attacks.missilesInFlight > 0, null, { timeout: 4000 });
-  // The missile may land within a frame or two, so assert on the DAMAGE — that
+  // The missile may land within a frame or two, so assert on the DAMAGE. That
   // is the real question: does a committed auto still resolve through a cast?
   const hpBeforeE = await page.evaluate(() => window.__warmup.scene.getScene('GameScene').director.enemies[0].hp);
   await page.mouse.move(1100, 360);

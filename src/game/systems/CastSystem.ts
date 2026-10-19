@@ -43,7 +43,7 @@ interface CastCallbacks {
  *
  * While a cast is pending the player is rooted (movement is locked) and further
  * ability inputs are ignored, but move, attack-move and attack orders are
- * BUFFERED and replayed the instant the cast resolves — committed, but never
+ * BUFFERED and replayed the instant the cast resolves, so a cast commits you but is never
  * unresponsive. Stop discards a buffered order without touching the cast.
  *
  * Flash is the one thing that can move her mid-cast, and the cast goes with
@@ -64,7 +64,7 @@ export class CastSystem {
 
   /** Bumped each time a cast completes, so the scene can flash once. */
   public lastResolveAt = -Infinity;
-  /** Which ability that last resolve was — `castingAbility` is null by then. */
+  /** Which ability that last resolve was; `castingAbility` is null by then. */
   public lastResolvedAbility: CastAbility = 'q';
 
   constructor(
@@ -106,7 +106,7 @@ export class CastSystem {
   }
 
   /**
-   * Start a cast. The caller has already checked the cooldown and started it —
+   * Start a cast. The caller has already checked the cooldown and started it;
    * cooldowns run from cast START so the window never extends the cooldown.
    */
   begin(ability: CastAbility, payload: CastPayload, durationMs: number, nowMs: number, anchored = false): void {
@@ -152,7 +152,7 @@ export class CastSystem {
     this.lastResolveAt = nowMs;
     this.lastResolvedAbility = ability;
 
-    // Resolve first, then replay the buffered order — so E's blink lands before
+    // Resolve first, then replay the buffered order, so E's blink lands before
     // the movement it was queued behind starts from the new position.
     this.callbacks.onResolve(ability, payload);
 

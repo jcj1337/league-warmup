@@ -140,7 +140,7 @@ interface HostileSpellCallbacks {
  * ground zones, and shots in flight (Magus orbs, basic spit).
  *
  * Spells live here, not on their caster, so that a zone already placed still
- * lands after the caster dies — only a spell still being CHARGED dies with it.
+ * lands after the caster dies; only a spell still being CHARGED dies with it.
  * Zones resolve exactly at their GameClock deadline: the player is hit only if
  * they are inside the shape at that instant, so walking out during the
  * telegraph is always the counterplay.

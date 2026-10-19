@@ -34,7 +34,7 @@ export interface AbilitySlotSpec {
  * only authority on whether an ability is actually castable.
  *
  * Laid out for N slots and centred as a group, so adding R later is a matter
- * of constructing more slots — the row re-centres itself.
+ * of constructing more slots; the row re-centres itself.
  */
 export class AbilityBar {
   private readonly slots: AbilitySlot[] = [];
@@ -85,7 +85,7 @@ export class AbilityBar {
 
 /**
  * One square ability slot: pixel frame in the ability's colour, pixel icon,
- * keybind label, and — while on cooldown — a dark wash, a draining radial
+ * keybind label, and while on cooldown a dark wash, a draining radial
  * sweep and a large countdown.
  */
 class AbilitySlot {
@@ -175,7 +175,7 @@ class AbilitySlot {
   }
 
   /**
-   * While casting, the slot fills from the bottom in the ability's colour — a
+   * While casting, the slot fills from the bottom in the ability's colour, a
    * small, local echo of the charge happening on the character.
    */
   private drawCastProgress(progress: number): void {
@@ -251,7 +251,7 @@ class AbilitySlot {
   }
 }
 
-/** Whole seconds above 1s, one decimal below — the last second is the tense one. */
+/** Whole seconds above 1s, one decimal below, because the last second is the tense one. */
 export function formatCooldown(remainingMs: number): string {
   const seconds = remainingMs / 1000;
   return seconds > 1 ? String(Math.ceil(seconds)) : seconds.toFixed(1);

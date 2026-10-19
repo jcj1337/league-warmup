@@ -288,7 +288,7 @@ export class PlayerView {
     const by = Math.round(s.y + this.offsetY + footPx * (1 - pose.sy));
 
     this.sprite.setFlipX(this.facing < 0).setPosition(bx, by).setScale(S * pose.sx, S * pose.sy).setDepth(actorDepth(s.y));
-    // Hit: a brief white pop, then a red wash — the hero never vanishes into a silhouette.
+    // Hit: a brief white pop, then a red wash; the hero never vanishes into a silhouette.
     this.applyHitTint(this.sprite, P.hitFlashMs);
 
     const glowKey = this.look.glow?.[frame];

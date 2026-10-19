@@ -10,11 +10,11 @@ import type { GameClock } from '../systems/GameClock';
 /**
  * Pursuer AI states.
  *
- *   CHASE       — walk at the player's CURRENT position; swing when close and
+ *   CHASE:        walk at the player's CURRENT position; swing when close and
  *                 off cooldown; dash when in the dash band and off cooldown
- *   WINDUP      — rooted, telegraphing; the swing lands at the end
- *   DASH_WINDUP — rooted, crouched, its path LOCKED and drawn on the ground
- *   DASH        — the lunge along the locked path; stops early once in reach
+ *   WINDUP:       rooted, telegraphing; the swing lands at the end
+ *   DASH_WINDUP:  rooted, crouched, its path LOCKED and drawn on the ground
+ *   DASH:         the lunge along the locked path; stops early once in reach
  *
  * There is no separate recovery state: the cooldowns are timestamps checked
  * from CHASE, so the Pursuer keeps walking between attacks instead of standing idle.
@@ -38,7 +38,7 @@ const ART: EnemyArt = {
  *
  * Its whole job is to punish standing still. It is deliberately slower than the
  * player (see PURSUER.moveSpeedFraction), so correct kiting always maintains
- * spacing — but ignoring it costs HP.
+ * spacing, but ignoring it costs HP.
  *
  * It is a normal `Enemy`, so autos, Q, attack-move, right-click, scoring and the
  * passive all work on it with no special-casing anywhere.
@@ -119,7 +119,7 @@ export class Pursuer extends Enemy {
       return;
     }
 
-    // CHASE: walk down the player's *current* position — no stale targeting.
+    // CHASE: walk down the player's *current* position, with no stale targeting.
     if (dist > reach) {
       const speed = PLAYER.referenceMoveSpeed * this.speedFraction * this.slowFactor;
       // Close to 1px inside reach: stopping exactly AT reach lets float error
@@ -183,7 +183,7 @@ export class Pursuer extends Enemy {
   }
 
   /**
-   * The swing lands. Damage is only applied if the player is STILL in reach —
+   * The swing lands. Damage is only applied if the player is STILL in reach;
    * walking out during the telegraph is the intended counterplay.
    */
   private resolveSwing(ctx: EnemyContext, reach: number): void {

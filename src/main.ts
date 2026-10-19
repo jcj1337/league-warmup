@@ -29,7 +29,7 @@ const game = new Phaser.Game({
   },
   render: {
     // Pixel art: nearest-neighbour texture filtering, crisp canvas scaling and
-    // whole-pixel sprite placement. Gameplay positions stay fractional — only
+    // whole-pixel sprite placement. Gameplay positions stay fractional; only
     // where sprites are DRAWN is rounded.
     pixelArt: true,
   },

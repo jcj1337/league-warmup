@@ -94,7 +94,7 @@ test('smoke: movement, attack, Q, enemy fire, context menu, run end + restart, d
   // Deterministic geometry for the hit check. The run is live, so the nearest
   // enemy may be drifting, beyond Q range, or about to die to the autos from
   // section 2 before the bolt arrives. Drop the attack order, put the player at
-  // a fixed spot, and park that enemy — frozen, with a deep HP pool — 200px
+  // a fixed spot, and park that enemy, frozen and with a deep HP pool, 200px
   // ahead, well inside Q range.
   const qt = await page.evaluate(() => {
     const s = window.__warmup.scene.getScene('GameScene');
@@ -110,7 +110,7 @@ test('smoke: movement, attack, Q, enemy fire, context menu, run end + restart, d
     return { x: t.x, y: t.y };
   });
   if (!qt) fail('no live enemy to aim Q at');
-  // Aim by moving the cursor, then press Q — no targeting mode, no click.
+  // Aim by moving the cursor, then press Q, with no targeting mode and no click.
   await page.mouse.move(qt?.x ?? 840, qt?.y ?? 360);
   await page.waitForTimeout(60);
   await page.keyboard.press('q');

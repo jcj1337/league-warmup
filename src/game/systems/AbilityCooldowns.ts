@@ -7,7 +7,7 @@ export type AbilityId = Slot | 'flash';
  *
  * Every ability system asks this rather than keeping its own `readyAt`, which
  * is what makes cross-ability effects (a landed Q refunding Q/W/E) a single
- * call instead of three bits of duplicated arithmetic — and gives the HUD one
+ * call instead of three bits of duplicated arithmetic, and gives the HUD one
  * consistent source for every slot.
  *
  * Durations come from the champion's slot definitions (and FLASH for the

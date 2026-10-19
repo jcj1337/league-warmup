@@ -359,7 +359,7 @@ export class Fx {
     this.ring(to.x, to.y, 2, 18, e.blinkMs * 0.8, e.core, 1);
     this.sparks(from.x, from.y, [e.color, e.blue], 6, 90, e.blinkMs * 1.4);
     this.sparks(to.x, to.y, [e.core, e.color, e.blue], 8, 160, e.blinkMs * 1.4);
-    // A few fading motes along the path — short-lived, never a tether.
+    // A few fading motes along the path, short-lived and never a tether.
     const dist = Math.hypot(to.x - from.x, to.y - from.y);
     const steps = Math.floor(dist / 36);
     for (let i = 1; i < steps; i++) {

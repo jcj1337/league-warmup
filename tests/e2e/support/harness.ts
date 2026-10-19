@@ -5,7 +5,7 @@ import { expect, type Page, type TestInfo } from '@playwright/test';
  *
  * Each suite is a port of a characterization script: one long, sequential walk
  * through an area of the game that records PASS / FAIL / WARN lines. `fail` is a
- * soft assertion, so — exactly like the original scripts — one failed check
+ * soft assertion. As in the original scripts, one failed check
  * never hides the checks after it, but the test still fails at the end.
  */
 export interface Suite {

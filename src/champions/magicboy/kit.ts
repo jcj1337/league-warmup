@@ -22,7 +22,7 @@ import { PassiveSystem } from './PassiveSystem';
  */
 export class MagicBoyKit implements Kit {
   readonly passive = new PassiveSystem();
-  /** Stats for the end screen (Q only — W removes no pips). */
+  /** Stats for the end screen (Q only, since W removes no pips). */
   qFired = 0;
   qHit = 0;
   /** W marks cashed in for their extra pip. */
@@ -111,7 +111,7 @@ export class MagicBoyKit implements Kit {
       if (target.takeHit()) combat.kill(target);
     }
     this.grantPassiveStack();
-    // A landed Q lowers every ability cooldown, R included — never Flash.
+    // A landed Q lowers every ability cooldown, R included, but never Flash.
     cooldowns.reduce(SKILLSHOT_Q.hitCooldownReductionMs, ['q', 'w', 'e', 'r']);
   }
 
@@ -141,7 +141,7 @@ export class MagicBoyKit implements Kit {
 
   /**
    * One place that grants a passive stack, so every ability that should stack
-   * it (Q hit, W mark landing, E bolt hit) behaves identically — and so the
+   * it (Q hit, W mark landing, E bolt hit) behaves identically, and so the
    * player feedback can never fire without a real stack.
    */
   private grantPassiveStack(): void {

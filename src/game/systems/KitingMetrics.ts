@@ -19,20 +19,20 @@ export class KitingMetrics {
   public attacksStarted = 0;
   /** Windups that reached the fire point. */
   public attacksFired = 0;
-  /** Windups cancelled before firing — no damage dealt. */
+  /** Windups cancelled before firing, dealing no damage. */
   public attacksCancelled = 0;
   /** Fired missiles that actually connected (a target can die mid-flight). */
   public attacksLanded = 0;
 
   /**
-   * Time spent off cooldown with an enemy in range and no attack started —
+   * Time spent off cooldown with an enemy in range and no attack started,
    * i.e. DPS left on the table.
    */
   public idleInRangeMs = 0;
 
   /**
    * Time spent standing still during post-fire recovery, when a move order
-   * could have been issued for free — i.e. kiting distance left on the table.
+   * could have been issued for free, i.e. kiting distance left on the table.
    */
   public wastedRecoveryMs = 0;
 
@@ -44,7 +44,7 @@ export class KitingMetrics {
     this.attacksCancelled++;
   }
 
-  /** The missile left the player — the auto is committed. */
+  /** The missile left the player; the auto is committed. */
   onAttackFired(): void {
     this.attacksFired++;
   }

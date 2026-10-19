@@ -1,7 +1,7 @@
 # Warmup (hands diff)
 
 A browser mechanics trainer for League-style play: Phaser 3 + TypeScript (strict), Vite,
-no physics engine, no backend. The README is the player-facing and tuning reference;
+no physics engine, no backend. The README is a short public intro;
 this file is for working on the code.
 
 ## Commands

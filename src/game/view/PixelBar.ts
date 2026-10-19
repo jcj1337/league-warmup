@@ -9,7 +9,7 @@ export interface BarColors {
 /**
  * A compact pixel health bar: dark border plate, two-tone fill (bright top
  * half, darker bottom half) and a pale ghost layer that trails behind damage.
- * Whole-pixel aligned. Pure view — it is handed the numbers every frame.
+ * Whole-pixel aligned. Pure view; it is handed the numbers every frame.
  */
 export class PixelBar {
   private readonly back: Phaser.GameObjects.Rectangle;

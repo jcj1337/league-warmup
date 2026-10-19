@@ -8,7 +8,7 @@ export type ProjectileTeam = 'player' | 'enemy';
 export interface ProjectileConfig {
   x: number;
   y: number;
-  /** Direction in radians. Projectiles travel dead straight — no homing. */
+  /** Direction in radians. Projectiles travel dead straight, with no homing. */
   angle: number;
   speed: number;
   /** Collision radius. Independent of how big the sprite is drawn. */

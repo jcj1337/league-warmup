@@ -12,7 +12,7 @@ const HOSTILE_SPRITE_PX = 7;
 
 /** What enemy fire needs to know about the run. The WaveDirector provides it. */
 export interface EnemyFirePressure {
-  /** Fire only while a wave is being fought — never during a breather. */
+  /** Fire only while a wave is being fought, never during a breather. */
   readonly isWaveActive: boolean;
   /** 0..1 position on the ENEMY_PROJECTILES start → end ramps, set per stage. */
   readonly fireIntensity: number;
@@ -26,13 +26,13 @@ interface EnemyProjectileCallbacks {
  * Spawns the dodging pressure.
  *
  * Shots originate on the arena border and are aimed at the player's position at
- * the moment of firing — they never re-aim, so every shot is dodgeable if you
+ * the moment of firing. They never re-aim, so every shot is dodgeable if you
  * read it early. No individual enemy fires them: the volleys belong to the wave
  * being fought. Spawn rate, speed, size and damage come from the current
  * stage's fire intensity.
  *
  * Wave boundaries: as soon as a wave is cleared, every hostile shot in flight is
- * removed — before this frame's collision test — and nothing new is scheduled.
+ * removed before this frame's collision test, and nothing new is scheduled.
  * The next wave's first volley comes one full spawn interval after it starts.
  * A cleared wave can therefore never damage the player during the breather.
  */

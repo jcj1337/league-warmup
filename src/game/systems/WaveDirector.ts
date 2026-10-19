@@ -148,25 +148,25 @@ function ramp(values: readonly number[], stage: number): number {
  *        └───────────────── next wave, or Wave 1 of the next stage ◄────────────────┘
  *
  * The mode's intro stages (Mode.stages) are hand-written; every later stage is
- * generated (ENDLESS.wavesPerStage waves each, rosters bought from a budget —
+ * generated (ENDLESS.wavesPerStage waves each, rosters bought from a budget;
  * see rosterFor). The mode also sets each mob's registry entry (entry()) and
  * the wave size. Either way a wave is a finite roster, shuffled into a queue and
  * grouped into packs:
  *
  *   pending  ─(startsAt)─►  spawning  ─(activeAt)─►  active  ─(killed)─►  dead
  *
- * Pending entries are not objects yet. When one's start time comes — and the
- * field has room under DIFFICULTY.maxAlive — it gets a fixed spawn spot (near
+ * Pending entries are not objects yet. When one's start time comes and the
+ * field has room under DIFFICULTY.maxAlive, it gets a fixed spawn spot (near
  * its pack's anchor) and becomes a `spawning` Enemy in `enemies`, inert until
  * its GameClock activation deadline (RUN.spawn).
  *
  * A wave is cleared only by a kill that leaves nothing pending, nothing
  * spawning and nothing active. A killed enemy stays in the roster, dead, so its
- * death animation plays out — nothing refills it. The next wave spawns once the
+ * death animation plays out; nothing refills it. The next wave spawns once the
  * breather elapses; the old roster is destroyed at that moment. Elapsed time
  * never advances a wave: progression is kills alone.
  *
- * It is also the one source of stage-scoped tuning for other systems — enemy
+ * It is also the one source of stage-scoped tuning for other systems: enemy
  * health pips and enemy fire (EnemyFirePressure). The player's attack speed
  * comes from their level (Progression), not the stage.
  */
@@ -349,7 +349,7 @@ export class WaveDirector implements EnemyFirePressure {
 
   /**
    * A generated wave, bought from a budget of the stage's wave size in points:
-   *   1. a mob's first appearance — Wave 1 of its unlockStage — fields exactly
+   *   1. a mob's first appearance, in Wave 1 of its unlockStage, fields exactly
    *      one of it, first;
    *   2. the stage's last wave fields every unlocked capstone (as many as its
    *      maxPerWave allows), first;
@@ -472,7 +472,7 @@ export class WaveDirector implements EnemyFirePressure {
 
   /**
    * Called by the scene when a kill is registered. The wave clears on the spot
-   * only if that kill exhausted the roster — enemies still scheduled or
+   * only if that kill exhausted the roster; enemies still scheduled or
    * mid-arrival keep it going. Then the breather starts.
    */
   onEnemyKilled(enemy: Enemy, nowMs: number): void {
@@ -558,7 +558,7 @@ export class WaveDirector implements EnemyFirePressure {
   }
 
   /**
-   * Move every pending entry whose time has come onto the field, mid-arrival —
+   * Move every pending entry whose time has come onto the field, mid-arrival,
    * as long as there is room under the stage's DIFFICULTY.maxAlive. An entry
    * that finds the field full waits, and arrives as soon as a slot frees up.
    */
@@ -637,7 +637,7 @@ export class WaveDirector implements EnemyFirePressure {
   /**
    * Soft body-blocking so enemies do not stack into one ambiguous blob.
    * Heavier enemies shove lighter ones: the push is split by radius. Only
-   * active enemies take part — an arriving enemy never moves.
+   * active enemies take part; an arriving enemy never moves.
    */
   private separate(): void {
     const list = this.roster;

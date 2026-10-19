@@ -5,7 +5,7 @@ import type { AttackPacing } from './AttackSystem';
 /**
  * The player's level, League style: kills give XP (ENEMIES[id].xp), levels run
  * 1 → LEVELS.max on the world's XP curve, and each level makes the champion
- * faster by its own perks —
+ * faster by its own perks:
  *
  *   ability haste    perks.abilityHastePerLevel per level on the slots
  *                    (cooldown = base / (1 + haste / 100); Flash is a summoner, untouched),
