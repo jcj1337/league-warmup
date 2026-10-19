@@ -46,7 +46,17 @@ export function spriteToCanvas(key: string, sprite: PixelSprite): HTMLCanvasElem
 /** Register a pixel sprite as a texture, once per game (textures outlive scene restarts). */
 export function addPixelTexture(scene: Phaser.Scene, key: string, sprite: PixelSprite): void {
   if (scene.textures.exists(key)) return;
-  scene.textures.addCanvas(key, spriteToCanvas(key, sprite));
+  addCanvasTexture(scene, key, spriteToCanvas(key, sprite));
+}
+
+/**
+ * Register a finished canvas as a texture. Not `textures.addCanvas`: that makes a
+ * CanvasTexture, which reads every pixel straight back (getImageData) for pixel editing
+ * we never do, a GPU readback per texture at boot. A plain texture has no base frame
+ * until one is added; images need it.
+ */
+export function addCanvasTexture(scene: Phaser.Scene, key: string, canvas: HTMLCanvasElement): void {
+  scene.textures.create(key, canvas, canvas.width, canvas.height)?.add('__BASE', 0, 0, 0, canvas.width, canvas.height);
 }
 
 /**

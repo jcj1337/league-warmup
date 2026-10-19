@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import { ARENA } from '../../config/balance';
 import { THEME, propDepth } from '../../config/theme';
-import { mulberry32 } from '../art/pixel';
+import { addCanvasTexture, mulberry32 } from '../art/pixel';
 import { TEX } from '../art/textures';
 
 const BAYER4 = [
@@ -48,7 +48,7 @@ export class Battlefield {
     scene.cameras.main.setBackgroundColor(THEME.battlefield.void);
 
     if (!scene.textures.exists(TEX.ground)) {
-      scene.textures.addCanvas(TEX.ground, paintGround(THEME.battlefield.seed));
+      addCanvasTexture(scene, TEX.ground, paintGround(THEME.battlefield.seed));
     }
     this.ground = scene.add.image(0, 0, TEX.ground).setOrigin(0, 0).setScale(S).setDepth(THEME.depth.ground);
 

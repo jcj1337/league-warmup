@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { THEME } from '../../config/theme';
 import { GLYPHS, GLYPH_H, GLYPH_W, LOWER_GLYPHS } from './glyphs';
+import { addCanvasTexture } from './pixel';
 
 export const FONT_KEY = 'pixel-font';
 /** The same font with real lower-case letters (LOWER_GLYPHS), for the title. */
@@ -57,7 +58,7 @@ function buildFont(scene: Phaser.Scene, key: string, glyphs: Record<string, stri
     if (foldLower && lower !== ch) data.chars[lower.charCodeAt(0)] = glyph;
   });
 
-  scene.textures.addCanvas(key, canvas);
+  addCanvasTexture(scene, key, canvas);
   scene.cache.bitmapFont.add(key, { data, texture: key, frame: null });
 }
 
