@@ -5,7 +5,7 @@ too.
 
 ## Setup
 
-You need Node 20.19 or newer, and Microsoft Edge to run the tests.
+You need Node 20.19 or newer, and Microsoft Edge for running the tests.
 
 ```bash
 npm install
