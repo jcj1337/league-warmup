@@ -37,6 +37,10 @@ const game = new Phaser.Game({
   scene: [GameScene, UIScene],
   // No "Phaser vX" line in the player's console.
   banner: false,
+  // The game uses no built-in pre or post FX (glow, blur, ...): skip compiling their
+  // shaders and allocating their render targets at boot.
+  disablePreFX: true,
+  disablePostFX: true,
 });
 
 // Right-click is the move button: no browser menu anywhere on the page, letterbox included.
