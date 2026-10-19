@@ -11,6 +11,9 @@ this file is for working on the code.
 - `npm test` — the Playwright suites in `tests/e2e/`, one at a time in headless Edge
   (~5 min). They start their own Vite server on :5173 or reuse one.
 - `npx playwright test <name>` — one suite (`kit`, `waves`, `snakelady`, `axeman`, `bulwark`, `modes`, ...).
+- `npm run perf` — the load-time benchmark (`tests/perf/`, ~1 min): builds for production,
+  times cold loads to the start screen on three throttled networks, checks the budgets.
+  Not part of `npm test`; run it alone so nothing else competes for the CPU.
 - **Never run `mouse-speed.spec.ts` on a machine someone is using**: it takes a real
   pointer lock, which on Windows grabs the OS cursor even headless. It is skipped
   unless `PW_POINTER_LOCK=1`.

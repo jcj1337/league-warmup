@@ -14,6 +14,7 @@ npm install
 npm run dev      # opens http://localhost:5173
 npm run build    # typecheck + production build
 npm test         # browser regression suite
+npm run perf     # load-time benchmark
 ```
 
 ### Tests
@@ -27,6 +28,12 @@ report). Without Edge, run `npx playwright install chromium` and set `PW_CHANNEL
 The Mouse Speed suite is **skipped by default**: it takes a real pointer lock, which on
 Windows grabs your actual mouse cursor even in headless mode (and your own mouse movement
 makes it fail). Run it with `PW_POINTER_LOCK=1` when you're not using the machine.
+
+`npm run perf` is the load-time benchmark in [tests/perf/](tests/perf/), separate from `npm test`.
+It builds the game for production, serves it brotli-compressed as Cloudflare does, and times
+cold loads to the first painted start screen with no throttling and on Lighthouse's desktop
+and slow-4G networks (median of 7; `PERF_RUNS=15` for more). It fails if the bundle or the
+desktop load goes over its budget in [load.spec.ts](tests/perf/load.spec.ts).
 
 ## Controls
 

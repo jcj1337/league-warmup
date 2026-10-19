@@ -11,7 +11,8 @@
     "test": "playwright test",
     "test:headed": "playwright test --headed",
     "test:debug": "playwright test --debug",
-    "test:report": "playwright show-report"
+    "test:report": "playwright show-report",
+    "perf": "playwright test --config playwright.perf.config.ts"
   },
   "dependencies": {
     "phaser": "^3.90.0"
