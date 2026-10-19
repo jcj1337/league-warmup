@@ -586,6 +586,7 @@ is armed and flashes briefly after `T`.
 - `src/config/theme.ts` — **the look**: `PALETTE` (raw colours) and `THEME` (sprite scale, depth bands, effect timings, HUD styling). Nothing in it affects gameplay.
 - `src/game/art/` — original pixel sprites as text pixel maps (`sprites.ts`), the 5×7 HUD font (`glyphs.ts`, `font.ts`), and `textures.ts`, which rasterises them once and owns every texture key. Real PNG art can later replace a sprite key-for-key.
 - `src/game/view/` — the read-only view layer: `PlayerView`, `EnemyView` / `PursuerView`, `MagusView`, `SovereignView`, `BulwarkView`, `HostileSpellView` (Magus zones), `ProjectileView` + `projectileArt`, `Fx` (pooled particles, dotted rings, smooth shockwaves and ground flashes, damage numbers), `PixelBar` (health bars), `Battlefield` (painted ground + props) and `pixelDraw` helpers.
+- `src/phaser.js` — the Phaser the game ships: only the parts it uses, about a third smaller than the full bundle. Using a Phaser feature that isn't listed there (text, particles, ...) means adding it there first.
 - `src/game/scenes/GameScene.ts` — input wiring, per-frame orchestration, round lifecycle.
 - `src/game/scenes/UIScene.ts` — HUD, ability bar, pause menu (polls GameScene); `src/game/ui/EndScreen.ts` draws the end screen from a finished run.
 - `src/game/entities/` — `Player` (incl. stun / slow status), `Enemy` (abstract base), `Target`, `Pursuer`, `Magus`, `Sovereign`, `Bulwark`, `Projectile`, `AutoAttackMissile`.

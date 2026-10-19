@@ -46,6 +46,10 @@ this file is for working on the code.
   heading) and the mobs. `src/game/view/` draws; views only read entity state.
 - `src/game/art/` — hand-authored pixel sprites (`sprites.ts`), the pixel font, and
   `look.ts`, which composes a champion's body with cosmetics (`src/cosmetics/`).
+- `src/phaser.js` — the Phaser the game ships, built from Phaser's source with only the
+  parts the game uses; `vite.config.ts` points `phaser` at it (types still come from the
+  package). A Phaser feature that isn't listed there fails at runtime
+  (`this.add.text is not a function`): add its class and its Factory / Creator first.
 - `src/profile/Profile.ts` — everything saved, one localStorage key, with migrations.
   `Keybinds`, `MouseSpeed`, `Settings`, `RunHistory` are views over it.
 - `src/game/scenes/UIScene.ts` — HUD, start screen (champion row), pause menu, end screen.

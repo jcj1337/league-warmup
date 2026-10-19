@@ -27,13 +27,13 @@ const NETWORKS = {
 } as const;
 
 /**
- * Budgets with room over the numbers measured on the machine that set them (RTX 3060, Edge),
- * so a slower machine passes and a real regression does not. The bundle size does not
- * depend on the machine, so its room is small.
+ * Budgets with room over the numbers measured on the machine that set them (RTX 3060, Edge:
+ * 227 KB, 499 ms), so a slower machine passes and a real regression does not. The bundle
+ * size does not depend on the machine, so its room is small.
  */
 const BUDGET = {
-  bundleBrotliBytes: 360_000,
-  desktopStartScreenMs: 1_300,
+  bundleBrotliBytes: 245_000,
+  desktopStartScreenMs: 750,
 };
 
 const TYPES: Record<string, string> = { '.html': 'text/html', '.js': 'text/javascript', '.png': 'image/png' };
