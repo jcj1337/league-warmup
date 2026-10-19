@@ -1,6 +1,9 @@
 node_modules
 dist
 .vite
+.wrangler/
+
+# Design notes and proposals stay on the maintainer's machine
 docs/
 
 # Playwright output
@@ -8,3 +11,16 @@ test-results/
 playwright-report/
 blob-report/
 playwright/.cache/
+
+# Secrets and local overrides
+.env*
+.dev.vars*
+*.local
+
+# Logs and OS clutter
+*.log
+.DS_Store
+Thumbs.db
+
+# Personal Claude Code settings (the shared skill in .claude/skills is tracked)
+.claude/settings.local.json

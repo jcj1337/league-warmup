@@ -55,8 +55,11 @@ this file is for working on the code.
 - `src/game/scenes/UIScene.ts` — HUD, start screen (champion row), pause menu, end screen.
   `src/game/ui/EndScreen.ts` draws the end screen from a `RoundResult`; the suites read it
   as plain lines through `UIScene.endScreen.text`.
-- `docs/proposals/` — design proposals with their status line; `docs/TECHNICAL_REPORT.md`
-  is historical (predates the endless run, champions and most mobs).
+- `docs/` — the maintainer's design notes: `proposals/` (each with a status line),
+  `TECHNICAL_REPORT.md`, `STUDY_GUIDE.md`, `performance/`. Git-ignored, so they exist only
+  on the maintainer's machine; the public repo doesn't have them.
+- `CONTRIBUTING.md` — the guide for outside contributors. Keep it in step when a rule,
+  command or champion step changes.
 
 ## Rules the code keeps
 
@@ -89,5 +92,5 @@ assume a frame is ~16ms: thresholds go in px/s or ms, not per call.
 - Commit messages describe behaviour; keep each phase of work its own commit with
   the suites green.
 - Adding a mob: README "Adding a mob". Adding a champion: README "Adding a champion".
-- Planned next: sound cues, then cosmetics with a
-  currency from score (`docs/proposals/ARCHITECTURE_PROPOSAL.md`, Cosmetics).
+- Planned next: sound cues, then cosmetics with a currency from score (the maintainer's
+  local `docs/proposals/ARCHITECTURE_PROPOSAL.md`, Cosmetics).

@@ -43,7 +43,24 @@ You can change most values from the browser console while the game runs, for exa
 
 1. Create a folder `src/champions/<id>/` with `balance.ts`, `kit.ts`, `index.ts`,
    `motions.ts`, `art.ts` and a `README.md` that describes its kit.
-2. Add a line to `CHAMPIONS` in [src/champions/index.ts](src/champions/index.ts).
-3. If it puts a status on enemies, apply the status with `enemy.applyStatus(id, now, ms)`
+2. Draw its ability icons in `src/game/art/sprites.ts` and add their keys to `TEX.icons`
+   in `src/game/art/textures.ts`.
+3. Add a line to `CHAMPIONS` in [src/champions/index.ts](src/champions/index.ts).
+4. If it puts a status on enemies, apply the status with `enemy.applyStatus(id, now, ms)`
    and register its look with `registerStatusLook`.
-4. Add a suite under `tests/e2e/`.
+5. Add a suite under `tests/e2e/`.
+
+## Contributing
+
+New champions are the contribution this project wants most. [CONTRIBUTING.md](CONTRIBUTING.md)
+covers setup, the layout of the code, the rules it keeps, and what a pull request needs.
+
+## License
+
+MIT, for the code and the art alike. See [LICENSE](LICENSE).
+
+hands diff isn't endorsed by Riot Games and doesn't reflect the views or opinions of Riot
+Games or anyone officially involved in producing or managing Riot Games properties. Riot
+Games, and all associated properties are trademarks or registered trademarks of Riot Games,
+Inc. The MIT license covers this project's own work, not Riot's trademarks. The source
+names the League champions its designs follow; the game itself uses its own names.
